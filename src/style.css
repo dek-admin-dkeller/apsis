@@ -752,6 +752,9 @@ canvas.chart.square { height: auto; aspect-ratio: 1; max-width: 240px; margin: 0
 #pair-list .dist b { font-weight: 400; }
 #pair-list .dist small { font: 10.5px var(--font-ui); color: var(--muted); }
 #pair-list .sev-calm .sev { background: rgba(255, 255, 255, 0.16); }
+/* One spacecraft catalogued as several objects: its second line is the list of its other parts. */
+#pair-list .is-joined .names span + span .dot { display: none; }
+#pair-list .is-joined .names span + span b { font-size: 11px; color: var(--muted); }
 #conj-kind { margin-top: 4px; }
 #conj-kind b { margin-left: 5px; font: 11px var(--font-mono); font-weight: 400; color: var(--muted); }
 #conj-kind .is-on b { color: inherit; opacity: 0.75; }

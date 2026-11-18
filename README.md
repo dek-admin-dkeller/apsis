@@ -64,7 +64,7 @@ status line sit along the bottom.
 | Data age | inspector, Live tab: how old the object's orbital elements are, with a warning once they are stale, and its catalogue status. Objects → Browse → Colour by → **Data age** colours the whole catalogue the same way |
 | Close-approach report | with a close approach open: **Report** opens a one-page summary to print or save as a PDF; **Data (CSV)** downloads both objects' positions, velocities and the range between them through the approach |
 | Layers panel (`L`) | orbit path, ground track, coverage footprint, 3D model; ground-station marker, clouds, atmosphere, coastlines and borders, lat/long grid, day/night line; stars, constellations, planets, names in the sky; screening cells (`G`) |
-| Close-approach monitor (`C`) | **Right now**: switch it on, set the alert distance; the pairs inside it are sorted into two lists — **Passing** (objects on different orbits crossing paths, with their passing speed) and **Flying together** (docked spacecraft, formations and launch trains, which are close all the time). The counts in the top bar and on the globe are of the passing kind only. **Coming hours**: scan up to 24 hours ahead for predicted close passes. Click any pair to open the **close-approach view** (time keeps running live; the panel's replay and scrubber give a slow-motion or frozen look): both spacecraft as 3D models, their flight paths, the live distance between them, a range chart you can scrub, and a slow-motion replay |
+| Close-approach monitor (`C`) | **Right now**: switch it on, set the alert distance; the pairs inside it are sorted into two lists — **Passing** (objects on different orbits crossing paths, with their passing speed) and **Flying together** (docked spacecraft, formations and launch trains, which are close all the time). A spacecraft that the catalogue lists as several objects, such as the Space Station with its modules and docked capsules, appears there once, and clicking it selects the spacecraft instead of opening a pair. The counts in the top bar and on the globe are of the passing kind only. **Coming hours**: scan up to 24 hours ahead for predicted close passes. Click any pair to open the **close-approach view** (time keeps running live; the panel's replay and scrubber give a slow-motion or frozen look): both spacecraft as 3D models, their flight paths, the live distance between them, a range chart you can scrub, and a slow-motion replay |
 | Ride along (`V`) | from the inspector: sit on the selected object and look out from it. Drag to look around, scroll to zoom |
 | Sky view (`4`) | the **Sky** button at the foot of the rail: stand at the ground station and watch objects cross overhead |
 | Your location | Apsis asks once whether it may show where you are; the crosshair button in the top bar does the same at any time. Only after a yes does the browser's own permission prompt appear. You are then a green dot, and passes and the sky view use that spot |
@@ -204,6 +204,7 @@ src/
     conjunction.ts       bruteForcePairs() and hashedPairs() — same sorted output, so they can be compared
     benchmark.ts         timing + identical-result check, shared by the app and `npm run bench`
     lookahead.ts         prediction scan: wide hash cells + straight-line closest approach + SGP4 refinement
+    groups.ts            union–find over a Map: merges pairs of joined objects back into one spacecraft
   data/
     catalog.ts           loads the snapshot; builds the Map/Set indexes (by NORAD id, name, prefix, category, orbit)
     categorize.ts        category + orbit class (LEO / MEO / GEO / HEO) from name and mean motion
@@ -277,8 +278,9 @@ autocomplete, `Map<category, Set<id>>` for the filter toggles, `Map<noradId, fac
 the inspector, a `Map<title, summary>` cache for Wikipedia lookups, a `Set` of starred
 NORAD numbers for the watchlist, a `Map<pair, time>` that stops the look-ahead scan
 reporting the same pass twice, a `Map<typed name, catalogue name>` so that "hubble" finds
-the object filed as HST, a `Map<noradId, radio record>` for the radio details, and the
-two `Map<noradId, record>` tables that the orbit-change comparison joins.
+the object filed as HST, a `Map<noradId, radio record>` for the radio details, the
+two `Map<noradId, record>` tables that the orbit-change comparison joins, and the
+`Map<object, parent>` behind the union–find that groups a station's parts (`groups.ts`).
 
 ## Data and its limits
 

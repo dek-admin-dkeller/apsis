@@ -109,7 +109,7 @@ export class EncounterPanel {
     $('enc-span').textContent = `${duration(windowS * 1000)} either side`;
     $<HTMLButtonElement>('enc-replay').disabled = approach.coMoving;
     $('enc-note').textContent = approach.coMoving
-      ? 'These two travel together — docked, in formation, or neighbours in the same slot — so the range hardly changes and there is no single passing moment.'
+      ? 'These two travel together — in formation, in one launch’s train, or as neighbours in the same slot — so the range hardly changes and there is no single passing moment.'
       : 'Positions are predictions from published orbital elements, good to roughly a kilometre. A real alert would be followed by tracking both objects more precisely.';
     this.root.classList.remove('is-hidden');
     this.lastDraw = -Infinity;

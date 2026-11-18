@@ -7,11 +7,17 @@
  *   Passing          two objects on different orbits crossing paths — over in seconds;
  *   Flying together  objects that stay close (docked, in formation, one launch's train).
  * The worker tells them apart by relative speed (see TOGETHER_KM_S in hashing/conjunction.ts).
+ *
+ * Joined objects are listed ONCE. A space station is catalogued as a dozen objects at the
+ * same place, which the screening reports as every pair among them (11 objects → 55 pairs at
+ * "0 m"). Those pairs are merged back into one row per spacecraft (hashing/groups.ts), and
+ * clicking that row selects the spacecraft: there is no pair to look at, the two are one thing.
  */
 
 import type { Catalog } from '../data/catalog.ts';
 import { CATEGORY_COLORS } from '../data/types.ts';
 import { TOGETHER_KM_S } from '../hashing/conjunction.ts';
+import { connectedGroups } from '../hashing/groups.ts';
 import type { FromWorker } from '../worker/protocol.ts';
 import { $, fmt, fmtInt, fmtKmS, fmtRange, fmtSlow } from './dom.ts';
 import { alertDistance } from './inspector.ts';
@@ -19,18 +25,26 @@ import { alertDistance } from './inspector.ts';
 type ScreenMessage = Extract<FromWorker, { type: 'screen' }>;
 
 const MAX_ROWS = 80;
-const DOCKED_KM = 0.1; // closer than 100 m = parts of one spacecraft, or flying joined together
+/** Closer than 100 m and not moving apart = parts of one spacecraft, or two flying joined together. */
+export const DOCKED_KM = 0.1;
+
+/** One row of the list: two objects near each other, or one spacecraft made of several catalogued objects. */
+type Row =
+  | { group: false; a: number; b: number; dist: number; speed: number }
+  | { group: true; members: number[] }; // catalogue indexes, the oldest object first
 
 type Kind = 'passing' | 'together';
 const KIND_NOTE: Record<Kind, string> = {
   passing: 'Objects on different orbits crossing paths right now. Each pass is over within seconds.',
-  together: 'Objects that stay close: docked spacecraft, formations and launch trains. They are not approaching each other.',
+  together: 'Objects that stay close: docked spacecraft, formations and launch trains. They are not approaching each other. A spacecraft catalogued in several parts is listed once.',
 };
 
 export interface MonitorHandlers {
   onToggle(on: boolean): void;
   onDistance(d: number): void;
   onPair(a: number, b: number): void;
+  /** A row that is one spacecraft catalogued as several objects was chosen (catalogue indexes, the oldest first). */
+  onJoined(members: number[]): void;
   onHow(): void;
 }
 
@@ -104,6 +118,37 @@ export class Monitor {
     this.render();
   }
 
+  /**
+   * The rows of the "Flying together" list: each joined spacecraft once, then the pairs that
+   * really are two things. Also says how many together-pairs arrived (the worker caps them).
+   */
+  private togetherRows(msg: ScreenMessage, catalog: Catalog): { rows: Row[]; received: number } {
+    const docked: [number, number][] = [];
+    let received = 0;
+    for (let k = 0; k < msg.pairA.length; k++) {
+      if (msg.pairSpeed[k] >= TOGETHER_KM_S) continue;
+      received++;
+      if (msg.pairDist[k] < DOCKED_KM) docked.push([msg.pairA[k], msg.pairB[k]]);
+    }
+    // Which spacecraft each joined object belongs to: a Map<object, its group>.
+    const groupOf = new Map<number, number[]>();
+    const rows: Row[] = [];
+    for (const members of connectedGroups(docked)) {
+      members.sort((p, q) => catalog.sats[p].noradId - catalog.sats[q].noradId); // the oldest part first: a station's core module
+      for (const index of members) groupOf.set(index, members);
+      rows.push({ group: true, members });
+    }
+    rows.sort((p, q) => (q as { members: number[] }).members.length - (p as { members: number[] }).members.length); // the largest spacecraft first
+    for (let k = 0; k < msg.pairA.length; k++) {
+      if (msg.pairSpeed[k] >= TOGETHER_KM_S) continue;
+      const a = msg.pairA[k], b = msg.pairB[k];
+      const group = groupOf.get(a);
+      if (group && group === groupOf.get(b)) continue; // two parts of the same spacecraft: already listed
+      rows.push({ group: false, a, b, dist: msg.pairDist[k], speed: msg.pairSpeed[k] });
+    }
+    return { rows, received };
+  }
+
   private render(): void {
     this.syncKind();
     if (!this.last) return;
@@ -111,40 +156,72 @@ export class Monitor {
     const { stats } = msg;
     const wantTogether = this.kind === 'together';
 
-    // Pairs arrive sorted by distance; rows are reused so the list does not flicker.
-    let shown = 0, closest = Infinity;
-    for (let k = 0; k < msg.pairA.length; k++) {
-      const dist = msg.pairDist[k], speed = msg.pairSpeed[k];
-      if (speed < TOGETHER_KM_S !== wantTogether) continue; // belongs to the other list
-      if (dist < closest) closest = dist;
-      if (shown >= MAX_ROWS) continue;
-      const a = catalog.sats[msg.pairA[k]], b = catalog.sats[msg.pairB[k]];
-      let row = this.list.children[shown] as HTMLLIElement | undefined;
+    // What to list. Pairs arrive sorted by distance.
+    const together = this.togetherRows(msg, catalog);
+    let rows: Row[];
+    if (wantTogether) rows = together.rows;
+    else {
+      rows = [];
+      for (let k = 0; k < msg.pairA.length; k++) {
+        if (msg.pairSpeed[k] >= TOGETHER_KM_S) rows.push({ group: false, a: msg.pairA[k], b: msg.pairB[k], dist: msg.pairDist[k], speed: msg.pairSpeed[k] });
+      }
+    }
+    let closest = Infinity;
+    for (const row of rows) if (!row.group && row.dist < closest) closest = row.dist;
+    // How many things fly together: spacecraft and pairs as listed, unless the worker had to
+    // cut its list short (then only its own count of pairs is known).
+    const togetherTotal = stats.together <= together.received ? together.rows.length : stats.together;
+
+    // Rows are reused so the list does not flicker.
+    const shown = Math.min(rows.length, MAX_ROWS);
+    for (let n = 0; n < shown; n++) {
+      const item = rows[n];
+      let row = this.list.children[n] as HTMLLIElement | undefined;
       if (!row || row.classList.contains('empty')) {
         row?.remove();
         row = document.createElement('li');
         row.innerHTML = '<i class="sev"></i><div class="names"><span><i class="dot"></i><b></b></span><span><i class="dot"></i><b></b></span></div><span class="dist"><b></b><small></small></span>';
-        row.addEventListener('click', () => this.handlers.onPair(Number(row!.dataset.a), Number(row!.dataset.b)));
-        this.list.insertBefore(row, this.list.children[shown] ?? null);
+        const made = row;
+        row.addEventListener('click', () => {
+          if (made.dataset.members) this.handlers.onJoined(made.dataset.members.split(',').map(Number));
+          else this.handlers.onPair(Number(made.dataset.a), Number(made.dataset.b));
+        });
+        this.list.insertBefore(row, this.list.children[n] ?? null);
       }
+      const names = row.querySelectorAll<HTMLElement>('.names b');
+      const dots = row.querySelectorAll<HTMLElement>('.dot');
+      const cell = row.lastElementChild as HTMLElement;
+      if (item.group) {
+        // One spacecraft: its oldest part by name, then the rest in short ("ISS (UNITY)" → "UNITY").
+        const [first, ...rest] = item.members.map((index) => catalog.sats[index]);
+        row.dataset.members = item.members.join(',');
+        row.dataset.pair = 'joined'; // never equal to an open pair's "a:b"
+        row.className = 'sev-calm is-joined';
+        row.title = `${item.members.length} catalogued objects that are one spacecraft: ${[first, ...rest].map((sat) => sat.name).join(', ')}`;
+        names[0].textContent = first.name;
+        names[1].textContent = `+ ${rest.map((sat) => sat.name.replace(/^[A-Z]+ \((.+)\)$/, '$1')).join(', ')}`;
+        dots[0].style.color = CATEGORY_COLORS[first.category];
+        (cell.firstElementChild as HTMLElement).textContent = 'joined';
+        (cell.lastElementChild as HTMLElement).textContent = `${item.members.length} objects`;
+        continue;
+      }
+      const a = catalog.sats[item.a], b = catalog.sats[item.b];
+      delete row.dataset.members;
+      row.title = '';
       row.dataset.a = String(a.index);
       row.dataset.b = String(b.index);
       row.dataset.pair = `${a.index}:${b.index}`;
       // Colour says how close a PASSING pair is; pairs flying together are no cause for alarm.
-      const severity = wantTogether ? 'sev-calm' : dist < 1 ? 'sev-high' : dist < msg.d / 2 ? 'sev-mid' : 'sev-low';
+      const severity = wantTogether ? 'sev-calm' : item.dist < 1 ? 'sev-high' : item.dist < msg.d / 2 ? 'sev-mid' : 'sev-low';
       row.className = `${severity}${row.dataset.pair === this.activePair ? ' is-on' : ''}`;
-      const names = row.querySelectorAll<HTMLElement>('.names b');
-      const dots = row.querySelectorAll<HTMLElement>('.dot');
       names[0].textContent = a.name;
       names[1].textContent = b.name;
       dots[0].style.color = CATEGORY_COLORS[a.category];
       dots[1].style.color = CATEGORY_COLORS[b.category];
-      const cell = row.lastElementChild as HTMLElement;
-      (cell.firstElementChild as HTMLElement).textContent = fmtRange(dist);
+      (cell.firstElementChild as HTMLElement).textContent = fmtRange(item.dist);
       (cell.lastElementChild as HTMLElement).textContent = wantTogether
-        ? dist < DOCKED_KM ? 'joined' : `drifting ${fmtSlow(speed)}`
-        : `passing at ${fmtKmS(speed, 1)}`;
-      shown++;
+        ? item.dist < DOCKED_KM ? 'joined' : `drifting ${fmtSlow(item.speed)}`
+        : `passing at ${fmtKmS(item.speed, 1)}`;
     }
     while (this.list.children.length > shown) this.list.lastElementChild!.remove();
     if (shown === 0) {
@@ -156,9 +233,9 @@ export class Monitor {
       this.list.append(empty);
     }
 
-    const total = wantTogether ? stats.together : stats.passing;
+    const total = wantTogether ? togetherTotal : stats.passing;
     $('conj-n-passing').textContent = fmtInt(stats.passing);
-    $('conj-n-together').textContent = fmtInt(stats.together);
+    $('conj-n-together').textContent = fmtInt(togetherTotal);
     $('conj-count').textContent = fmtInt(total);
     $('conj-closest').textContent = Number.isFinite(closest) ? fmtRange(closest) : '–';
     $('conj-time').textContent = `${fmt(stats.hashMs, 1)} ms`;

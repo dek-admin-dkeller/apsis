@@ -114,6 +114,13 @@ worker/lookahead.worker.ts: started on demand for the "Coming hours" scan (hashi
   as its position and labels every pair by relative speed (`TOGETHER_KM_S` = 0.1 km/s in
   `conjunction.ts`). `ScreenStats.passing` / `.together` are the true totals; the pair arrays
   are capped per kind. Globe markers, the top-bar count and the autopilot use passing only.
+- `hashing/groups.ts`: union–find with a `Map` as the parent table. The monitor uses it to merge
+  pairs closer than `DOCKED_KM` (100 m, `ui/monitor.ts`) and not drifting apart back into
+  spacecraft: the Space Station is 11 catalogued objects at one place, which screening reports
+  as 55 pairs at "0 m". Each such spacecraft is ONE row in "Flying together", and choosing it
+  (or any pair that `joinedNow()` in `main.ts` finds to be joined) selects the spacecraft
+  instead of opening a close-approach view — that view showed one model and "0 m", which the
+  owner reported as a bug. `scripts/check-groups.mjs` tests it.
 - `render/gridViz.ts` has a pair mode (`PairCells`): with a close approach open it draws the
   two objects' cells, A's 27-cell block, and turns both red while range < d.
 - Other hash tables are listed in the README ("Other places hashing is used").
@@ -128,7 +135,7 @@ src/data/                   catalog, categorize, describe (operator/purpose/mode
                             modules: radio + doppler (SatNOGS records, Doppler shift), changes (compare two downloads),
                             decay + spaceWeather (time left, NOAA flux and Kp), launches (Launch Library 2), visibility
                             (bright passes), approachData (report numbers), places (cities for the command bar)
-src/hashing/                SpatialHash, conjunction, lookahead, benchmark
+src/hashing/                SpatialHash, conjunction, lookahead, benchmark, groups (union–find)
 src/worker/                 sim.worker (+ SimClient, protocol, propagate), lookahead.worker, tonight.worker (visible passes)
 src/render/                 scene (renderer, bloom, quality presets), globe (Earth shader), tiles (close-up ground:
                             NASA GIBS map tiles streamed in below ~6,000 km), geoOverlay (borders, grid, terminator), sky (Milky Way, stars, constellations, planets, Sun, Moon), aurora, satellites
@@ -147,7 +154,7 @@ src/ui/                     app (the App interface), featureList (every feature,
 index.html                  all static markup; ids are the contract between HTML and the ui modules
 scripts/                    fetch-data.mjs, fetch-radio.mjs, diff-elements.mjs (writes changes.json), carry-over.mjs (push
                             builds keep the published data), build-borders.mjs, bench.mjs, shots.mjs, and the checks behind
-                            `npm run check`: check-changes, check-visibility, check-report, decay-check, test-command
+                            `npm run check`: check-changes, check-visibility, check-report, decay-check, test-command, check-groups
 public/                     data/ (satellites.json, satcat.json, radio.json, borders.bin; changes.json exists only in the
                             published site), shots/, textures/, icons/, manifest.webmanifest
 .github/workflows/deploy.yml  build + deploy to Pages; every 8 h it refreshes CelesTrak and SatNOGS data first (not committed

@@ -72,7 +72,7 @@ export const FEATURES: FeatureGroup[] = [
     title: 'Watch for close approaches',
     summary: 'Which objects are near each other now, and which will be in the coming hours.',
     items: [
-      { name: 'Monitor', text: 'Every object is checked against every other about once a second. Pairs are sorted into those crossing paths and those that simply fly together.' },
+      { name: 'Monitor', text: 'Every object is checked against every other about once a second. Pairs are sorted into those crossing paths and those that simply fly together, and a station’s docked parts count as one spacecraft.' },
       { name: 'Close-approach view', text: 'Both objects in 3D, their flight paths, the distance between them as it changes, and a slow-motion replay.' },
       { name: 'Coming hours', text: 'A scan up to 24 hours ahead for predicted close passes.' },
       { name: 'Screening cells', text: 'The grid that makes the search fast, drawn in space around the objects it is sorting.' },

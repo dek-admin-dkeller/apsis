@@ -67,7 +67,7 @@ import { installReport } from './features/report.ts';
 import { installTonight } from './features/tonight.ts';
 import { installWeather } from './features/weather.ts';
 import { Labels } from './ui/labels.ts';
-import { Monitor } from './ui/monitor.ts';
+import { DOCKED_KM, Monitor } from './ui/monitor.ts';
 import { initSearch } from './ui/search.ts';
 import { SettingsStore, type Settings } from './ui/settings.ts';
 import { ShareDialog } from './ui/share.ts';
@@ -259,6 +259,7 @@ const monitor = new Monitor({
     screenDirty = true;
   },
   onPair: (a, b) => openEncounter(a, b),
+  onJoined: (members) => showJoined(members),
   onHow: () => howto.open('hw-grid'),
 });
 const ahead = new AheadPanel(
@@ -711,8 +712,36 @@ $('m-sky').addEventListener('click', skyFromPhone);
 
 // ---- close-approach view ------------------------------------------------------------------
 
+/** Are these two catalogued objects one spacecraft right now: at the same place and not moving apart? */
+function joinedNow(a: Satellite, b: Satellite): boolean {
+  const sa = stateAt(makeSatrec(a), clock.time), sb = stateAt(makeSatrec(b), clock.time);
+  if (!sa || !sb) return false;
+  const apart = Math.hypot(sa.position.x - sb.position.x, sa.position.y - sb.position.y, sa.position.z - sb.position.z);
+  const drift = Math.hypot(sa.velocity.x - sb.velocity.x, sa.velocity.y - sb.velocity.y, sa.velocity.z - sb.velocity.z);
+  return apart < DOCKED_KM && drift < TOGETHER_KM_S;
+}
+
+/**
+ * A spacecraft that the catalogue lists as several objects (a station's modules, the capsules
+ * docked to it, a servicing vehicle on its client). There is no pair to draw: they are at the
+ * same place, so the close-approach view would show one model and "0 m". Select the
+ * spacecraft itself (its oldest part) and say what the visitor is looking at.
+ */
+function showJoined(members: number[]): void {
+  if (!catalog) return;
+  const sats = members.map((index) => catalog!.sats[index]).sort((p, q) => p.noradId - q.noradId);
+  select(sats[0]);
+  toast(
+    sats.length === 2
+      ? `${sats[0].name} and ${sats[1].name} are joined: listed as two objects, flying as one.`
+      : `${sats[0].name} is listed as ${sats.length} objects (its parts and what is docked to it). They fly as one spacecraft.`,
+    6500,
+  );
+}
+
 function openEncounter(aIndex: number, bIndex: number): void {
   if (!catalog) return;
+  if (joinedNow(catalog.sats[aIndex], catalog.sats[bIndex])) return showJoined([aIndex, bIndex]); // one spacecraft, not a pair
   if (fp.mode !== 'off') fp.exit();
   if (selected) {
     // leave the inspector without sending the camera back to the whole-Earth view
