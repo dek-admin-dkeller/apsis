@@ -17,6 +17,7 @@ interface Flight {
 const ORIGIN = new THREE.Vector3();
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
 const ZOOM_SPEED = 0.9; // OrbitControls' zoom step far from the Earth (matches scene.ts)
+const ROTATE_SPEED = 0.55; // …and its drag-to-turn rate
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
 export class CameraRig {
@@ -179,12 +180,17 @@ export class CameraRig {
     // what you want, but with the Earth's CENTRE as that point the same step near the
     // surface swallows most of the remaining altitude and feels wildly sensitive. So in an
     // Earth-centred view the step is scaled by how much altitude is left.
+    // Dragging has the same problem: one pixel always turns the camera by the same angle about
+    // the Earth's centre, so close to the surface the ground races past. The turn rate is tied
+    // to altitude so the ground moves roughly with the finger at any height.
     if (!this.focus && controls.target.lengthSq() < 1) {
       const distance = camera.position.length();
-      const altitudeShare = Math.max(0, distance - EARTH_RADIUS) / distance; // 0 at the surface → 1 far away
-      controls.zoomSpeed = ZOOM_SPEED * THREE.MathUtils.clamp(altitudeShare * 2.2, 0.14, 1);
+      const altitude = Math.max(0, distance - EARTH_RADIUS); // scene units (1,000 km)
+      controls.zoomSpeed = ZOOM_SPEED * THREE.MathUtils.clamp((altitude / distance) * 1.3, 0.06, 1);
+      controls.rotateSpeed = THREE.MathUtils.clamp(altitude * 0.033, 0.02, ROTATE_SPEED);
     } else {
       controls.zoomSpeed = ZOOM_SPEED;
+      controls.rotateSpeed = ROTATE_SPEED;
     }
 
     controls.update();

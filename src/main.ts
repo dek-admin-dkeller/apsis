@@ -15,6 +15,7 @@ import './style.css';
 import './mobile.css';
 
 import * as THREE from 'three';
+import { mountLaunch } from './ui/launch.ts';
 import { eciToGeodetic, gstime, type SatRec } from 'satellite.js';
 import { buildCatalog, loadLive, loadSnapshot, type Catalog } from './data/catalog.ts';
 import { describe } from './data/describe.ts';
@@ -64,6 +65,9 @@ import { Tour } from './ui/tour.ts';
 import { Watchlist } from './ui/watchlist.ts';
 import type { ScreenStats } from './worker/protocol.ts';
 import { SimClient } from './worker/SimClient.ts';
+
+// The loading screen's launch scene goes up first, before anything heavy starts.
+mountLaunch(document.querySelector<HTMLElement>('.launch')!);
 
 // ---------------------------------------------------------------- state
 
@@ -352,6 +356,7 @@ type PanelName = 'objects' | 'layers' | 'conj' | 'settings';
 let openPanelName: PanelName | null = null;
 function openPanel(name: PanelName | null): void {
   openPanelName = name;
+  if (name !== null) sheets.reset(); // phones: a sheet always opens at its normal height
   document.body.classList.toggle('panel-open', name !== null); // bars stay solid while a tool panel is in use
   for (const button of document.querySelectorAll<HTMLElement>('.rail-btn')) {
     const on = button.dataset.panel === name;
@@ -386,13 +391,32 @@ function updateViewShift(): void {
   else kit.camera.clearViewOffset();
 }
 
-// Phone-only chips and round buttons simply press the control they stand in for.
+// Phone-only buttons simply press the control they stand in for.
+const viewsMenu = $('m-views');
+const setViewsMenu = (open: boolean) => {
+  viewsMenu.classList.toggle('is-hidden', !open);
+  $('m-views-open').setAttribute('aria-expanded', String(open));
+};
 for (const button of document.querySelectorAll<HTMLElement>('[data-proxy]')) {
-  button.addEventListener('click', () => document.querySelector<HTMLElement>(button.dataset.proxy!)?.click());
+  button.addEventListener('click', () => {
+    setViewsMenu(false);
+    document.querySelector<HTMLElement>(button.dataset.proxy!)?.click();
+  });
 }
+$('m-views-open').addEventListener('click', (event) => {
+  event.stopPropagation();
+  setViewsMenu(viewsMenu.classList.contains('is-hidden'));
+});
+document.addEventListener('pointerdown', (event) => {
+  // a tap anywhere else closes the views menu
+  if (!viewsMenu.classList.contains('is-hidden') && !(event.target as HTMLElement).closest('#m-views, #m-views-open')) setViewsMenu(false);
+});
+const fitLabelsToScreen = () => (labels.nearby = Sheets.isPhone ? 5 : 18); // a phone screen fits far fewer name tags
+fitLabelsToScreen();
+window.addEventListener('resize', fitLabelsToScreen);
 /** A short tick on phones that support it (Android), so a tap that selects something can be felt. */
 const haptic = () => {
-  if (isPhone()) navigator.vibrate?.(8);
+  if (isPhone() && navigator.userActivation?.hasBeenActive) navigator.vibrate?.(8); // browsers refuse it before the first tap
 };
 
 // ---- small helpers -------------------------------------------------------------------------
@@ -448,6 +472,7 @@ function select(sat: Satellite | null): void {
   model.setKind(describe(sat).kind);
   rig.follow = true;
   if (isPhone()) openPanel(null); // one sheet at a time on a phone
+  sheets.reset();
   haptic();
   inspector.show(sat, facts.get(sat.noradId), true);
   inspector.setStarred(watch.has(sat));
@@ -501,6 +526,7 @@ function openEncounter(aIndex: number, bIndex: number): void {
     $('reticle').classList.add('is-hidden');
   }
   if (isPhone()) openPanel(null);
+  sheets.reset();
   const encounter = encPanel.open(catalog.sats[aIndex], catalog.sats[bIndex], clock.time, screeningDistance);
   const { approach, windowS } = encounter;
   encViz.show(encounter.recA, encounter.recB, approach, windowS);
@@ -1039,11 +1065,39 @@ cinema.onChange = () => {
   $('record').setAttribute('aria-pressed', String(cinema.isRecording));
 };
 
+// ---- home: the logo puts everything back the way it started ---------------------------------
+
+function goHome(): void {
+  if (cinema.isPlaying) cinema.stop();
+  if (fp.mode !== 'off') fp.exit();
+  closeEncounter(true);
+  if (selected) select(null);
+  openPanel(null);
+  setViewsMenu(false);
+  setKeys(false);
+  setAbout(false);
+  shareDialog.close();
+  if (howto.isOpen) howto.close();
+  if (bench.isOpen) bench.close();
+  sheets.reset();
+  jumpToNow();
+  preset(1);
+}
+$('home').addEventListener('click', goHome);
+$('home').addEventListener('keydown', (event) => {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    event.stopPropagation();
+    goHome();
+  }
+});
+
 window.addEventListener('keydown', (event) => {
   const el = event.target as HTMLElement;
   if (el instanceof HTMLInputElement && el.type !== 'checkbox' && el.type !== 'range') return; // typing in a field
   if (event.metaKey || event.ctrlKey || event.altKey) return;
   switch (event.key.toLowerCase()) {
+    case '0': goHome(); break;
     case '1': preset(1); break;
     case '2': preset(2); break;
     case '3': preset(3); break;

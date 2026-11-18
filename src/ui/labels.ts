@@ -17,10 +17,11 @@ export type LabelMode = 'off' | 'notable' | 'nearby';
 
 const FAMOUS = /^(ISS \(ZARYA\)|CSS \(TIANHE\)|HST|LANDSAT 9|GOES 19|TERRASAR-X|NOAA 21|SENTINEL-2A|TDRS 13|METEOSAT-12 \(MTG-I1\)|HIMAWARI-9)$/;
 const POOL = 26;
-const NEARBY = 18;
 
 export class Labels {
   mode: LabelMode = 'nearby';
+  /** How many of the nearest objects get a name tag (fewer on a phone, where they crowd the screen). */
+  nearby = 18;
   private readonly elements: HTMLDivElement[] = [];
   private famous: number[] = [];
   private pinned: number[] = []; // watchlist: always labelled
@@ -68,13 +69,13 @@ export class Labels {
     for (let i = 0; i < this.sim.count; i++) {
       if (!this.cloud.visible[i] || !this.sim.getPosition(i, p)) continue;
       const d2 = (p.x - cameraEci.x) ** 2 + (p.y - cameraEci.y) ** 2 + (p.z - cameraEci.z) ** 2;
-      if (nearest.length === NEARBY && d2 >= nearest[NEARBY - 1].d2) continue;
+      if (nearest.length === this.nearby && d2 >= nearest[this.nearby - 1].d2) continue;
       if (behindEarth(cameraEci, p)) continue;
       // insertion into a short sorted list — cheaper than sorting 20,000 distances
       let at = nearest.length;
       while (at > 0 && nearest[at - 1].d2 > d2) at--;
       nearest.splice(at, 0, { index: i, d2 });
-      if (nearest.length > NEARBY) nearest.pop();
+      if (nearest.length > this.nearby) nearest.pop();
     }
     for (const n of nearest) if (!this.chosen.includes(n.index)) this.chosen.push(n.index);
   }

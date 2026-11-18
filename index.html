@@ -20,27 +20,7 @@
 
     <!-- Loading screen -->
     <div id="loading">
-      <div class="launch" aria-hidden="true">
-        <div class="rocket">
-          <svg viewBox="0 0 48 124">
-            <defs>
-              <linearGradient id="hull" x1="0" x2="1">
-                <stop offset="0" stop-color="#8fa1b8" /><stop offset="0.35" stop-color="#f4f8fc" /><stop offset="0.7" stop-color="#cfd9e6" /><stop offset="1" stop-color="#6f8098" />
-              </linearGradient>
-            </defs>
-            <path d="M10 90L1 119l9-6zM38 90l9 29-9-6z" fill="#5f7189" />
-            <path d="M24 1C33 14 38 32 38 54v58H10V54C10 32 15 14 24 1z" fill="url(#hull)" />
-            <path d="M24 1c4.2 6 7.5 13 9.8 21H14.200C16.500 14 19.800 7 24 1z" fill="#1b2a41" />
-            <rect x="10" y="80" width="28" height="5" fill="#7fe3ff" />
-            <circle cx="24" cy="46" r="6" fill="#0d2238" stroke="#9fb4c9" stroke-width="1.5" />
-            <path d="M22 112h4l2.500 11h-9z" fill="#3c4a5e" /><path d="M13 112h5l1.500 9h-8zM30 112h5l1.500 9h-8z" fill="#465469" />
-          </svg>
-          <i class="flame"></i>
-          <i class="plume"></i>
-        </div>
-        <i class="smoke s1"></i><i class="smoke s2"></i><i class="smoke s3"></i>
-        <i class="pad"></i>
-      </div>
+      <div class="launch" aria-hidden="true"></div>
       <div class="loading-inner">
         <p class="wordmark">
           <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
@@ -67,7 +47,7 @@
     <div id="hud" class="hud-hidden">
       <!-- ============ top bar ============ -->
       <header class="topbar">
-        <div class="brand">
+        <div class="brand" id="home" role="button" tabindex="0" title="Home: close everything and go back to the whole-Earth view (0)" aria-label="Home: close everything and reset the view">
           <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
             <g transform="rotate(-30 16 16)">
               <path d="M27.5 16a11.5 7 0 1 1-3.4-4.95" fill="none" stroke="#e8f1fb" stroke-width="1.9" stroke-linecap="round" />
@@ -116,24 +96,24 @@
         </nav>
       </header>
 
-      <!-- ============ phones only: view chips under the search field, round buttons on the right edge ============ -->
-      <div id="m-chips" class="m-only" role="group" aria-label="Views">
-        <button data-proxy="[data-view='1']">Earth</button>
-        <button data-proxy="[data-view='2']">Low orbit</button>
-        <button data-proxy="[data-view='3']">GEO ring</button>
-        <button data-proxy="#view-sky">Sky view</button>
-        <button data-proxy="#autopilot">Autopilot</button>
-      </div>
+      <!-- ============ phones only: three round buttons on the right edge; the middle one opens the list of views ============ -->
       <div id="m-stack" class="m-only">
         <button data-proxy="#locate-top" aria-label="Show where I am on the globe">
           <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="5.5" /><circle cx="10" cy="10" r="1.6" /><path d="M10 1.5v3M10 15.5v3M1.5 10h3M15.5 10h3" /></svg>
         </button>
+        <button id="m-views-open" aria-label="Views" aria-expanded="false">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" /><path d="M3 10h14M10 3c2.5 2 2.5 12 0 14M10 3c-2.5 2-2.5 12 0 14" /></svg>
+        </button>
         <button data-proxy="#share" aria-label="Share: QR code and link">
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 12.5V3M6.5 6L10 2.5 13.5 6M4.5 10v6.5h11V10" /></svg>
         </button>
-        <button data-proxy="#keys-open" aria-label="Controls and tour">
-          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5" /><path d="M7.8 7.8a2.3 2.3 0 1 1 3.3 2.1c-.7.4-1.1.9-1.1 1.6M10 14.3v.2" /></svg>
-        </button>
+      </div>
+      <div id="m-views" class="m-only is-hidden" role="menu" aria-label="Views">
+        <button role="menuitem" data-proxy="[data-view='1']">Whole Earth</button>
+        <button role="menuitem" data-proxy="[data-view='2']">Low orbit</button>
+        <button role="menuitem" data-proxy="[data-view='3']">GEO ring</button>
+        <button role="menuitem" data-proxy="#view-sky">Sky from my location</button>
+        <button role="menuitem" data-proxy="#autopilot">Autopilot tour</button>
       </div>
 
       <!-- ============ tool rail ============ -->
@@ -353,6 +333,7 @@
               <p class="note" id="data-note"></p>
               <button id="refresh" class="btn wide" title="One request to CelesTrak; keeps the saved data if it fails">Download current elements</button>
             </details>
+            <button class="btn wide m-only" data-proxy="#tour-start">Take the tour</button>
             <button id="display-reset" class="btn wide">Reset all settings</button>
           </div>
         </section>
@@ -798,6 +779,7 @@
           <div><dt><kbd>R</kbd></dt><dd>Run time backwards</dd></div>
           <div><dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Step 10 minutes</dd></div>
           <div><dt><kbd>N</kbd></dt><dd>Back to now</dd></div>
+          <div><dt><kbd>0</kbd> or the logo</dt><dd>Home: close everything, back to now and the whole Earth</dd></div>
           <div><dt><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></dt><dd>Earth, low orbit, GEO ring</dd></div>
           <div><dt><kbd>O</kbd> <kbd>L</kbd> <kbd>C</kbd> <kbd>,</kbd></dt><dd>Objects, layers, monitor, settings</dd></div>
           <div><dt><kbd>G</kbd></dt><dd>Screening cells</dd></div>

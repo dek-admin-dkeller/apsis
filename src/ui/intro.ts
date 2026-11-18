@@ -13,7 +13,7 @@ export class LoadingScreen {
     this.counted = new Promise((resolve) => {
       const start = performance.now();
       const tick = (now: number) => {
-        const t = Math.min(1, (now - start) / durationMs);
+        const t = Math.min(1, Math.max(0, (now - start) / durationMs)); // the first frame's timestamp can predate `start`
         this.counter.textContent = fmtInt(total * (1 - Math.pow(1 - t, 3))); // ease-out
         if (t < 1) requestAnimationFrame(tick);
         else resolve();
@@ -22,7 +22,11 @@ export class LoadingScreen {
     });
   }
 
+  private shown = 0;
+
+  /** Progress never goes backwards, even though textures and data finish in no fixed order. */
   progress(fraction: number, status: string): void {
+    fraction = this.shown = Math.max(this.shown, fraction);
     this.bar.style.width = `${Math.round(fraction * 100)}%`;
     $('loading').style.setProperty('--p', fraction.toFixed(3)); // how high the rocket has climbed
     this.status.textContent = status;

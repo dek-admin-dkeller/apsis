@@ -238,11 +238,6 @@
 
   /* ---------- loading screen: rocket in the middle, text underneath ---------- */
 
-  .launch { left: 50%; opacity: 0.9; }
-  .rocket, .pad { bottom: 36vh; }
-  .rocket { left: -30px; width: 60px; transform: translateY(calc(var(--p) * -38vh)); }
-  .smoke { bottom: 35vh; }
-  .plume { height: calc(var(--p) * 38vh + 12vh); }
   .loading-inner { left: 24px; right: 24px; top: auto; bottom: calc(7vh + env(safe-area-inset-bottom, 0px)); width: auto; transform: none; }
   .wordmark { gap: 11px; margin-bottom: 18px; }
   .wordmark .logo { width: 32px; height: 32px; }
@@ -279,8 +274,6 @@
   #hud:has(#encounter:not(.is-hidden)) .timebar { display: none; }
 
   .loading-inner { bottom: 5vh; }
-  .rocket, .pad { bottom: 44vh; }
-  .smoke { bottom: 43vh; }
 }
 
 /* ============================================================== 4. elements added later */
@@ -635,3 +628,65 @@
   #hud > .dock > .panel { animation: none; }
   :root.sheet-gliding #hud > .dock > .panel { transition: none; }
 }
+
+/* ============================================================== 6. calmer phone layout
+ * Fewer things on screen at once: no logo button, no chip row (views are one round button
+ * with a short menu), three round buttons, fewer name tags, lighter shadows. Plus the rule
+ * that whichever sheet was opened last is the one on top.
+ */
+
+@media (max-width: 760px) {
+  :root { --sheet: 54vh; --m-shadow: 0 6px 22px rgba(0, 0, 0, 0.38); }
+  @supports (height: 1dvh) {
+    :root { --sheet: 54dvh; }
+  }
+
+  /* the round logo button is Home: it closes everything and returns to the whole-Earth view */
+  #home { border-radius: 50%; }
+  #m-stack { top: calc(66px + var(--safe-top)); gap: 8px; }
+  #m-stack button { width: 44px; height: 44px; }
+  #m-stack button[aria-expanded='true'] { color: var(--cyan); border-color: rgba(127, 227, 255, 0.5); }
+
+  #m-views {
+    position: absolute;
+    right: 64px;
+    top: calc(66px + var(--safe-top));
+    z-index: 5;
+    flex-direction: column;
+    min-width: 200px;
+    padding: 6px;
+    border-radius: 20px;
+    background: var(--m-glass);
+    border: 1px solid var(--m-edge);
+    backdrop-filter: var(--m-blur);
+    -webkit-backdrop-filter: var(--m-blur);
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+    pointer-events: auto;
+    animation: menu-in 160ms ease-out;
+    transform-origin: top right;
+  }
+  #m-views button { min-height: 46px; padding: 0 14px; border: 0; border-radius: 14px; background: none; color: var(--text); font-size: 15px; text-align: left; }
+  #m-views button:active { background: rgba(255, 255, 255, 0.08); }
+  body.first-person #m-views { display: none; }
+
+  /* The sheet opened last is on top: a tool panel opened from the tab bar covers the inspector,
+     and closing it brings the inspector back. (Selecting an object closes the tool panel.) */
+  body.panel-open #hud > .dock-left { z-index: 4; }
+
+  /* Only one thing at the top at a time: with a tool panel up, the time pill waits out of the way. */
+  body.panel-open .timebar { display: none; }
+  #hud:has(#inspector:not(.is-hidden)) .timebar,
+  #hud:has(#encounter:not(.is-hidden)) .timebar { top: calc(66px + var(--safe-top)); bottom: auto; left: 10px; transform: none; }
+  #hud:has(#inspector:not(.is-hidden)) .timebar.is-open,
+  #hud:has(#encounter:not(.is-hidden)) .timebar.is-open { left: 50%; transform: translateX(-50%); }
+
+  /* quieter globe: no constellation names, smaller object names */
+  .sky-label.is-figure { display: none !important; }
+  .sat-label { font-size: 10px; opacity: 0.85; }
+
+  /* the tour explains from the top, clear of the sheets and the tab bar */
+  .tour-card { top: calc(64px + var(--safe-top)) !important; bottom: auto !important; }
+  .fp-banner { top: calc(62px + var(--safe-top)); }
+  #loc-ask { left: 10px; right: 10px; width: auto; transform: none; animation: none; }
+}
+@keyframes menu-in { from { opacity: 0; transform: scale(0.94); } }

@@ -1,0 +1,277 @@
+/*
+ * The launch scene on the loading screen (built by launch.ts).
+ *
+ * Everything is driven by ONE number: --p on #loading, the load progress from 0 to 1.
+ * It is registered below as a real number so the browser can glide between the stepped
+ * values the loader sets. From it:
+ *   --rise   the vehicle climbs a little, then holds its place on screen
+ *   --fall   the pad, tower and horizon drop away underneath (the camera is following)
+ *   stars    three layers slide down at different rates (parallax)
+ *   plume    grows longer and wider as the air thins
+ * When loading finishes, #loading.is-liftoff lets the vehicle go.
+ */
+
+@property --p {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+/* Stepped progress values glide instead of jumping. (opacity is the loader's own fade-out.) */
+html #loading { transition: opacity 1s ease, --p 1.2s cubic-bezier(0.33, 0.1, 0.2, 1); }
+
+/* The old container was a zero-width column; the scene lays itself out against the screen instead. */
+#loading > .launch { position: static; width: auto; height: auto; opacity: 1; }
+
+.lx-root {
+  --x: 68%; /* where the vehicle stands, across the screen */
+  --base: 16vh; /* height of the pad above the bottom edge */
+  --h: clamp(250px, 46vh, 430px); /* vehicle height */
+  --w: calc(var(--h) * 52 / 548); /* its drawing is 52 × 548 */
+  --plume: calc(var(--h) * 0.95); /* full length of the exhaust */
+  --rise: calc(min(var(--p) * 2.5, 1) * -18vh);
+  --fall: calc(var(--p) * 150vh);
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.lx-root > * { position: absolute; }
+
+/* ---------- sky and stars ---------- */
+
+.lx-sky {
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(to top, rgba(18, 44, 88, 0.85) 0%, rgba(10, 26, 54, 0.6) 26%, rgba(5, 12, 26, 0) 70%);
+  opacity: calc(1 - var(--p) * 1.15); /* navy near the ground, black once it is up */
+}
+.lx-stars { left: 0; right: 0; z-index: 1; opacity: calc(0.35 + var(--p) * 0.65); will-change: transform; }
+.lx-s1 { top: -12vh; height: 124vh; transform: translateY(calc(var(--p) * 10vh)); }
+.lx-s2 { top: -26vh; height: 138vh; transform: translateY(calc(var(--p) * 24vh)); }
+.lx-s3 { top: -48vh; height: 160vh; transform: translateY(calc(var(--p) * 46vh)); }
+
+/* ---------- the vehicle and its exhaust (two layers, so the pad can sit between them) ---------- */
+
+.lx-vehicle, .lx-plume-wrap {
+  left: var(--x);
+  bottom: var(--base);
+  width: var(--w);
+  height: var(--h);
+  transform: translate(-50%, var(--rise));
+  will-change: transform;
+}
+.lx-plume-wrap { z-index: 2; }
+.lx-vehicle { z-index: 4; }
+.lx-vehicle svg { display: block; width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 0 10px rgba(140, 180, 255, 0.12)); }
+
+.lx-plume {
+  position: absolute;
+  left: 50%;
+  top: calc(100% - var(--h) * 0.012);
+  width: 0;
+  height: 0;
+  transform-origin: 50% 0;
+  /* barely lit on the pad; long and broad at altitude */
+  transform: scale(calc(0.8 + var(--p) * 0.5), clamp(0.1, var(--p) * 2.2, 1));
+}
+.lx-plume i { position: absolute; top: 0; left: 0; transform-origin: 50% 0; will-change: transform, opacity; }
+/* Each layer is half an ellipse hanging from the nozzles: soft-edged by construction, so little blur is needed. */
+.lx-sheath {
+  width: calc(var(--w) * 1.5);
+  height: var(--plume);
+  margin-left: calc(var(--w) * -0.75);
+  background: radial-gradient(ellipse 50% 100% at 50% 0, rgba(255, 190, 112, 0.55) 0%, rgba(255, 142, 62, 0.28) 40%, rgba(255, 118, 48, 0) 100%);
+  filter: blur(3px);
+  animation: lx-sheath 0.29s ease-in-out infinite alternate;
+}
+.lx-core {
+  width: calc(var(--w) * 0.62);
+  height: calc(var(--plume) * 0.72);
+  margin-left: calc(var(--w) * -0.31);
+  background: radial-gradient(ellipse 50% 100% at 50% 0, #ffffff 0%, #fff4d8 14%, #ffca7a 34%, rgba(255, 142, 62, 0.5) 62%, rgba(255, 110, 40, 0) 100%);
+  filter: blur(1px);
+  animation: lx-core 0.11s ease-in-out infinite alternate;
+}
+.lx-boost {
+  width: calc(var(--w) * 0.86);
+  height: calc(var(--plume) * 0.9);
+  margin-left: calc(var(--w) * -0.43);
+  background: radial-gradient(ellipse 50% 100% at 50% 0, #ffffff 0%, #fff0c8 22%, rgba(255, 196, 110, 0.6) 52%, rgba(255, 130, 50, 0) 100%);
+  opacity: 0;
+  transition: opacity 0.25s ease-out;
+}
+.lx-blue {
+  width: calc(var(--w) * 0.95);
+  height: calc(var(--w) * 1.1);
+  margin-left: calc(var(--w) * -0.475);
+  background: radial-gradient(ellipse 50% 100% at 50% 0, rgba(156, 194, 255, 0.78) 0%, rgba(120, 160, 255, 0) 100%);
+  animation: lx-blue 0.23s ease-in-out infinite alternate;
+}
+/* shock diamonds: brighter knots strung down the core */
+.lx-bead {
+  width: calc(var(--w) * 0.42);
+  height: calc(var(--w) * 0.34);
+  margin-left: calc(var(--w) * -0.21);
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.95) 0%, rgba(255, 238, 196, 0.5) 45%, rgba(255, 220, 160, 0) 100%);
+  animation: lx-bead 0.17s ease-in-out infinite alternate;
+}
+.lx-plume .lx-b1 { top: calc(var(--plume) * 0.06); opacity: 0.9; }
+.lx-plume .lx-b2 { top: calc(var(--plume) * 0.135); opacity: 0.7; animation-delay: -0.05s; }
+.lx-plume .lx-b3 { top: calc(var(--plume) * 0.215); opacity: 0.5; animation-delay: -0.11s; }
+.lx-plume .lx-b4 { top: calc(var(--plume) * 0.3); opacity: 0.32; animation-delay: -0.02s; }
+
+/* three rhythms that never line up, so the flame never visibly "pulses" */
+@keyframes lx-core { from { transform: scale(0.93, 0.97); } to { transform: scale(1.06, 1.03); } }
+@keyframes lx-sheath { from { transform: scaleX(0.96); opacity: 0.66; } to { transform: scaleX(1.05); opacity: 0.9; } }
+@keyframes lx-blue { from { opacity: 0.65; } to { opacity: 1; } }
+@keyframes lx-bead { from { transform: translateY(-1.5px) scale(0.94); } to { transform: translateY(2px) scale(1.06); } }
+
+/* a wisp of cold propellant venting beside the second stage while it is still low */
+.lx-vent { position: absolute; left: 76%; top: 34%; width: calc(var(--w) * 1.7); height: calc(var(--w) * 0.9); opacity: calc(0.9 - var(--p) * 6); }
+.lx-vent i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: 0 50%;
+  background: radial-gradient(closest-side, rgba(236, 243, 251, 0.5), rgba(236, 243, 251, 0));
+  animation: lx-vent 2.6s ease-out infinite;
+}
+@keyframes lx-vent {
+  0% { transform: translate(0, 0) scale(0.4); opacity: 0; }
+  18% { opacity: 0.7; }
+  100% { transform: translate(120%, -30%) scale(1.5); opacity: 0; }
+}
+
+/* ---------- the ground: everything here falls away as the camera climbs ---------- */
+
+.lx-ground { inset: 0; z-index: 3; transform: translateY(var(--fall)); will-change: transform; }
+.lx-ground.lx-front { z-index: 5; }
+.lx-ground > * { position: absolute; }
+
+.lx-horizon {
+  left: calc(var(--x) - 60vw);
+  bottom: calc(var(--base) - 2.4vh);
+  width: 120vw;
+  height: 26vh;
+  background: radial-gradient(ellipse 50% 100% at 50% 100%, rgba(60, 110, 190, 0.34) 0%, rgba(40, 80, 150, 0.12) 45%, rgba(40, 80, 150, 0) 75%);
+}
+.lx-earth {
+  left: -10vw;
+  right: -10vw;
+  bottom: -200vh;
+  height: calc(200vh + var(--base) - 2.4vh);
+  border-top: 1px solid rgba(120, 150, 200, 0.22);
+  background: linear-gradient(to bottom, #0b1526 0, #070d18 18vh, #04070d 60vh);
+}
+.lx-pad {
+  left: var(--x);
+  bottom: calc(var(--base) - 2.4vh);
+  width: calc(var(--w) * 5.4);
+  height: 2.4vh;
+  margin-left: calc(var(--w) * -2.7);
+  background: linear-gradient(to bottom, #2c3850 0, #1a2334 30%, #0f1622 100%);
+  clip-path: polygon(7% 0, 93% 0, 100% 100%, 0 100%);
+}
+.lx-tower {
+  left: calc(var(--x) - var(--w) * 0.52 - var(--h) * 0.12);
+  bottom: var(--base);
+  width: calc(var(--h) * 0.12);
+  height: calc(var(--h) * 0.96);
+  opacity: 0.85;
+}
+.lx-tower svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.lx-beacon { position: absolute; left: 40%; top: 0; width: 4px; height: 4px; margin: -1px 0 0 -2px; border-radius: 50%; background: #ff4d5e; box-shadow: 0 0 8px 2px rgba(255, 77, 94, 0.55); animation: lx-beacon 1.9s ease-in-out infinite; }
+@keyframes lx-beacon { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+/* a lightning mast standing off to the other side */
+.lx-mast { left: calc(var(--x) + var(--w) * 2.7); bottom: var(--base); width: 1px; height: calc(var(--h) * 1.08); background: linear-gradient(to top, rgba(74, 91, 116, 0.9), rgba(74, 91, 116, 0.45)); }
+.lx-mast::after { content: ''; position: absolute; left: -2px; bottom: 0; width: 5px; height: 12%; background: linear-gradient(to top, rgba(74, 91, 116, 0.9), rgba(74, 91, 116, 0)); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+
+/* ignition light on the pad */
+.lx-bloom {
+  left: var(--x);
+  bottom: calc(var(--base) - 1vh - var(--w) * 2.2);
+  width: calc(var(--w) * 9);
+  height: calc(var(--w) * 5);
+  margin-left: calc(var(--w) * -4.5);
+  background: radial-gradient(closest-side, rgba(255, 204, 136, 0.72) 0%, rgba(255, 150, 70, 0.28) 40%, rgba(255, 140, 60, 0) 72%);
+  animation: lx-bloom 0.19s ease-in-out infinite alternate;
+}
+@keyframes lx-bloom { from { opacity: 0.72; } to { opacity: 1; } }
+
+.lx-smoke {
+  left: var(--x);
+  bottom: calc(var(--base) - 1.8vh);
+  width: calc(var(--w) * 3.4);
+  height: calc(var(--w) * 2.3);
+  margin-left: calc(var(--w) * -1.7);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(226, 232, 242, 0.9) 0%, rgba(206, 216, 232, 0.5) 45%, rgba(206, 216, 232, 0) 100%);
+  opacity: 0;
+  animation: lx-billow 4s ease-out infinite;
+  will-change: transform, opacity;
+}
+@keyframes lx-billow {
+  0% { transform: translate(0, 0) scale(0.45); opacity: 0; }
+  14% { opacity: var(--lx-a, 0.5); }
+  100% { transform: translate(var(--lx-dx, 12vw), var(--lx-dy, -2vh)) scale(var(--lx-s, 2.4)); opacity: 0; }
+}
+
+/* ---------- telemetry ---------- */
+
+.lx-telemetry {
+  left: calc(var(--x) + var(--w) * 0.5 + 44px);
+  top: 24vh;
+  z-index: 6;
+  display: grid;
+  gap: 11px;
+  margin: 0;
+  padding-left: 14px;
+  border-left: 1px solid var(--line-strong, rgba(150, 185, 230, 0.28));
+}
+.lx-telemetry div { display: grid; gap: 3px; }
+.lx-telemetry dt { font: 10.5px/1.2 var(--font-ui, system-ui, sans-serif); color: var(--muted, #8296ae); }
+.lx-telemetry dd { margin: 0; font: 500 12.5px/1.2 var(--font-mono, ui-monospace, monospace); font-variant-numeric: tabular-nums; color: var(--cyan, #7fe3ff); white-space: nowrap; }
+
+/* ---------- lift-off: throttle up, and the camera lets go ---------- */
+
+#loading.is-liftoff .lx-vehicle,
+#loading.is-liftoff .lx-plume-wrap { transform: translate(-50%, -150vh); transition: transform 0.9s cubic-bezier(0.55, 0, 0.9, 0.35); }
+#loading.is-liftoff .lx-plume { transform: scale(1.4, 1.5); transition: transform 0.3s ease-out; }
+#loading.is-liftoff .lx-boost { opacity: 1; }
+#loading.is-liftoff .lx-stars { transition: transform 0.9s cubic-bezier(0.5, 0, 0.9, 0.5); }
+#loading.is-liftoff .lx-s1 { transform: translateY(calc(var(--p) * 10vh + 4vh)) scaleY(1.4); }
+#loading.is-liftoff .lx-s2 { transform: translateY(calc(var(--p) * 24vh + 9vh)) scaleY(2.1); }
+#loading.is-liftoff .lx-s3 { transform: translateY(calc(var(--p) * 46vh + 16vh)) scaleY(3); }
+
+/* ---------- phones: the vehicle stands in the middle of the upper two-thirds ---------- */
+
+@media (max-width: 760px) {
+  .lx-root {
+    --x: 44%;
+    --base: 38vh; /* the loading text has the bottom third */
+    --h: clamp(190px, 36vh, 320px);
+    --rise: calc(min(var(--p) * 2.5, 1) * -9vh);
+  }
+  .lx-telemetry { left: calc(var(--x) + var(--w) * 0.5 + 26px); top: 15vh; gap: 9px; padding-left: 11px; }
+  .lx-mast { display: none; }
+}
+@media (max-width: 760px) and (orientation: landscape) {
+  .lx-root { --x: 70%; --base: 14vh; --h: clamp(150px, 56vh, 300px); }
+  .lx-telemetry { top: 16vh; }
+}
+
+/* ---------- reduced motion: the vehicle stands on its pad, engines idling, nothing moves ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  html #loading { transition: opacity 1s ease; }
+  .lx-root { --rise: 0px; --fall: 0px; }
+  .lx-root *, .lx-root *::before, .lx-root *::after { animation: none !important; }
+  .lx-stars { transform: none !important; opacity: 0.7; }
+  .lx-sky { opacity: 1; }
+  .lx-plume { transform: scale(0.9, 0.12) !important; }
+  .lx-smoke, .lx-vent { display: none; }
+  #loading.is-liftoff .lx-vehicle,
+  #loading.is-liftoff .lx-plume-wrap { transform: translate(-50%, 0); transition: none; }
+  #loading.is-liftoff .lx-boost { opacity: 0; }
+}

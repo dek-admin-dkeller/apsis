@@ -9,6 +9,7 @@
 
 const PHONE_MAX_WIDTH = 760;
 const COLLAPSED = 58; // px: the header alone
+const DEFAULT_SHARE = 0.54; // of the screen height (matches --sheet in mobile.css)
 
 export class Sheets {
   private height: number | null = null; // px once dragged; null = the stylesheet's default (58% of the screen)
@@ -30,11 +31,19 @@ export class Sheets {
 
   /** Height of an open sheet right now, in pixels (what the 3D view should make room for). */
   get current(): number {
-    return this.height ?? Math.round(window.innerHeight * 0.58);
+    return this.height ?? Math.round(window.innerHeight * DEFAULT_SHARE);
   }
 
   private get tallest(): number {
     return Math.max(COLLAPSED, window.innerHeight - 70 - 84 - 12); // below the search field, above the tab bar
+  }
+
+  /** A sheet that is being opened always starts at its normal height, whatever the last one was dragged to. */
+  reset(): void {
+    if (this.height === null) return;
+    this.height = null;
+    document.documentElement.style.removeProperty('--sheet');
+    this.onResize();
   }
 
   /** Glide to a height (used after a tap or a flick) instead of jumping. */
@@ -78,7 +87,7 @@ export class Sheets {
       if (!active) return;
       active = false;
       // A tap (no drag) toggles between tucked away and the default height.
-      if (!moved) this.glide(this.current <= COLLAPSED + 24 ? window.innerHeight * 0.58 : COLLAPSED);
+      if (!moved) this.glide(this.current <= COLLAPSED + 24 ? window.innerHeight * DEFAULT_SHARE : COLLAPSED);
       // A quick flick carries on in its direction: down tucks the sheet away, up opens it fully.
       else if (velocity > 0.5) this.glide(COLLAPSED); // 500 px/s counts as a deliberate fling
       else if (velocity < -0.5) this.glide(this.tallest);

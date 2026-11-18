@@ -13,6 +13,9 @@ closer than a screening distance `d`. The naive way compares every pair: n(n−1
 **191 million** distance checks per tick. OrbitHash hashes each object's position into a
 grid cell and gets the *identical* answer with a few hundred checks.
 
+Working on the code, or handing it to an AI agent? Start with [CLAUDE.md](CLAUDE.md): it
+explains the architecture, the coordinate frames, the conventions and how to verify a change.
+
 ## Run it
 
 Needs Node 22.18 or newer (the benchmark script imports the TypeScript files directly).
@@ -43,7 +46,8 @@ status line sit along the bottom.
 
 | What | How |
 | --- | --- |
-| Look around | drag = rotate, scroll = zoom, right-drag = pan |
+| Look around | drag = rotate, scroll = zoom, right-drag = pan. Drag and zoom slow down as you get close to the surface |
+| Home | the logo (or `0`) closes everything and returns to the whole Earth at the present time |
 | Inspect an object | click a dot, or search by name / NORAD ID (press `/`; suggestions show a photo or a 3D-model thumbnail). The camera flies to the object and locks on: dragging now turns the view around **it**, not the Earth (`T` unlocks) |
 | Inspector tabs | **Live** telemetry, ground-track map, altitude chart · **Orbit** shape to scale, orbital elements, speed and sunlight charts · **Passes** over your ground station with a sky chart · **Record** owner, launch, size, a Wikipedia summary and the raw element record |
 | Objects panel (`O`) | filter by type, orbit regime, altitude band; colour by type, orbit, altitude, owner, launch year or tilt; labels, marker size; shortcuts to notable objects |
@@ -213,6 +217,7 @@ src/
     constellations.ts    constellation picker                      contacts.ts   ground-station contact timeline
     crew.ts              people in space                           share.ts   QR code and link
     cinema.ts            autopilot tour and video recording        sheet.ts   draggable bottom sheets on phones
+    launch.ts            the loading screen's launch scene         intro.ts   loading progress and hand-over
     howto.ts             the walkthrough page                     hashTrace.ts   one object through the hash
     filters.ts  search.ts  settings.ts  timeControls.ts  labels.ts  benchmarkModal.ts  intro.ts
   mobile.css             phone layout: bottom tab bar and bottom sheets
