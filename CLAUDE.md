@@ -170,6 +170,12 @@ bar, one outline, one glass); dragged fully down the sheet is "tucked" (22 px: o
 class `sheet-tucked` on `<html>`), leaving the tab bar. `sheet.ts`'s `COLLAPSED` and
 `tallest` must match the `min-height` and offsets in `mobile.css`.
 
+Phone chrome is deliberately minimal (the owner's rule: the globe is the feature, the
+interface stays out of its way): search pill, two round buttons (sky view, menu), the tab
+bar. There is NO time bar on a phone: `mobile.css` section 10 hides `.timebar` unless `<body>`
+has `m-time-open`, which follows the bar's own `is-open` class (menu → "Time and speed", the
+tour, tap elsewhere to close); `#m-time-chip` appears only while time is not live.
+
 Phone sky view: the `#m-sky` button calls `skyFromPhone()` in `main.ts`, which asks for the
 location (and, on iOS, the motion sensors) straight from the tap, then enters the sky view
 with `sky-immersive` on `<body>`: `firstPerson.css` hides the whole interface and leaves only

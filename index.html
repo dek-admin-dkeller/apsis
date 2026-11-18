@@ -166,6 +166,8 @@
         <button id="m-views-open" aria-label="Views and more" aria-expanded="false">
           <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="4.5" cy="10" r="1.3" /><circle cx="10" cy="10" r="1.3" /><circle cx="15.5" cy="10" r="1.3" /></svg>
         </button>
+        <!-- Shown only while time is not running live (paused, sped up, moved): says so, and opens the time controls. -->
+        <button id="m-time-chip" class="is-hidden" aria-label="Time controls"></button>
       </div>
       <div id="m-views" class="m-only is-hidden" role="menu" aria-label="Views and more">
         <button role="menuitem" data-proxy="[data-view='1']">Whole Earth</button>
@@ -173,6 +175,7 @@
         <button role="menuitem" data-proxy="[data-view='3']">GEO ring</button>
         <button role="menuitem" data-proxy="[data-view='5']">Earth and Moon</button>
         <button role="menuitem" data-proxy="#autopilot">Autopilot tour</button>
+        <button role="menuitem" id="m-time-open">Time and speed</button>
         <button role="menuitem" data-proxy="#locate-top">Show where I am</button>
         <button role="menuitem" data-proxy="#share">Share</button>
       </div>

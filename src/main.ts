@@ -54,7 +54,7 @@ import { EncounterPanel, type Encounter, type EncounterFocus } from './ui/encoun
 import { Filters } from './ui/filters.ts';
 import { HashTrace } from './ui/hashTrace.ts';
 import { HowTo } from './ui/howto.ts';
-import { alertDistance, clockStamp, Inspector } from './ui/inspector.ts';
+import { alertDistance, clockStamp, duration, Inspector } from './ui/inspector.ts';
 import { LoadingScreen } from './ui/intro.ts';
 import { Landing } from './ui/landing.ts';
 import type { App, FrameInfo } from './ui/app.ts';
@@ -502,6 +502,38 @@ document.addEventListener('pointerdown', (event) => {
   // a tap anywhere else closes the views menu
   if (!viewsMenu.classList.contains('is-hidden') && !(event.target as HTMLElement).closest('#m-views, #m-views-open')) setViewsMenu(false);
 });
+// Phones: the time bar is not on the screen at all (the globe gets the room). It opens from the
+// menu, closes again with a tap anywhere else (the bar's own rule), and a small chip beside
+// the menu button says so whenever time is NOT running live, so a paused or fast-forwarded
+// clock is never a mystery.
+const timeBar = document.querySelector<HTMLElement>('.timebar')!;
+const timeChip = $('m-time-chip');
+const openPhoneTime = () => {
+  setViewsMenu(false);
+  openPanel(null); // one thing at a time
+  timeBar.classList.add('is-open');
+};
+$('m-time-open').addEventListener('click', openPhoneTime);
+timeChip.addEventListener('click', openPhoneTime);
+// Whatever opens or closes the bar (the menu, the tour, its own tap-elsewhere rule), the page
+// follows: mobile.css shows the bar only while <body> carries `m-time-open`.
+new MutationObserver(() => {
+  document.body.classList.toggle('m-time-open', timeBar.classList.contains('is-open'));
+}).observe(timeBar, { attributes: true, attributeFilter: ['class'] });
+let timeChipText = '';
+function updateTimeChip(): void {
+  if (!isPhone()) return;
+  const offset = clock.time - Date.now();
+  const text = clock.paused ? 'Paused'
+    : clock.speed !== 1 ? `${fmtInt(clock.speed)}×`
+    : Math.abs(offset) >= 5000 ? `${offset > 0 ? '+' : '−'}${duration(offset)}`
+    : '';
+  if (text === timeChipText) return;
+  timeChipText = text;
+  timeChip.textContent = text;
+  timeChip.classList.toggle('is-hidden', text === '');
+}
+
 const fitLabelsToScreen = () => (labels.nearby = Sheets.isPhone ? 14 : 70); // a phone screen fits fewer name tags
 fitLabelsToScreen();
 window.addEventListener('resize', fitLabelsToScreen);
@@ -1629,6 +1661,7 @@ function step(now: number): void {
   if (!uiHidden) updateStatus(realSeconds);
   requestScreening(realSeconds);
   timeControls.render();
+  updateTimeChip();
   if (frameHooks.length > 0) {
     const info: FrameInfo = { timeMs: clock.time, realSeconds, dt, uiHidden };
     for (const run of frameHooks) run(info);
