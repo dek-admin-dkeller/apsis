@@ -42,6 +42,9 @@ jobs:
       - name: Refresh orbital data (CelesTrak asks for at most one download every 2 hours)
         if: github.event_name != 'push'
         run: node scripts/fetch-data.mjs || echo "CelesTrak unreachable - publishing the stored snapshot"
+      - name: Refresh radio records (SatNOGS volunteer network; at most 22 requests, never fatal)
+        if: github.event_name != 'push'
+        run: node scripts/fetch-radio.mjs || echo "SatNOGS unreachable - publishing the stored radio records"
       # GitHub switches off scheduled workflows in a repository that has had no activity for
       # 60 days (the site stays up; only this refresh would stop). Re-enabling the workflow
       # through the API on each scheduled run resets that timer.
