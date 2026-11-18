@@ -1,0 +1,17 @@
+/*
+ * Space weather lines at the top of "Lowest orbits" (features/weather.ts) and the
+ * time-left words in the rows underneath (ui/feed.ts). Everything else is the shared
+ * panel look: .kv, .note and .watch-list from style.css.
+ */
+
+#weather-body { margin: 8px 0 6px; }
+#weather-body .kv { margin-bottom: 7px; }
+#weather-body .note + .note { margin-top: 6px; }
+
+/* Words, not a figure: the interface font, so it does not read as a measurement like the height beside it. */
+.watch-pick .eta { flex: none; font-size: 11px; color: var(--text); opacity: 0.74; white-space: nowrap; }
+
+/* Phones: rows inside a sheet use larger type (section 6 of mobile.css); keep up with them. */
+@media (max-width: 760px) {
+  .watch-pick .eta { font-size: 12.5px; }
+}
