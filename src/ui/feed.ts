@@ -17,7 +17,7 @@ import type { Catalog } from '../data/catalog.ts';
 import { decayLabel, decayRange, estimateDecayDays, type DecayWeather } from '../data/decay.ts';
 import type { CatalogFacts } from '../data/satcat.ts';
 import { CATEGORY_COLORS, type Satellite } from '../data/types.ts';
-import { $, fmtKm } from './dom.ts';
+import { $, fmtKm, sectionNote } from './dom.ts';
 
 const EARTH_RADIUS_KM = 6371;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -85,6 +85,7 @@ export function renderFeed(catalog: Catalog, facts: Map<number, CatalogFacts>, o
     .sort((a, b) => (a[0] < b[0] ? 1 : -1))
     .slice(0, 6);
   if (!trains.some(([id]) => id === activeTrain)) activeTrain = '';
+  sectionNote($('feed-trains'), trains.length > 0 ? String(trains.length) : ''); // the figure on the section's tile
   $('feed-trains').replaceChildren(...trains.map(([id, launch]) => {
     const when = launch.date ? `${Number(launch.date.slice(8, 10))} ${MONTHS[Number(launch.date.slice(5, 7)) - 1]}` : id;
     const family = launch.first.name.replace(/[-\s]?\d+.*$/, '') || launch.first.name;
@@ -144,6 +145,7 @@ function renderLowest(): void {
     .sort((a, b) => a.perigee - b.perigee)
     .slice(0, 7);
   const nowMs = Date.now(); // the real present, not the simulated clock: these are real objects coming down
+  sectionNote($('feed-low'), lowest.length > 0 ? fmtKm(lowest[0].perigee) : ''); // the lowest of all, on the section's tile
   $('feed-low').replaceChildren(...lowest.map((entry) => {
     // null (no words at all) when the elements cannot support an estimate.
     const days = daysLeft(entry.sat, nowMs);

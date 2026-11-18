@@ -69,7 +69,7 @@ import { installWeather } from './features/weather.ts';
 import { Labels } from './ui/labels.ts';
 import { DOCKED_KM, Monitor } from './ui/monitor.ts';
 import { initSearch } from './ui/search.ts';
-import { SettingsStore, type Settings } from './ui/settings.ts';
+import { DEFAULT_SITE, SettingsStore, type Settings } from './ui/settings.ts';
 import { ShareDialog } from './ui/share.ts';
 import { Sheets } from './ui/sheet.ts';
 import { thumbnail } from './ui/thumb.ts';
@@ -129,6 +129,7 @@ const catalogHooks: ((next: Catalog, previous: Catalog | null) => void)[] = [];
 const factsHooks: ((facts: Map<number, CatalogFacts>) => void)[] = [];
 const settingsHooks: ((settings: Settings, changed: keyof Settings | null) => void)[] = [];
 const encounterHooks: ((encounter: Encounter | null) => void)[] = [];
+const skyHooks: ((open: boolean) => void)[] = []; // the phone's full-screen sky view opened or closed
 const homeHooks: (() => void)[] = [];
 let lastPairs: { a: Uint32Array; b: Uint32Array } | null = null; // the monitor's latest list, closest first
 let lastTraceAt = -Infinity;
@@ -214,7 +215,10 @@ let constMembers: number[] = []; // object indices of the constellation on show
 const fp = new FirstPersonView(kit, canvas, () => {
   // back from a ride-along or sky view: the ordinary camera and the 3D model take over again
   model.enabled = store.settings.model && !encPanel.isOpen;
-  document.body.classList.remove('sky-immersive'); // the phone's full-screen sky view puts the interface back
+  if (document.body.classList.contains('sky-immersive')) {
+    document.body.classList.remove('sky-immersive'); // the phone's full-screen sky view puts the interface back
+    for (const run of skyHooks) run(false);
+  }
 });
 const watch = new Watchlist(sim, (sat) => select(sat), () => {
   labels.setPinned(watch.indices());
@@ -393,6 +397,38 @@ const setConsent = (value: 'yes' | 'no') => {
   } catch { /* storage unavailable: the question may be asked again next visit */ }
 };
 
+/** Make the position the browser gave the ground station (rounded to about a kilometre) and mark it on the globe. */
+function placeMe(position: GeolocationPosition): void {
+  store.set('siteName', 'My location');
+  store.set('siteLat', Math.round(position.coords.latitude * 100) / 100);
+  store.set('siteLon', Math.round(position.coords.longitude * 100) / 100);
+  store.set('siteMarker', true);
+}
+
+/**
+ * For features that are about "where you are" (visible passes): make sure the ground station
+ * is the visitor's own place, asking the browser for it if it is still the built-in example.
+ * Resolves true when it is theirs (found now, found earlier, or typed into Settings), false if
+ * the browser cannot say or they declined. Called from the visitor's own click, which is the yes.
+ */
+function useMyLocation(): Promise<boolean> {
+  const site = store.settings;
+  const builtIn = site.siteName === DEFAULT_SITE.name && site.siteLat === DEFAULT_SITE.latDeg && site.siteLon === DEFAULT_SITE.lonDeg;
+  if (!builtIn) return Promise.resolve(true);
+  if (!navigator.geolocation) return Promise.resolve(false);
+  setConsent('yes');
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        placeMe(position);
+        resolve(true);
+      },
+      () => resolve(false),
+      { timeout: 10000, maximumAge: 600000 },
+    );
+  });
+}
+
 /**
  * Ask the browser where the user is, make that the ground station, and show it on the globe.
  * `quiet` = a returning visitor who already agreed: update the position without messages or camera moves.
@@ -408,10 +444,7 @@ function locate(quiet = false): void {
   }
   navigator.geolocation.getCurrentPosition(
     (position) => {
-      store.set('siteName', 'My location');
-      store.set('siteLat', Math.round(position.coords.latitude * 100) / 100);
-      store.set('siteLon', Math.round(position.coords.longitude * 100) / 100);
-      store.set('siteMarker', true);
+      placeMe(position);
       if (quiet) return;
       toast('You are the green dot. Passes and the sky view now use this spot.', 5000);
       if (fp.mode === 'off' && !encPanel.isOpen) {
@@ -689,6 +722,7 @@ function skyFromPhone(): void {
     if (encPanel.isOpen) closeEncounter(true);
     document.body.classList.add('sky-immersive');
     fp.enterGround(observer);
+    for (const run of skyHooks) run(true);
     void motion.then((allowed) => {
       if (allowed && fp.mode === 'ground') fp.useMotion();
     });
@@ -698,10 +732,7 @@ function skyFromPhone(): void {
   setConsent('yes'); // pressing the button is the yes
   navigator.geolocation.getCurrentPosition(
     (position) => {
-      store.set('siteName', 'My location');
-      store.set('siteLat', Math.round(position.coords.latitude * 100) / 100);
-      store.set('siteLon', Math.round(position.coords.longitude * 100) / 100);
-      store.set('siteMarker', true);
+      placeMe(position);
       enter(null);
     },
     () => enter(`Location was not shared. Showing the sky above ${observer.name}.`),
@@ -1835,6 +1866,11 @@ const app: App = {
     else if (what === 'share') shareDialog.open(shareUrl(), !!selected || encPanel.isOpen);
   },
   openSection: (name) => {
+    if (isPhone() && name === 'tonight') {
+      // On a phone that list belongs to the full-screen sky view, where you can hold the phone up to it.
+      toast('Tonight’s passes are in the sky view: tap the sky button, then the eye beside the cross.', 6000);
+      return;
+    }
     if (isPhone() && inspector.isOpen) select(null); // one sheet at a time on a phone
     openPanel('objects');
     objectTabs.open(name);
@@ -1855,6 +1891,8 @@ const app: App = {
   onSettings: (run) => void settingsHooks.push(run),
   onEncounter: (run) => void encounterHooks.push(run),
   onHome: (run) => void homeHooks.push(run),
+  onSkyView: (run) => void skyHooks.push(run),
+  useMyLocation,
 };
 
 // One line per module. A module that throws while setting itself up is reported and skipped:

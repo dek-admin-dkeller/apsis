@@ -202,7 +202,6 @@
             </g>
           </svg>
           <h1>Apsis</h1>
-          <span class="brand-sub">Orbital tracking console</span>
         </div>
         <div class="search">
           <svg class="search-icon" viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.8" /><path d="M13 13l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg>
@@ -211,8 +210,8 @@
           <ul id="suggestions" role="listbox"></ul>
         </div>
         <dl class="readouts">
-          <div><dt>Tracked</dt><dd id="stat-tracked">0</dd></div>
-          <div><dt>Shown</dt><dd id="visible-count">0</dd></div>
+          <!-- One count. "of 19,572" appears only while a filter is hiding something. -->
+          <div id="readout-objects" class="is-all"><dt>Objects</dt><dd><span id="visible-count">0</span><span class="readout-of"> of <span id="stat-tracked">0</span></span></dd></div>
           <div id="readout-pairs"><dt>Close approaches</dt><dd id="stat-pairs">off</dd></div>
           <div><dt>Elements from</dt><dd id="data-age">–</dd></div>
         </dl>
@@ -265,15 +264,37 @@
         <button id="m-time-chip" class="is-hidden" aria-label="Time controls"></button>
       </div>
       <div id="m-views" class="m-only is-hidden" role="menu" aria-label="Views and more">
-        <button role="menuitem" data-proxy="[data-view='1']">Whole Earth</button>
-        <button role="menuitem" data-proxy="[data-view='2']">Low orbit</button>
-        <button role="menuitem" data-proxy="[data-view='3']">GEO ring</button>
-        <button role="menuitem" data-proxy="[data-view='5']">Earth and Moon</button>
-        <button role="menuitem" data-proxy="#autopilot">Autopilot tour</button>
-        <button role="menuitem" id="m-time-open">Time and speed</button>
-        <button role="menuitem" data-command-open>Type a command</button>
-        <button role="menuitem" data-proxy="#locate-top">Show where I am</button>
-        <button role="menuitem" data-proxy="#share">Share</button>
+        <!-- Where to look from: four views side by side. -->
+        <div class="m-views-row" role="group" aria-label="View">
+          <button role="menuitem" data-proxy="[data-view='1']">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" /><path d="M3 10h14M10 3c2.5 2 2.5 12 0 14M10 3c-2.5 2-2.5 12 0 14" /></svg><span>Earth</span>
+          </button>
+          <button role="menuitem" data-proxy="[data-view='2']">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M1.5 17a12 12 0 0 1 17 0" /><path d="M3 11.5a10 10 0 0 1 14 0" stroke-dasharray="1.5 2.5" /><circle cx="13.5" cy="7" r="1.3" /></svg><span>Low orbit</span>
+          </button>
+          <button role="menuitem" data-proxy="[data-view='3']">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="2.5" /><ellipse cx="10" cy="10" rx="8.5" ry="4" /></svg><span>GEO ring</span>
+          </button>
+          <button role="menuitem" data-proxy="[data-view='5']">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15.5 12.8A6.5 6.5 0 0 1 7.2 4.5a6.5 6.5 0 1 0 8.3 8.3z" /></svg><span>Moon</span>
+          </button>
+        </div>
+        <!-- Things to do. -->
+        <button role="menuitem" data-proxy="#autopilot">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5" /><path d="M8.2 6.8v6.4l5-3.2z" /></svg><span>Autopilot tour</span>
+        </button>
+        <button role="menuitem" id="m-time-open">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5" /><path d="M10 5.5V10l3 2" /></svg><span>Time and speed</span>
+        </button>
+        <button role="menuitem" data-command-open>
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 6.5L7.5 10 4 13.5M10 13.5h6" /></svg><span>Command bar</span>
+        </button>
+        <button role="menuitem" data-proxy="#locate-top">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="5.5" /><circle cx="10" cy="10" r="1.6" /><path d="M10 1.5v3M10 15.5v3M1.5 10h3M15.5 10h3" /></svg><span>My location</span>
+        </button>
+        <button role="menuitem" data-proxy="#share">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8.5 11.5a3.5 3.5 0 0 0 5 0l3-3a3.5 3.5 0 0 0-5-5l-1 1M11.5 8.5a3.5 3.5 0 0 0-5 0l-3 3a3.5 3.5 0 0 0 5 5l1-1" /></svg><span>Share</span>
+        </button>
       </div>
 
       <!-- ============ tool rail ============ -->
@@ -315,14 +336,17 @@
         <!-- Objects -->
         <section class="panel is-hidden" id="panel-objects">
           <header class="panel-head"><h2>Objects</h2><button class="icon-btn" data-close-panel aria-label="Close panel">×</button></header>
-          <!-- Three tabs instead of one long scroll (src/ui/objectTabs.ts). Each section says which
-               tab it belongs to with data-tab; data-section is the name other code opens it by. -->
+          <!-- Three tabs (src/ui/objectTabs.ts). Browse is a page of controls. Activity and Tools are
+               a grid of tiles, one per feature; a tile opens its section in place of the grid.
+               Each section says which tab it belongs to (data-tab), the name code opens it by
+               (data-section) and, for a tile, its short label (data-tile). -->
           <div class="tabs" id="obj-tabs" role="tablist" aria-label="Objects">
-            <button role="tab" data-tab="browse" class="is-on" aria-selected="true" title="Choose what is on the globe and pick things out of it">Browse</button>
-            <button role="tab" data-tab="activity" aria-selected="false" title="What is happening in orbit: passes tonight, launches, orbit changes, re-entries">Activity</button>
-            <button role="tab" data-tab="tools" aria-selected="false" title="Constellations, growth by year, design your own satellite">Tools</button>
+            <button role="tab" data-tab="browse" class="is-on" aria-selected="true">Browse</button>
+            <button role="tab" data-tab="activity" aria-selected="false">Activity</button>
+            <button role="tab" data-tab="tools" aria-selected="false">Tools</button>
           </div>
           <div class="panel-body" id="obj-body">
+            <div class="obj-grid is-hidden" id="obj-grid"></div>
             <!-- ================= Browse: what is on the globe, and picking things out of it ================= -->
             <details class="sec" data-tab="browse" data-section="watchlist" open>
               <summary>Watchlist</summary>
@@ -369,49 +393,49 @@
             </details>
 
             <!-- ================= Activity: what is happening up there =================
-                 Closed until asked for: the tab then reads as a short menu, one line per section.
-                 Sections that share a `name` open one at a time (the browser closes the others).
+                 Each of these is a tile in the grid above until it is opened. Sections that share a
+                 `name` open one at a time (the browser closes the others).
                  The empty elements with ids ending in -body are filled in by the modules in src/features/. -->
-            <details class="sec" name="obj-activity" data-tab="activity" data-section="tonight" data-feature>
-              <summary><span class="sum-text">Visible tonight<small>Bright passes you could see from the ground</small></span></summary>
+            <details class="sec" name="obj-activity" data-tab="activity" data-section="tonight" data-feature data-tile="Tonight" data-hint="Bright passes you could see from the ground tonight">
+              <summary>Visible tonight</summary>
               <div id="tonight-body"></div>
             </details>
-            <details class="sec" name="obj-activity" data-tab="activity" data-section="launches" data-feature>
-              <summary><span class="sum-text">Upcoming launches<small>What goes up next, with a countdown</small></span></summary>
+            <details class="sec" name="obj-activity" data-tab="activity" data-section="launches" data-feature data-tile="Launches" data-hint="What goes up next, with a countdown">
+              <summary>Upcoming launches</summary>
               <div id="launches-body"></div>
             </details>
-            <details class="sec" name="obj-activity" data-tab="activity" data-section="changes" data-feature>
-              <summary><span class="sum-text">Orbit changes<small>Raised, lowered, new and gone since the last update</small></span></summary>
+            <details class="sec" name="obj-activity" data-tab="activity" data-section="changes" data-feature data-tile="Orbit changes" data-hint="Raised, lowered, new and gone since the last update">
+              <summary>Orbit changes</summary>
               <div id="changes-body"></div>
             </details>
-            <details class="sec" name="obj-activity" data-tab="activity" data-section="newest">
-              <summary><span class="sum-text">Newest in orbit<small>The latest launches, grouped</small></span></summary>
+            <details class="sec" name="obj-activity" data-tab="activity" data-section="newest" data-tile="Newest" data-hint="The latest launches, grouped">
+              <summary>Newest in orbit</summary>
               <ol class="watch-list" id="feed-new"></ol>
             </details>
-            <details class="sec" name="obj-activity" data-tab="activity" data-section="trains">
-              <summary><span class="sum-text">Satellite trains<small>Fresh batches still flying in a line</small></span></summary>
+            <details class="sec" name="obj-activity" data-tab="activity" data-section="trains" data-tile="Trains" data-hint="Fresh batches still flying in a line">
+              <summary>Satellite trains</summary>
               <p class="note">Batches launched in the last two months, still flying in a line. Click one to light it up.</p>
               <ol class="watch-list" id="feed-trains"></ol>
               <p class="note is-hidden" id="feed-trains-empty">No recent batches in the data.</p>
             </details>
-            <details class="sec" name="obj-activity" data-tab="activity" data-section="lowest">
-              <summary><span class="sum-text">Lowest orbits<small>Next to come down, and today’s space weather</small></span></summary>
+            <details class="sec" name="obj-activity" data-tab="activity" data-section="lowest" data-tile="Lowest orbits" data-hint="Next to come down, and today’s space weather">
+              <summary>Lowest orbits</summary>
               <p class="note">Lowest point of each orbit. Below about 300 km the thin air drags objects down within weeks.</p>
               <div id="weather-body"></div>
               <ol class="watch-list" id="feed-low"></ol>
             </details>
 
             <!-- ================= Tools: things to do with the catalogue ================= -->
-            <details class="sec" name="obj-tools" data-tab="tools" data-section="constellations">
-              <summary><span class="sum-text">Constellations<small>Draw a whole network and where it reaches</small></span></summary>
+            <details class="sec" name="obj-tools" data-tab="tools" data-section="constellations" data-tile="Constellations" data-hint="Draw a whole network and where it reaches">
+              <summary>Constellations</summary>
               <div id="constellation-body"></div>
             </details>
-            <details class="sec" name="obj-tools" data-tab="tools" data-section="growth" data-feature>
-              <summary><span class="sum-text">Growth by year<small>Wind the catalogue back to 1957</small></span></summary>
+            <details class="sec" name="obj-tools" data-tab="tools" data-section="growth" data-feature data-tile="Growth by year" data-hint="Wind the catalogue back to 1957">
+              <summary>Growth by year</summary>
               <div id="growth-body"></div>
             </details>
-            <details class="sec" name="obj-tools" data-tab="tools" data-section="designer" id="designer">
-              <summary><span class="sum-text">Design a satellite<small>Launch your own and see what it passes</small></span></summary>
+            <details class="sec" name="obj-tools" data-tab="tools" data-section="designer" id="designer" data-tile="Designer" data-hint="Launch your own satellite and see what it passes">
+              <summary>Design a satellite</summary>
               <div id="designer-body"></div>
             </details>
           </div>

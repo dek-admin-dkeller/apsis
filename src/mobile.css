@@ -897,6 +897,22 @@
 @media (max-width: 760px) {
   .topbar, #m-stack { transition: opacity 0.22s ease; }
   .rail { transition: border-radius 220ms ease, left 220ms ease, right 220ms ease, opacity 0.22s ease; } /* section 8's list, plus opacity */
-  body.m-rest .topbar, body.m-rest #m-stack { opacity: 0.5; transition: opacity 2.2s ease; }
-  body.m-rest .rail { opacity: 0.5; transition: border-radius 220ms ease, left 220ms ease, right 220ms ease, opacity 2.2s ease; }
+  body.m-rest .topbar, body.m-rest #m-stack { opacity: 0.28; transition: opacity 2.2s ease; }
+  body.m-rest .rail { opacity: 0.28; transition: border-radius 220ms ease, left 220ms ease, right 220ms ease, opacity 2.2s ease; }
+}
+
+/* ============================================================== 12. the phone menu, in two parts
+ * The menu behind the round "more" button was nine lines of text of equal weight. Now the four
+ * views sit side by side at the top as icons (they are one choice out of four), and the five
+ * actions follow as a short list, each with its icon. Same place, same glass, less to read.
+ */
+@media (max-width: 760px) {
+  #m-views { width: 248px; min-width: 0; padding: 8px; gap: 2px; border-radius: 18px; }
+  #m-views svg { flex: none; width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  #m-views > button { display: flex; align-items: center; gap: 12px; min-height: 42px; padding: 0 10px; border-radius: 11px; font-size: 14.5px; }
+  #m-views > button svg { color: var(--muted); }
+  .m-views-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding-bottom: 8px; margin-bottom: 6px; border-bottom: 1px solid var(--m-edge); }
+  #m-views .m-views-row button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 58px; padding: 6px 0 5px; border-radius: 12px; font-size: 11px; line-height: 1; text-align: center; color: var(--muted); }
+  #m-views .m-views-row button svg { width: 21px; height: 21px; color: var(--text); }
+  #m-views .m-views-row button:active { color: var(--text); }
 }

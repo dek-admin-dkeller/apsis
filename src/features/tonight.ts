@@ -8,12 +8,19 @@
  * object is sunlit, the place is dark and the object is well above the horizon. The best
  * dozen come back, brightest first; this file lists them in plain words
  * (features/tonightWords.ts) and lets the visitor jump to one.
+ *
+ * It is about where the visitor is, so pressing the button asks for their position first
+ * (app.useMyLocation) unless the ground station is already theirs.
+ *
+ * On a phone the list is not in the Objects panel at all. It belongs to the full-screen sky
+ * view, where the phone can be held up to the pass: a small faded button beside that view's
+ * close button opens it as a sheet over the sky (the same elements, moved there and back).
  */
 
 import type { Observer } from '../data/ephemeris.ts';
 import { DEFAULT_SITE } from '../ui/settings.ts';
 import { CATEGORY_COLORS } from '../data/types.ts';
-import { DARK_SUN_DEG, MIN_ELEVATION_DEG, pickCandidates } from '../data/visibility.ts';
+import { DARK_SUN_DEG, pickCandidates } from '../data/visibility.ts';
 import type { App } from '../ui/app.ts';
 import { $, fmt, fmtInt } from '../ui/dom.ts';
 import { clockStamp, duration } from '../ui/inspector.ts';
@@ -64,8 +71,7 @@ export function installTonight(app: App): void {
   const status = element('p', 'note tonight-status');
   const staleNote = element('p', 'note tonight-stale is-hidden');
   const list = element('ol', 'watch-list tonight-list');
-  const foot = element('p', 'note is-hidden',
-    'Brightness is an estimate from each object\'s size on radar, its distance and how much of its sunlit side faces you; expect it to be out by a magnitude or so either way. Shiny panels can flash much brighter for a moment. Times hold to a few seconds while the orbital data is fresh. Craft docked to a station are counted once.');
+  const foot = element('p', 'note is-hidden', 'Brightness is an estimate, good to about a magnitude. Times hold to a few seconds while the orbital data is fresh.');
   body.append(placeNote, run, bar, status, staleNote, list, foot);
 
   // Hash table keyed by NORAD id: an object's index changes whenever the catalogue is replaced, its
@@ -76,16 +82,19 @@ export function installTonight(app: App): void {
   let result: Search | null = null;
   let stale: Stale = '';
 
-  /** Say which place the passes are for — and whether it is really the visitor's. */
+  let declined = false; // the visitor was asked for their position and did not give it
+
+  /** Say which place the passes are for — and, if it is not the visitor's, how to change that. */
   const describePlace = (): void => {
     const place = app.observer();
     const builtIn = samePlace(place, BUILT_IN_PLACE) && place.name === BUILT_IN_PLACE.name;
     placeNote.replaceChildren(
-      'Satellites you could see without a telescope in the next 24 hours from ',
+      'Seen from ',
       element('b', '', place.name || 'the ground station'),
-      ` (${coordinates(place)}): the sky dark, the satellite still in sunlight.`,
-      ...(builtIn ? [' ', element('span', 'tonight-default', 'This is the app\'s example place, not yours. Use the location button, or Settings › Ground station, to search from where you are.')] : []),
+      ` (${coordinates(place)}).`,
+      ...(builtIn && declined ? [' ', element('span', 'tonight-default', 'Your location was not shared, so this is the example place. Set your own in Settings.')] : []),
     );
+    placeNote.classList.toggle('is-hidden', builtIn && !declined); // nothing to say until a place is known
   };
 
   const stop = (message: string): void => {
@@ -98,7 +107,15 @@ export function installTonight(app: App): void {
     status.textContent = message;
   };
 
-  const start = (): void => {
+  let asking = false; // waiting for the browser's answer about the visitor's position
+
+  const start = async (): Promise<void> => {
+    if (asking) return;
+    // The passes are for where the visitor is: ask for that first (the click on the button is the yes).
+    asking = true;
+    status.textContent = 'Finding where you are…';
+    declined = !(await app.useMyLocation());
+    asking = false;
     const catalog = app.catalog();
     if (!catalog) {
       status.textContent = 'The catalogue is still loading. Try again in a moment.';
@@ -145,17 +162,16 @@ export function installTonight(app: App): void {
   /** The note under the button: how many objects were checked, over which hours, and what came of it. */
   const summary = (search: Search): string => {
     const { reply } = search;
-    const checked = `Checked ${fmtInt(search.candidates)} of ${fmtInt(search.catalogSize)} objects (the stations, Hubble and the largest in low orbits) for the 24 hours from ${clockStamp(search.startMs)}`;
+    const from = `the 24 hours from ${clockStamp(search.startMs)}`;
     if (reply.darkHours === 0) {
-      return `It does not get dark at this place in the 24 hours from ${clockStamp(search.startMs)}: the Sun stays less than ${-DARK_SUN_DEG}° below the horizon, so no satellite can be seen.`;
+      return `It does not get dark at this place in ${from}: the Sun stays less than ${-DARK_SUN_DEG}° below the horizon, so no satellite can be seen.`;
     }
     const outcome = reply.passes.length === 0
-      ? 'None of them crosses the dark sky in sunlight in that time. That is common: visible passes come in spells of a few days. Move the clock on a day and search again.'
+      ? `No visible passes in ${from}. They come in spells of a few days: move the clock on a day and search again.`
       : reply.passes.length > SHOWN
-        ? `${fmtInt(reply.passes.length)} passes could be seen; these are the ${SHOWN} brightest.`
-        : `${reply.passes.length === 1 ? 'One pass' : `${reply.passes.length} passes`} could be seen.`;
-    return `${checked}, ${fmt(reply.darkHours, 1)} of them dark. ${outcome}`
-      + (search.hadSizes ? '' : ' The size data had not loaded, so only the space stations and Hubble were checked: search again in a moment.');
+        ? `The ${SHOWN} brightest of ${fmtInt(reply.passes.length)} passes in ${from}.`
+        : `${reply.passes.length === 1 ? 'One pass' : `${reply.passes.length} passes`} in ${from}.`;
+    return outcome + (search.hadSizes ? '' : ' The size data had not loaded, so only the space stations and Hubble were checked: search again in a moment.');
   };
 
   /** Select the object and put the clock just before the pass; with `fromGround`, stand at the place and look up. */
@@ -194,7 +210,12 @@ export function installTonight(app: App): void {
     for (const step of pathRows(pass)) path.append(element('b', '', step.label), element('span', '', step.text));
     text.append(head, bright, path);
     pick.append(dot, text);
-    pick.addEventListener('click', () => go(pass, false));
+    // In the phone's sky view the visitor is already standing there looking up: go straight to watching.
+    pick.addEventListener('click', () => {
+      const inSky = !sheet.classList.contains('is-hidden');
+      if (inSky) closeSheet();
+      go(pass, inSky);
+    });
     const watch = element('button', 'link tonight-watch', 'Watch from the ground');
     watch.title = 'Stand at the ground station just before it appears and look up';
     watch.addEventListener('click', () => go(pass, true));
@@ -225,7 +246,39 @@ export function installTonight(app: App): void {
     }
   }
 
-  run.addEventListener('click', () => (worker ? stop('Search stopped.') : start()));
+  run.addEventListener('click', () => (worker ? stop('Search stopped.') : void start()));
+
+  // ---- phones: the list lives in the full-screen sky view ---------------------------------
+  const skyButton = element('button', 'tonight-sky-open is-hidden');
+  skyButton.setAttribute('aria-label', 'Bright passes you can see tonight');
+  skyButton.innerHTML = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M1.8 10s3-5.5 8.2-5.5S18.2 10 18.2 10s-3 5.5-8.2 5.5S1.8 10 1.8 10z"/><circle cx="10" cy="10" r="2.4"/></svg>';
+  const sheet = element('div', 'tonight-sheet is-hidden');
+  sheet.setAttribute('role', 'dialog');
+  sheet.setAttribute('aria-label', 'Visible tonight');
+  const sheetHead = element('div', 'tonight-sheet-head');
+  const sheetClose = element('button', 'icon-btn', '×');
+  sheetClose.setAttribute('aria-label', 'Close');
+  sheetHead.append(element('h2', '', 'Visible tonight'), sheetClose);
+  const sheetBody = element('div', 'tonight-sheet-body');
+  sheet.append(sheetHead, sheetBody);
+  document.body.append(skyButton, sheet);
+
+  function openSheet(): void {
+    sheetBody.append(body); // the same elements, moved over the sky
+    sheet.classList.remove('is-hidden');
+    if (!result && !worker) void start(); // nothing to show yet: look straight away
+  }
+  function closeSheet(): void {
+    if (sheet.classList.contains('is-hidden')) return;
+    sheet.classList.add('is-hidden');
+    section?.append(body); // back where it lives on a larger screen
+  }
+  skyButton.addEventListener('click', () => (sheet.classList.contains('is-hidden') ? openSheet() : closeSheet()));
+  sheetClose.addEventListener('click', closeSheet);
+  app.onSkyView((open) => {
+    skyButton.classList.toggle('is-hidden', !open);
+    if (!open) closeSheet();
+  });
 
   app.onSettings((_settings, changed) => {
     const place = changed === 'siteLat' || changed === 'siteLon' || changed === 'siteName';
@@ -263,5 +316,5 @@ export function installTonight(app: App): void {
   });
 
   render();
-  status.textContent = `Counts a pass when the Sun is at least ${-DARK_SUN_DEG}° below your horizon and the satellite is sunlit and at least ${MIN_ELEVATION_DEG}° up.`;
+  status.textContent = 'Satellites bright enough to see without a telescope in the next 24 hours, from where you are.';
 }

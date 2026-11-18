@@ -55,3 +55,24 @@ export const fmtKmS = (kmS: number, digits = 2): string =>
 /** A slow speed given in km/s (two objects drifting apart): "12 m/s" or "27 mph". */
 export const fmtSlow = (kmS: number): string =>
   units === 'metric' ? `${fmt(kmS * 1000, kmS < 0.01 ? 1 : 0)} m/s` : `${fmt(kmS * 3600 * MILES_PER_KM, kmS < 0.01 ? 1 : 0)} mph`;
+
+/**
+ * A short figure beside a section's title ("528", "148 km"): what the section would say at a
+ * glance. `inside` is any element in the section. The Objects panel copies it onto that
+ * section's tile (objectTabs.ts). An empty text takes it away.
+ */
+export function sectionNote(inside: HTMLElement, text: string): void {
+  const summary = inside.closest('details')?.querySelector('summary');
+  if (!summary) return;
+  let note = summary.querySelector<HTMLElement>('.sum-note');
+  if (!text) {
+    note?.remove();
+    return;
+  }
+  if (!note) {
+    note = document.createElement('span');
+    note.className = 'sum-note';
+    summary.append(note);
+  }
+  if (note.textContent !== text) note.textContent = text;
+}

@@ -31,12 +31,13 @@ export const DOCKED_KM = 0.1;
 /** One row of the list: two objects near each other, or one spacecraft made of several catalogued objects. */
 type Row =
   | { group: false; a: number; b: number; dist: number; speed: number }
-  | { group: true; members: number[] }; // catalogue indexes, the oldest object first
+  | { group: true; members: number[] } // catalogue indexes, the oldest object first
+  | { head: string; note: string }; // a heading inside the list
 
 type Kind = 'passing' | 'together';
 const KIND_NOTE: Record<Kind, string> = {
   passing: 'Objects on different orbits crossing paths right now. Each pass is over within seconds.',
-  together: 'Objects that stay close: docked spacecraft, formations and launch trains. They are not approaching each other. A spacecraft catalogued in several parts is listed once.',
+  together: 'Objects that stay close to each other. They are not approaching.',
 };
 
 export interface MonitorHandlers {
@@ -139,6 +140,8 @@ export class Monitor {
       rows.push({ group: true, members });
     }
     rows.sort((p, q) => (q as { members: number[] }).members.length - (p as { members: number[] }).members.length); // the largest spacecraft first
+    const joined = rows.length;
+    if (joined > 0) rows.unshift({ head: 'Joined', note: 'one spacecraft, listed as several objects' });
     for (let k = 0; k < msg.pairA.length; k++) {
       if (msg.pairSpeed[k] >= TOGETHER_KM_S) continue;
       const a = msg.pairA[k], b = msg.pairB[k];
@@ -146,6 +149,9 @@ export class Monitor {
       if (group && group === groupOf.get(b)) continue; // two parts of the same spacecraft: already listed
       rows.push({ group: false, a, b, dist: msg.pairDist[k], speed: msg.pairSpeed[k] });
     }
+    // The two kinds are told apart by a heading each (only needed when both are present).
+    const separate = joined > 0 ? joined + 1 : 0; // where the pairs begin
+    if (joined > 0 && rows.length > separate) rows.splice(separate, 0, { head: 'Separate', note: 'formations and launch trains' });
     return { rows, received };
   }
 
@@ -167,26 +173,36 @@ export class Monitor {
       }
     }
     let closest = Infinity;
-    for (const row of rows) if (!row.group && row.dist < closest) closest = row.dist;
+    for (const row of rows) if ('dist' in row && row.dist < closest) closest = row.dist;
     // How many things fly together: spacecraft and pairs as listed, unless the worker had to
     // cut its list short (then only its own count of pairs is known).
-    const togetherTotal = stats.together <= together.received ? together.rows.length : stats.together;
+    const togetherTotal = stats.together <= together.received ? together.rows.filter((row) => !('head' in row)).length : stats.together;
 
     // Rows are reused so the list does not flicker.
     const shown = Math.min(rows.length, MAX_ROWS);
     for (let n = 0; n < shown; n++) {
       const item = rows[n];
       let row = this.list.children[n] as HTMLLIElement | undefined;
-      if (!row || row.classList.contains('empty')) {
-        row?.remove();
-        row = document.createElement('li');
-        row.innerHTML = '<i class="sev"></i><div class="names"><span><i class="dot"></i><b></b></span><span><i class="dot"></i><b></b></span></div><span class="dist"><b></b><small></small></span>';
-        const made = row;
-        row.addEventListener('click', () => {
-          if (made.dataset.members) this.handlers.onJoined(made.dataset.members.split(',').map(Number));
-          else this.handlers.onPair(Number(made.dataset.a), Number(made.dataset.b));
-        });
-        this.list.insertBefore(row, this.list.children[n] ?? null);
+      const isHead = 'head' in item;
+      if (!row || row.classList.contains('empty') || row.classList.contains('head') !== isHead) {
+        const made = document.createElement('li');
+        if (isHead) made.innerHTML = '<b></b><span></span>';
+        else {
+          made.innerHTML = '<i class="sev"></i><div class="names"><span><i class="dot"></i><b></b></span><span><i class="dot"></i><b></b></span></div><span class="dist"><b></b><small></small></span>';
+          made.addEventListener('click', () => {
+            if (made.dataset.members) this.handlers.onJoined(made.dataset.members.split(',').map(Number));
+            else this.handlers.onPair(Number(made.dataset.a), Number(made.dataset.b));
+          });
+        }
+        if (row) row.replaceWith(made);
+        else this.list.append(made);
+        row = made;
+      }
+      if ('head' in item) {
+        row.className = 'head';
+        (row.firstElementChild as HTMLElement).textContent = item.head;
+        (row.lastElementChild as HTMLElement).textContent = item.note;
+        continue;
       }
       const names = row.querySelectorAll<HTMLElement>('.names b');
       const dots = row.querySelectorAll<HTMLElement>('.dot');

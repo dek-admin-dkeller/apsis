@@ -206,6 +206,8 @@ body.ui-hidden #hud > *, body.ui-hidden .dock > * { pointer-events: none; }
 .readouts > div { display: flex; flex-direction: column; justify-content: center; padding: 0 13px; border-left: 1px solid var(--line); }
 .readouts dt { font-size: 10.5px; line-height: 1.25; color: var(--muted); }
 .readouts dd { margin: 0; font-size: 12.5px; line-height: 1.3; color: var(--text); }
+.readout-of { color: var(--muted); }
+#readout-objects.is-all .readout-of { display: none; }
 #readout-pairs dd { color: var(--muted); }
 #hud:has(#panel-conj.is-on) #readout-pairs dd { color: var(--red); }
 
@@ -519,12 +521,36 @@ kbd { font-size: 10.5px; padding: 1px 5px; border: 1px solid var(--line-strong);
 .sec > summary:hover { color: var(--text); }
 .sec[open] > summary { margin-bottom: 9px; }
 .sum-note { margin-left: auto; font: 400 10.5px var(--font-mono); color: var(--muted); }
-/* A closed section can say in one line what is inside it (the Objects panel's Activity and
-   Tools tabs read as a short menu that way). Open, its content speaks for itself. */
-.sum-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.sum-text small { font-size: 11px; font-weight: 400; line-height: 1.3; color: var(--muted); opacity: 0.85; }
-.sec[open] > summary .sum-text small { display: none; }
-.sec:not([open]) > summary:has(.sum-text) { padding: 3px 0; }
+/* ---- the Objects panel's tiles (ui/objectTabs.ts) ----
+   Activity and Tools are a grid of tiles, one per feature: an icon, a short name and, where the
+   feature has one, a live figure. A tile opens its section in place of the grid. */
+.obj-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.obj-tile {
+  display: grid;
+  grid-template: 'icon value' 18px 'name name' auto / auto 1fr;
+  align-content: space-between;
+  gap: 12px 6px;
+  min-height: 66px;
+  padding: 10px 10px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  background: var(--cell);
+  color: var(--text);
+  text-align: left;
+  transition: border-color var(--fast), background var(--fast);
+}
+.obj-tile svg { grid-area: icon; width: 18px; height: 18px; fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; transition: stroke var(--fast); }
+.obj-tile-name { grid-area: name; font-size: 12.5px; font-weight: 500; line-height: 1.2; }
+.obj-tile-value { grid-area: value; justify-self: end; align-self: center; font: 11px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
+.obj-tile:hover { border-color: var(--line-strong); background: #0c1422; }
+.obj-tile:hover svg, .obj-tile:focus-visible svg { stroke: var(--cyan); }
+.obj-tile:active { background: #0e1828; }
+/* The one section opened from a tile: its title is the way back to the grid. */
+#obj-body.is-tiled .sec { padding: 0; border-top: 0; }
+#obj-body.is-tiled .sec > summary { gap: 6px; margin: -5px -6px 11px; padding: 6px; border-radius: var(--radius-s); font-size: 13px; color: var(--text); }
+#obj-body.is-tiled .sec > summary::before { width: 6px; height: 6px; margin: 0 4px 0 5px; transform: rotate(135deg); }
+#obj-body.is-tiled .sec > summary:hover { background: var(--hover); }
+#obj-body.is-tiled .sec > summary .sum-note { font-size: 11px; }
 /* The first section actually on show has no line above it (earlier ones may belong to another tab). */
 .sec.is-first { padding-top: 0; border-top: 0; }
 .sec + .btn.wide { margin-top: 12px; }
@@ -752,6 +778,12 @@ canvas.chart.square { height: auto; aspect-ratio: 1; max-width: 240px; margin: 0
 #pair-list .dist b { font-weight: 400; }
 #pair-list .dist small { font: 10.5px var(--font-ui); color: var(--muted); }
 #pair-list .sev-calm .sev { background: rgba(255, 255, 255, 0.16); }
+/* Headings inside the list: joined spacecraft, then the pairs that really are two things. */
+#pair-list li.head { display: flex; align-items: baseline; gap: 8px; min-height: 0; padding: 10px 2px 5px; border-radius: 0; border-bottom: 1px solid var(--line-soft); margin-bottom: 3px; cursor: default; }
+#pair-list li.head:hover { background: none; }
+#pair-list li.head:first-child { padding-top: 2px; }
+#pair-list li.head b { font-size: 11.5px; font-weight: 600; color: var(--text); }
+#pair-list li.head span { font-size: 11px; color: var(--muted); }
 /* One spacecraft catalogued as several objects: its second line is the list of its other parts. */
 #pair-list .is-joined .names span + span .dot { display: none; }
 #pair-list .is-joined .names span + span b { font-size: 11px; color: var(--muted); }
@@ -1117,8 +1149,9 @@ label.act:has(input:focus-visible) { outline: 2px solid var(--cyan); outline-off
 /* ---------- brand ---------- */
 
 .logo { width: 22px; height: 22px; flex: none; }
-.brand h1, .wordmark span { font-family: var(--font-display); font-weight: 600; text-transform: uppercase; letter-spacing: 0.2em; }
-.brand h1 { font-size: 14px; margin-right: -0.1em; }
+/* The name as it is written on the home page: plain, not spaced-out capitals. */
+.brand h1, .wordmark span { font-family: var(--font-display); font-weight: 600; letter-spacing: 0.01em; }
+.brand h1 { font-size: 16px; }
 
 /* ---------- close approach: one row per object ---------- */
 

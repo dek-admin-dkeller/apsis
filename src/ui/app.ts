@@ -118,4 +118,12 @@ export interface App {
   onEncounter(run: (encounter: Encounter | null) => void): void;
   /** The logo (or `0`) was pressed: everything is being put back the way it started. Undo what you changed. */
   onHome(run: () => void): void;
+  /** The phone's full-screen sky view opened (true) or closed (false). */
+  onSkyView(run: (open: boolean) => void): void;
+  /**
+   * Make sure the ground station is the visitor's own place, asking the browser for their
+   * position if it is still the built-in example. Call it from the visitor's own click.
+   * Resolves false if the browser cannot say or they declined.
+   */
+  useMyLocation(): Promise<boolean>;
 }

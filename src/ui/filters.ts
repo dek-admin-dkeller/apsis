@@ -155,6 +155,7 @@ export class Filters {
       if (this.categoryOn.get(category)) shown += count;
     }
     $('visible-count').textContent = fmtInt(shown);
+    $('readout-objects').classList.toggle('is-all', shown === catalog.sats.length); // "of 19,572" only while something is hidden
     this.onChange();
   }
 }

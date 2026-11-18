@@ -25,7 +25,7 @@ import { statusLabel } from '../data/satcat.ts';
 import { CATEGORY_COLORS, type Satellite, type Snapshot } from '../data/types.ts';
 import type { App } from '../ui/app.ts';
 import { CUSTOM_NORAD_ID } from '../ui/designer.ts';
-import { $, fmt, fmtInt, fmtKm, fmtRange } from '../ui/dom.ts';
+import { $, fmt, fmtInt, fmtKm, fmtRange, sectionNote } from '../ui/dom.ts';
 import { clockStamp, utcStamp } from '../ui/inspector.ts';
 
 const DAY_MS = 86400000;
@@ -131,6 +131,8 @@ export function installChanges(app: App): void {
     expanded.clear();
     renderList();
     renderFresh(true);
+    // The figure on the section's title and tile: how many orbits changed (new and gone included).
+    sectionNote($('changes-body'), next ? fmtInt(CHANGE_KINDS.reduce((sum, kind) => sum + next.counts[kind], 0)) : '');
   }
 
   /** The comparison made when the site was built, if there is one and it belongs to this catalogue. */

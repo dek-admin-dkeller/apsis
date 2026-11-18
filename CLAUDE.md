@@ -117,7 +117,8 @@ worker/lookahead.worker.ts: started on demand for the "Coming hours" scan (hashi
 - `hashing/groups.ts`: union–find with a `Map` as the parent table. The monitor uses it to merge
   pairs closer than `DOCKED_KM` (100 m, `ui/monitor.ts`) and not drifting apart back into
   spacecraft: the Space Station is 11 catalogued objects at one place, which screening reports
-  as 55 pairs at "0 m". Each such spacecraft is ONE row in "Flying together", and choosing it
+  as 55 pairs at "0 m". Each such spacecraft is ONE row in "Flying together", under a "Joined"
+  heading apart from the pairs that really are two things ("Separate"), and choosing it
   (or any pair that `joinedNow()` in `main.ts` finds to be joined) selects the spacecraft
   instead of opening a close-approach view — that view showed one model and "0 m", which the
   owner reported as a bug. `scripts/check-groups.mjs` tests it.
@@ -187,6 +188,13 @@ it (the owner found a text-only page bland):
 - **Spacecraft plate:** `modelThumbnail()` for every `ModelKind`, drawn in idle moments once
   the tracker is live and the plate is near the screen.
 - **Index:** `FEATURES` (`featureList.ts`) as rows of names with one line of text each.
+- **The plate never changes the page's length.** `layPlate()` makes a square and a caption
+  for every kind at construction; the pictures only fade into place. They are drawn one at a
+  time and only while the page is neither being touched nor has just scrolled (each one holds
+  the main thread for a moment). Figures used to be appended as they were drawn, and on a
+  phone the page grew and hitched under the finger.
+- The bar is one row at every width; below 600 px its three shortcuts are hidden (mark on the
+  left, "Open the tracker" on the right). Two rows were "big and smooshed" on an iPhone.
 - A deliberately quiet "Games" row, then a small section that explains the name (the orbit
   drawing with its two apsides marked, `.ld-name`), then the footer.
 Navigation inside the page uses buttons, never `#anchor` links: any `#hash` in the address
@@ -207,16 +215,26 @@ time (`panel-objects`, `panel-layers`, `panel-conj`, `panel-settings`) · right 
 `#inspector` or `#encounter` · bottom time bar (rests as a small pill, opens on hover) ·
 status line. Overlays: `#howto`, `#keys`, `#about`, `#share-dialog`, `#bench`, `#contacts`.
 
-The Objects panel has three tabs (`src/ui/objectTabs.ts`): **Browse** (watchlist, notable
-objects, type / orbit filters, appearance), **Activity** (visible tonight, launches, orbit
-changes, newest, trains, lowest orbits) and **Tools** (constellations, growth by year,
-designer). Every section is still one `<details class="sec">` in `index.html`, with
-`data-tab` (which tab) and `data-section` (the name code opens it by: `app.openSection(name)`,
-used by the command bar). A section opened by code brings its own tab forward (a captured
-`toggle` listener), so nothing needs to know which tab a section is in. Activity and Tools
-sections share a `name` attribute, so the browser keeps one open at a time, and their closed
-summaries carry a one-line description (`.sum-text small`). A new section goes into the tab
-that matches what the visitor is doing, never into a fourth tab or a longer Browse.
+The Objects panel has three tabs (`src/ui/objectTabs.ts`). **Browse** is a page of controls
+(watchlist, notable objects, type / orbit filters, appearance). **Activity** and **Tools** are
+grids of TILES, one per feature: an icon, a short name and a live figure where the feature
+has one. A tile opens its section in place of the grid, and the section's title is the way
+back. The owner rejected two earlier versions of this panel: one long scroll of fourteen
+sections ("features get lost") and then tabs holding lists of collapsed sections with a line
+of description each ("just a list, a lot of text, an AI feel"). Do not go back to prose lists.
+- Every section is still one `<details class="sec">` in `index.html`, filled by the same
+  module as before. `data-tab` says which tab, `data-section` the name code opens it by
+  (`app.openSection(name)`, used by the command bar), `data-tile` its tile's label and
+  `data-hint` the tile's tooltip. "Open" still means the `<details>` is open, so modules that
+  listen for `toggle` did not change. Sections in one tab share a `name`: one open at a time.
+- A module puts a figure on its tile with `sectionNote(element, text)` (`dom.ts`): it keeps a
+  `.sum-note` in the section's `<summary>`, and the tile copies whatever is there.
+- Tiles that are not sections (contact timeline, benchmark, walkthrough, tour, command bar)
+  are in `SHORTCUTS` in `objectTabs.ts`; each presses a button that already exists.
+- A new feature gets a section in the right tab plus an icon in `ICONS`. Never a fourth tab.
+
+The top bar says "Apsis" as the home page writes it (plain, not spaced capitals; no tagline)
+and shows ONE object count: "of 19,572" appears only while a filter is hiding something.
 
 Settings are generic: any control with `data-setting="name"` edits `Settings[name]`
 (`src/ui/settings.ts`), persisted in `localStorage`. To add a toggle: add the field + default
@@ -241,8 +259,18 @@ tour, tap elsewhere to close); `#m-time-chip` appears only while time is not liv
 
 Phone idle fade: while the globe drifts by itself (`rig.drifting`) and nothing has been
 touched for 4 s, `updatePhoneRest()` in `main.ts` puts `m-rest` on `<body>` and `mobile.css`
-section 11 dims the search pill, round buttons and tab bar to half. Any `pointerdown` removes
-it at once. Never while a sheet, the menu, the time controls or the tour is open.
+section 11 dims the search pill, round buttons and tab bar to 0.28 (the owner asked for it
+fainter than half). Any `pointerdown` removes it at once. Never while a sheet, the menu, the
+time controls or the tour is open.
+
+Phone menu (`#m-views`, `mobile.css` section 12): the four views side by side as icons, then
+five actions as an icon list. It was nine equal lines of text.
+
+"Visible tonight" on a phone is NOT in the Objects panel (its tile is hidden at phone width).
+It belongs to the full-screen sky view: `features/tonight.ts` adds a small faded eye button
+beside that view's cross (`app.onSkyView`) and shows the same list as a sheet over the sky.
+Tapping a pass there closes the sheet and moves the clock to just before the pass. On every
+screen the search first calls `app.useMyLocation()`, so the list is for where the visitor is.
 
 Phone sky view: the `#m-sky` button calls `skyFromPhone()` in `main.ts`, which asks for the
 location (and, on iOS, the motion sensors) straight from the tap, then enters the sky view
@@ -265,7 +293,7 @@ tracker. Each module draws inside an empty element reserved for it in `index.htm
 | `changes.ts` | `#changes-body`, `#insp-fresh` | Orbit changes between two downloads (`changes.json`, or compared in the browser after "Download current elements"); data age and catalogue status of the selected object |
 | `weather.ts` | `#weather-body` (in "Lowest orbits") | NOAA solar flux and Kp in words; feeds `ui/feed.ts` → `data/decay.ts` for the "time left" estimates |
 | `launches.ts` | `#launches-body` | Launch Library 2 list with countdowns; pads on the globe (`render/padMarkers.ts`) only while the section is open |
-| `tonight.ts` | `#tonight-body` | Bright passes in the next 24 h, computed in `worker/tonight.worker.ts` only when asked |
+| `tonight.ts` | `#tonight-body` (moved into its own sheet in the phone sky view) | Bright passes in the next 24 h from the visitor's own position, computed in `worker/tonight.worker.ts` only when asked |
 | `report.ts` | `#enc-export` | Close-approach report (new tab, or a saved file if the tab is blocked) and CSV |
 | `growth.ts` | `#growth-body` | Year slider; registers one filter with `app.setFilter('growth', …)`; cleared by Home (`app.onHome`) |
 | `command.ts` | its own overlay | Ctrl/Cmd+K; anything with `data-command-open` opens it; `commandParse.ts` holds the grammar |
