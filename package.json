@@ -12,6 +12,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "fetch-data": "node scripts/fetch-data.mjs",
+    "fetch-radio": "node scripts/fetch-radio.mjs",
     "build-borders": "node scripts/build-borders.mjs",
     "bench": "node scripts/bench.mjs"
   },

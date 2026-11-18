@@ -1,0 +1,74 @@
+/*
+ * Radio cards in the inspector (features/radio.ts): "last heard" on the Live tab,
+ * transmitters and the Doppler readout on the Passes tab. Colours and radii are the design
+ * tokens of style.css; the phone rules at the end follow section 5 of mobile.css.
+ */
+
+#insp-heard:empty, #insp-radio:empty { display: none; }
+#insp-heard { margin-top: 10px; }
+#insp-radio { margin-top: 14px; padding-top: 2px; border-top: 1px solid var(--line); }
+
+/* ---- Live tab: last heard */
+
+.radio-card { display: grid; gap: 4px; padding: 8px 10px 9px; border: 1px solid var(--line); border-radius: var(--radius-s); background: var(--cell); }
+.radio-card p { margin: 0; }
+.radio-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 10.5px; color: var(--muted); }
+.radio-state::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: var(--muted); opacity: 0.6; vertical-align: 1px; }
+.radio-state.is-ok { color: var(--ok); }
+.radio-state.is-ok::before { background: var(--ok); opacity: 1; }
+.radio-main { font-size: 13px; line-height: 1.4; color: var(--text); overflow-wrap: anywhere; }
+.radio-main b { font-weight: 600; }
+.radio-credit { padding-top: 5px; border-top: 1px solid var(--line-soft); font-size: 11px; }
+.radio-links { display: flex; flex-wrap: wrap; gap: 2px 16px; font-size: 11.5px; }
+/* An object with no record gets one quiet line instead of a card. */
+.radio-quiet { margin: 0; font-size: 11px; opacity: 0.85; }
+
+/* ---- Passes tab: transmitters (the same row language as the pass list above it) */
+
+.radio-list { margin: 0; padding: 0; list-style: none; }
+.radio-list li { border-left: 2px solid transparent; border-radius: 0 var(--radius-s) var(--radius-s) 0; transition: background var(--fast), border-color var(--fast); }
+.radio-list li + li { margin-top: 1px; }
+.radio-list li.is-on { background: rgba(255, 180, 84, 0.09); border-left-color: var(--amber); }
+.radio-tx {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1px 10px;
+  align-items: baseline;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  text-align: left;
+}
+button.radio-tx:hover { background: var(--hover); }
+button.radio-tx:focus-visible { outline-offset: -2px; }
+.radio-tx .name { min-width: 0; font-size: 12px; color: var(--text); overflow-wrap: anywhere; }
+.radio-tx .state { font: 11px var(--font-mono); color: var(--muted); text-align: right; white-space: nowrap; }
+.radio-tx .state.is-ok { color: var(--ok); }
+.radio-tx .detail { grid-column: 1 / -1; min-width: 0; font: 11px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--muted); overflow-wrap: anywhere; }
+.radio-more { display: block; margin: 5px 0 0 10px; }
+
+/* ---- Passes tab: Doppler */
+
+.radio-doppler dd { font-size: 13.5px; }
+.radio-doppler-note { margin: 7px 0 0; }
+
+@media (pointer: coarse) {
+  .radio-tx { min-height: 44px; padding-top: 8px; padding-bottom: 8px; }
+  .radio-more { min-height: 38px; }
+  .radio-links a { display: inline-flex; align-items: center; min-height: 38px; }
+  .radio-links { margin: -5px 0 -8px; } /* the finger-sized row brings its own air above and below the words */
+}
+
+@media (max-width: 760px) {
+  .radio-card { gap: 5px; padding: 11px 13px 12px; border-radius: 16px; }
+  .radio-head { font-size: 11.5px; }
+  .radio-main { font-size: 15px; }
+  .radio-credit, .radio-quiet { font-size: 12px; }
+  .radio-links { font-size: 13px; }
+  .radio-list li { border-radius: 0 12px 12px 0; }
+  .radio-tx .name { font-size: 14px; }
+  .radio-tx :is(.state, .detail) { font-size: 12px; }
+  .radio-doppler dd { font-size: 15px; }
+}
