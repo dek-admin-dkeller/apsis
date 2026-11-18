@@ -525,7 +525,7 @@ function updateTimeChip(): void {
   if (!isPhone()) return;
   const offset = clock.time - Date.now();
   const text = clock.paused ? 'Paused'
-    : clock.speed !== 1 ? `${fmtInt(clock.speed)}×`
+    : clock.speed !== 1 ? (Math.abs(clock.speed) < 1 ? 'Slow motion' : `${clock.speed < 0 ? '−' : ''}${fmtInt(Math.abs(clock.speed))}×`)
     : Math.abs(offset) >= 5000 ? `${offset > 0 ? '+' : '−'}${duration(offset)}`
     : '';
   if (text === timeChipText) return;
