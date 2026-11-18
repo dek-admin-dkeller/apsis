@@ -14,6 +14,7 @@
  */
 
 import './launch.css';
+import { fmtKm, fmtKmS } from './dom.ts';
 
 /** The vehicle, drawn 52 × 548 units (the body is 38 wide: about 1 : 14). Nose up. */
 const ROCKET = /* svg */ `
@@ -166,8 +167,8 @@ export function mountLaunch(container: HTMLElement): void {
 
     <dl class="lx-telemetry">
       <div><dt>Mission clock</dt><dd data-lx="clock">T+ 0:00</dd></div>
-      <div><dt>Altitude</dt><dd data-lx="altitude">0.0 km</dd></div>
-      <div><dt>Speed</dt><dd data-lx="speed">0.00 km/s</dd></div>
+      <div><dt>Altitude</dt><dd data-lx="altitude">${fmtKm(0, 1)}</dd></div>
+      <div><dt>Speed</dt><dd data-lx="speed">${fmtKmS(0)}</dd></div>
     </dl>`;
   root.querySelector<HTMLElement>('.lx-s1')!.style.backgroundImage = starField(34, 2710, 0.55, 0.6);
   root.querySelector<HTMLElement>('.lx-s2')!.style.backgroundImage = starField(22, 1957, 0.8, 0.8);
@@ -193,8 +194,8 @@ export function mountLaunch(container: HTMLElement): void {
     const seconds = Math.floor((now - started) / 1000);
     const km = 200 * Math.pow(p, 1.7); // slow off the pad, then quickly up to orbit height
     write(clock, `T+ ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`);
-    write(altitude, `${km < 100 ? km.toFixed(1) : Math.round(km)} km`);
-    write(speed, `${(7.8 * Math.pow(p, 1.15)).toFixed(2)} km/s`);
+    write(altitude, fmtKm(km, km < 100 ? 1 : 0));
+    write(speed, fmtKmS(7.8 * Math.pow(p, 1.15)));
   };
   requestAnimationFrame(tick);
 }

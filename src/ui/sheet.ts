@@ -35,7 +35,7 @@ export class Sheets {
   }
 
   private get tallest(): number {
-    return Math.max(COLLAPSED, window.innerHeight - 70 - 84 - 12); // below the search field, above the tab bar
+    return Math.max(COLLAPSED, window.innerHeight - 56 - 62 - 10); // below the search field, above the tab bar (matches --top and --status in mobile.css)
   }
 
   /** A sheet that is being opened always starts at its normal height, whatever the last one was dragged to. */

@@ -43,7 +43,15 @@ Node ≥ 22.18 (the bench imports `.ts` files directly; `erasableSyntaxOnly` kee
 - `strict`, `noUnusedLocals`, `erasableSyntaxOnly` (no enums, no constructor parameter
   properties), imports written **with the `.ts` extension**.
 - DOM access through `$('id')` from `src/ui/dom.ts`; number formatting with `fmt`, `fmtInt`,
-  `fmtCompact`. Time helpers `utcStamp`, `duration` live in `src/ui/inspector.ts`.
+  `fmtCompact`. Time helpers `utcStamp`, `clockStamp`, `zoneLabel`, `duration` live in
+  `src/ui/inspector.ts`.
+- **Units and clock.** The simulation is km, km/s and UTC everywhere. Text shown to the user
+  must go through `fmtKm`, `fmtRange`, `fmtKmS`, `fmtSlow`, `lengthUnit`/`lengthValue`
+  (`dom.ts`), `alertDistance` and `clockStamp` (`inspector.ts`) so the Settings choice
+  (kilometres/miles, UTC/local) applies. Never write `` `${x} km` `` by hand. The exceptions,
+  left metric on purpose: the walkthrough and hash trace (the cell size d is defined in km),
+  the benchmark, the raw element record. Panels that only redraw on demand expose
+  `refreshUnits()`, called from `applySettings()`.
 - A UI module owns its DOM ids and exposes a small class; `src/main.ts` creates every module
   and wires them with callbacks ("host"/"handlers" objects). Modules do not import `main.ts`.
 - CSS: `src/style.css` (desktop, design tokens on `:root`), `src/mobile.css` (≤ 760 px and
@@ -99,6 +107,12 @@ worker/lookahead.worker.ts: started on demand for the "Coming hours" scan (hashi
   candidate, refine survivors with SGP4 + golden section. Optional `focus` index restricts it
   to pairs involving one object (used by the satellite designer).
 - `hashing/benchmark.ts` + `scripts/bench.mjs`: timing and identical-result checks.
+- Passing vs flying together: the worker gets each object's velocity from the same SGP4 call
+  as its position and labels every pair by relative speed (`TOGETHER_KM_S` = 0.1 km/s in
+  `conjunction.ts`). `ScreenStats.passing` / `.together` are the true totals; the pair arrays
+  are capped per kind. Globe markers, the top-bar count and the autopilot use passing only.
+- `render/gridViz.ts` has a pair mode (`PairCells`): with a close approach open it draws the
+  two objects' cells, A's 27-cell block, and turns both red while range < d.
 - Other hash tables are listed in the README ("Other places hashing is used").
 
 ## Source map
@@ -119,8 +133,8 @@ src/render/                 scene (renderer, bloom, quality presets), globe (Ear
 src/ui/                     inspector (+ charts), monitor (live pairs), ahead (prediction), encounterPanel, howto
                             (walkthrough), hashTrace, benchmarkModal, filters, search, settings, timeControls, labels,
                             watchlist, feed (launches, trains, lowest), designer, constellations, contacts, crew,
-                            share (QR), tour, cinema (autopilot + recording), sheet (phone sheets), launch + intro
-                            (loading screen), dom
+                            share (QR), tour, cinema (autopilot + recording), sheet (phone sheets), landing (welcome
+                            page), launch + intro (loading screen), dom (DOM, number, unit and clock helpers)
 index.html                  all static markup; ids are the contract between HTML and the ui modules
 scripts/                    fetch-data.mjs, build-borders.mjs, bench.mjs
 public/                     data/ (satellites.json, satcat.json, borders.bin), textures/, icons/, manifest.webmanifest
@@ -129,7 +143,13 @@ public/                     data/ (satellites.json, satcat.json, borders.bin), t
 
 ## UI structure (desktop)
 
-Top bar (logo = home/reset, search, readouts, tools) · left tool rail opening ONE panel at a
+Welcome page first (`#landing`, `src/ui/landing.ts`): static markup painted before any
+script, the tracker loading behind it; `boot()` waits on `landing.entered` before the loading
+screen's lift-off. An inline script in `index.html` skips it for share links (any `#hash`)
+and when `Settings.landing` is off.
+
+Top bar (logo = home/reset, search, readouts, tools; picture and video sit in the
+`#capture` menu so they cannot be hit by accident) · left tool rail opening ONE panel at a
 time (`panel-objects`, `panel-layers`, `panel-conj`, `panel-settings`) · right dock holding
 `#inspector` or `#encounter` · bottom time bar (rests as a small pill, opens on hover) ·
 status line. Overlays: `#howto`, `#keys`, `#about`, `#share-dialog`, `#bench`, `#contacts`.
@@ -141,7 +161,10 @@ in `settings.ts`, a control in `index.html`, and apply it in `applySettings()` i
 Phones (≤ 760 px, `src/mobile.css`): floating search pill, round buttons on the right edge
 (location, views menu, share), a floating 4-item tab bar (the rail), panels as rounded bottom
 sheets draggable by their header (`src/ui/sheet.ts` sets `--sheet`). `main.ts` shifts the
-camera's view offset up while a sheet is open.
+camera's view offset up while a sheet is open. Section 7 of `mobile.css` is the current
+phone look (short, narrow tab bar; smaller round buttons); in the object sheet `#inspector`
+itself is the scroller there — the name and the tabs are `position: sticky`, the photo and
+switches scroll away. `sheet.ts`'s `tallest` must match `--top` and `--status`.
 
 ## Browser storage keys
 

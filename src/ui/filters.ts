@@ -11,7 +11,7 @@
 
 import type { Catalog } from '../data/catalog.ts';
 import { CATEGORIES, CATEGORY_COLORS, ORBIT_CLASSES, ORBIT_COLORS, type Category, type OrbitClass, type Satellite } from '../data/types.ts';
-import { $, fmtInt } from './dom.ts';
+import { $, fmtInt, fmtKm, lengthUnit, lengthValue } from './dom.ts';
 
 const SLIDER_MAX = 1000;
 /** Slider position → altitude in km on a log scale (100 km … ~50,000 km); the ends mean "no limit". */
@@ -73,13 +73,22 @@ export class Filters {
       }
       this.altMin = sliderToKm(Number(min.value));
       this.altMax = sliderToKm(Number(max.value));
-      const lo = Number.isFinite(this.altMin), hi = Number.isFinite(this.altMax);
-      $('alt-label').textContent = lo && hi ? `${fmtInt(this.altMin)} – ${fmtInt(this.altMax)} km`
-        : lo ? `above ${fmtInt(this.altMin)} km` : hi ? `below ${fmtInt(this.altMax)} km` : 'any';
+      this.refreshUnits();
       this.reapply(); // altitude has no index → check every object
     };
     min.addEventListener('input', () => onRange(min));
     max.addEventListener('input', () => onRange(max));
+  }
+
+  /**
+   * Write the altitude band's label. The band itself is kept in km (that is what the objects
+   * are compared with); the label is only written when a thumb moves, so call this as well
+   * when the units setting changes.
+   */
+  refreshUnits(): void {
+    const lo = Number.isFinite(this.altMin), hi = Number.isFinite(this.altMax);
+    $('alt-label').textContent = lo && hi ? `${fmtInt(lengthValue(this.altMin))} – ${fmtInt(lengthValue(this.altMax))} ${lengthUnit()}`
+      : lo ? `above ${fmtKm(this.altMin)}` : hi ? `below ${fmtKm(this.altMax)}` : 'any';
   }
 
   private chip(label: string, color: string, withCount = true): HTMLButtonElement {

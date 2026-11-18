@@ -13,6 +13,7 @@
  */
 
 import './cinema.css';
+import { fmtKm, getUnits } from './dom.ts';
 
 export interface CinemaActions {
   selectByName(name: string): boolean; // select + fly to an object; false if it is not in the catalogue
@@ -30,7 +31,8 @@ export interface CinemaActions {
 
 interface Scene {
   title: string;
-  text: string;
+  /** The caption. A function where it names a distance, so it is worded in the units in use when the scene is shown. */
+  text: string | (() => string);
   seconds: number;
   /** Set the scene up. Return false to skip it (e.g. the object is not in the catalogue). */
   enter(): boolean | void;
@@ -191,7 +193,7 @@ export class Cinema {
       const scene = this.scenes[this.sceneIndex];
       this.undoScene();
       if (scene.enter() === false) continue; // not available: try the one after
-      this.showCaption(scene.title, scene.text);
+      this.showCaption(scene.title, typeof scene.text === 'string' ? scene.text : scene.text());
       if (scene.seconds > 0) this.sceneTimer(scene.seconds * 1000, () => this.next());
       return;
     }
@@ -237,7 +239,7 @@ export class Cinema {
       },
       {
         title: 'Low Earth orbit',
-        text: 'Most of what flies is here, a few hundred kilometres up. Time is running 100 times faster.',
+        text: () => `Most of what flies is here, a few hundred ${getUnits() === 'metric' ? 'kilometres' : 'miles'} up. Time is running 100 times faster.`,
         seconds: 12,
         enter: () => {
           this.clearSelection();
@@ -247,7 +249,7 @@ export class Cinema {
       },
       {
         title: 'International Space Station',
-        text: 'About 420 km up, and once around the planet roughly every 93 minutes.',
+        text: () => `About ${fmtKm(420)} up, and once around the planet roughly every 93 minutes.`,
         seconds: 12,
         enter: () => this.focusOn('ISS (ZARYA)'),
       },
@@ -270,7 +272,7 @@ export class Cinema {
       },
       {
         title: 'The geostationary ring',
-        text: 'At 35,786 km a satellite keeps pace with the turning Earth, so hundreds share one circle. Time is running 1,000 times faster.',
+        text: () => `At ${fmtKm(35786)} a satellite keeps pace with the turning Earth, so hundreds share one circle. Time is running 1,000 times faster.`,
         seconds: 12,
         enter: () => {
           this.clearSelection();

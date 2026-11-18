@@ -27,6 +27,16 @@ export interface HashedScreenResult extends ScreenResult {
   grid: SpatialHash;
 }
 
+/**
+ * Two objects closer than d are not always "approaching" each other. A capsule docked to a
+ * station, satellites flying in formation, or a freshly launched batch still travelling in a
+ * line are close ALL the time. What tells them apart is how fast one moves relative to the
+ * other: objects sharing an orbit drift at metres per second, while objects whose orbits
+ * merely cross pass at kilometres per second. Below this relative speed (km/s) a pair is
+ * called "flying together".
+ */
+export const TOGETHER_KM_S = 0.1;
+
 /** Deterministic order: closest first; ties broken by the indices. */
 function sortPairs(pairs: Pair[]): Pair[] {
   return pairs.sort((p, q) => p.dist - q.dist || p.a - q.a || p.b - q.b);

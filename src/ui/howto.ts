@@ -43,12 +43,17 @@ export class HowTo {
         this.scrollTo(link.getAttribute('href')!.slice(1));
       });
     }
-    // Highlight the section currently at the top of the page.
+    // Highlight the section being read. The "reading line" starts near the top of the view and
+    // slides to the bottom as the page is scrolled to its end — otherwise the last few
+    // sections, which are too short ever to reach the top, would never be highlighted.
     this.main.addEventListener('scroll', () => {
+      const { scrollTop, scrollHeight, clientHeight } = this.main;
+      const progress = scrollHeight > clientHeight ? scrollTop / (scrollHeight - clientHeight) : 0;
+      const readingLine = scrollTop + 120 + progress * (clientHeight - 120);
       let current = this.links[0];
       for (const link of this.links) {
         const section = $(link.getAttribute('href')!.slice(1));
-        if (section.offsetTop - this.main.scrollTop < 120) current = link;
+        if (section.offsetTop <= readingLine) current = link;
       }
       for (const link of this.links) link.classList.toggle('is-on', link === current);
     });

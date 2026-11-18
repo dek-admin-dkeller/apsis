@@ -40,6 +40,7 @@ import { createScene, EARTH_RADIUS, EARTH_RADIUS_KM, KM } from './render/scene.t
 import { SiteMarker } from './render/siteMarker.ts';
 import { createSky } from './render/sky.ts';
 import { EarthTiles } from './render/tiles.ts';
+import { TOGETHER_KM_S } from './hashing/conjunction.ts';
 import { AheadPanel } from './ui/ahead.ts';
 import { BenchmarkModal } from './ui/benchmarkModal.ts';
 import { Cinema } from './ui/cinema.ts';
@@ -48,13 +49,14 @@ import { Contacts } from './ui/contacts.ts';
 import { renderCrew, renderCrewSummary } from './ui/crew.ts';
 import { CUSTOM_NORAD_ID, Designer } from './ui/designer.ts';
 import { renderFeed } from './ui/feed.ts';
-import { $, fmt, fmtInt } from './ui/dom.ts';
+import { $, fmt, fmtInt, fmtKm, fmtKmS, fmtRange, setClockZone, setUnits } from './ui/dom.ts';
 import { EncounterPanel, type EncounterFocus } from './ui/encounterPanel.ts';
 import { Filters } from './ui/filters.ts';
 import { HashTrace } from './ui/hashTrace.ts';
 import { HowTo } from './ui/howto.ts';
-import { Inspector, utcStamp } from './ui/inspector.ts';
+import { alertDistance, clockStamp, Inspector } from './ui/inspector.ts';
 import { LoadingScreen } from './ui/intro.ts';
+import { Landing } from './ui/landing.ts';
 import { Labels } from './ui/labels.ts';
 import { Monitor } from './ui/monitor.ts';
 import { initSearch } from './ui/search.ts';
@@ -98,6 +100,7 @@ let replay: { endMs: number; holdMs: number } | null = null;
 let encFocus: EncounterFocus = 'both'; // what the camera is centred on
 let encModelSize = 0; // scene units
 let encViewDistance = 0; // camera distance that frames both objects
+let encPairDistance = 0; // … before allowing for the screening cells
 
 // screening bookkeeping
 let screenSeq = 0;
@@ -162,6 +165,7 @@ function showProblem(text: string, withReload: boolean): void {
 }
 const sim = new SimClient();
 const loading = new LoadingScreen();
+const landing = new Landing(); // the welcome page in front of everything (skipped for share links)
 let texturesDone = 0;
 const { globe, ready: texturesReady } = createGlobe(kit.scene, () =>
   loading.progress(0.4 + 0.1 * ++texturesDone, 'Loading Earth textures'),
@@ -286,7 +290,18 @@ function applySettings(s: Settings, changed: keyof Settings | null): void {
   sky.setPlanets(s.planets);
   skyLabelsOn = s.skyLabels;
   observer = { name: s.siteName, latDeg: s.siteLat, lonDeg: s.siteLon };
-  if (changed === null || changed.startsWith('site')) inspector.observerChanged();
+  // Units and clock: the formatting helpers in ui/dom.ts read these, so every panel follows.
+  setUnits(s.units);
+  setClockZone(s.clockZone);
+  if (changed === null || changed === 'units') $('d-label').textContent = alertDistance(screeningDistance);
+  if (changed === 'units' || changed === 'clockZone') {
+    // Panels that only redraw when something happens are told to redraw now.
+    ahead.refreshUnits();
+    designer.refreshUnits();
+    filters.refreshUnits();
+    updateDataNote();
+  }
+  if (changed === null || changed.startsWith('site') || changed === 'units' || changed === 'clockZone') inspector.observerChanged();
   if (s.quality !== qualitySetting) {
     qualitySetting = s.quality;
     kit.setQuality(s.quality === 'auto' ? 'balanced' : s.quality); // Auto starts balanced and steps down if needed
@@ -321,6 +336,8 @@ function renderLegend(mode: Settings['colorMode']): void {
   }
 }
 const store = new SettingsStore(applySettings);
+ahead.refreshUnits(); // these two were built before the saved units were known
+filters.refreshUnits();
 
 // Location is only ever used after the user has said yes in Apsis itself (the button, the
 // tour, or the one-time question below) — and then the browser asks again in its own prompt.
@@ -596,12 +613,21 @@ function openEncounter(aIndex: number, bIndex: number): void {
   // the view (the gap spans roughly half the screen at the closest point).
   const nowKm = rangeKm(encounter.recA, encounter.recB, clock.time);
   const gapKm = approach.coMoving && Number.isFinite(nowKm) ? Math.max(nowKm, approach.missKm) : approach.missKm;
-  encViewDistance = THREE.MathUtils.clamp(Math.max(gapKm, 0.3) * 2.6 * KM, 0.0004, 1.2);
+  encPairDistance = THREE.MathUtils.clamp(Math.max(gapKm, 0.3) * 2.6 * KM, 0.0004, 1.2);
+  encViewDistance = encounterViewDistance();
   encModelSize = Math.max(gapKm * 0.32, 0.05) * KM; // a third of the gap: large, but they can never touch
   // Time keeps running: the pair is watched live. (Replay and the scrubber in the panel are there
   // for a slow-motion or frozen look at the closest point.)
   encFrame = encViz.update(clock.time, realSeconds);
   focusEncounter('both', 1.4);
+}
+
+/**
+ * How far back the camera sits for the whole pair. With the screening cells shown it has to
+ * be far enough to take in both objects' cells (each d km wide), not just the two objects.
+ */
+function encounterViewDistance(): number {
+  return gridOn ? Math.max(encPairDistance, screeningDistance * KM * 5.5) : encPairDistance;
 }
 
 /** Centre the camera on one object of the pair (to zoom in and turn around it), or on both. */
@@ -669,6 +695,12 @@ function setGrid(on: boolean): void {
   $<HTMLInputElement>('grid-toggle').checked = on;
   grid.setVisible(on);
   if (!on) $('grid-note').textContent = '';
+  // A close approach is open: step back (or in again) so the two objects' cells fit the view.
+  if (encPanel.isOpen) {
+    encViewDistance = encounterViewDistance();
+    if (encFocus === 'both') focusEncounter('both', 1.2);
+    return;
+  }
   // Cells are only d km wide — move in close enough to actually see them.
   if (on && selected && selScene) {
     const want = screeningDistance * KM * 14;
@@ -773,7 +805,6 @@ function applyCatalog(next: Catalog): void {
   labels.setPinned(watch.indices());
   ahead.reset();
   $('stat-tracked').textContent = fmtInt(next.sats.length);
-  $('data-age').textContent = `${utcStamp(Date.parse(next.fetchedAt))} UTC${next.live ? ' (live)' : ''}`;
   updateDataNote();
 
   $('quick-list').replaceChildren(...NOTABLE.flatMap(([label, find]) => {
@@ -842,7 +873,7 @@ function updateDataNote(): void {
   if (!catalog) return;
   const ageH = (Date.now() - Date.parse(catalog.fetchedAt)) / 3.6e6;
   $('data-note').textContent =
-    `Orbital elements ${catalog.live ? 'downloaded' : 'saved'} ${utcStamp(Date.parse(catalog.fetchedAt))} UTC, ${ageH < 48 ? `${fmt(ageH, 0)} hours` : `${fmt(ageH / 24, 0)} days`} ago. `
+    `Orbital elements ${catalog.live ? 'downloaded' : 'saved'} ${clockStamp(Date.parse(catalog.fetchedAt))}, ${ageH < 48 ? `${fmt(ageH, 0)} hours` : `${fmt(ageH / 24, 0)} days`} ago. `
     + (facts.size > 0 ? `Catalogue facts loaded for ${fmtInt(facts.size)} objects.` : 'Catalogue facts (owner, launch, size) are not bundled yet.');
   const all = catalog;
   cloud.setOwners((index) => facts.get(all.sats[index].noradId)?.owner);
@@ -850,7 +881,8 @@ function updateDataNote(): void {
     cloud.setHighlight(members); // a satellite train: light up the whole batch
     if (lead) select(lead);
   });
-  $('about-data').textContent = `${fmtInt(catalog.sats.length)} objects, elements from ${utcStamp(Date.parse(catalog.fetchedAt))} UTC`;
+  $('about-data').textContent = `${fmtInt(catalog.sats.length)} objects, elements from ${clockStamp(Date.parse(catalog.fetchedAt))}`;
+  $('data-age').textContent = `${clockStamp(Date.parse(catalog.fetchedAt))}${catalog.live ? ' (live)' : ''}`;
 }
 
 $('refresh').addEventListener('click', async () => {
@@ -887,8 +919,14 @@ sim.onMessage = (msg) => {
     lastStats = msg.stats;
     howto.setStats(msg.stats, msg.d);
     if (!conjunctionOn) return;
-    markers.setPairs(msg.pairA, msg.pairB, msg.d);
-    lastPairs = { a: msg.pairA, b: msg.pairB };
+    // Markers on the globe, and the autopilot's pick, are for genuine approaches only: pairs
+    // that merely fly together (docked, in formation) would otherwise be flagged all day.
+    const crossing: number[] = [];
+    for (let k = 0; k < msg.pairA.length; k++) if (msg.pairSpeed[k] >= TOGETHER_KM_S) crossing.push(k);
+    const passA = Uint32Array.from(crossing, (k) => msg.pairA[k]);
+    const passB = Uint32Array.from(crossing, (k) => msg.pairB[k]);
+    markers.setPairs(passA, passB, msg.d);
+    lastPairs = { a: passA, b: passB };
     monitor.setResult(msg, catalog);
     $('sb-screen').textContent = `${fmt(msg.stats.hashMs, 1)} ms`;
   } else if (msg.type === 'benchRow') {
@@ -940,8 +978,8 @@ function updateHover(): void {
   pointer.dirty = false;
   const index = cloud.pick(pointer.x, pointer.y);
   canvas.style.cursor = index >= 0 ? 'pointer' : '';
-  tooltip.classList.toggle('is-hidden', index < 0);
-  if (index < 0) {
+  tooltip.classList.toggle('is-hidden', index < 0 || !store.settings.hoverCard);
+  if (index < 0 || !store.settings.hoverCard) {
     hoverIndex = -1;
     return;
   }
@@ -962,7 +1000,7 @@ function updateHover(): void {
   if (sim.getPosition(index, here)) {
     const r = Math.hypot(here.x, here.y, here.z);
     const speed = Math.sqrt(Math.max(0, 398600.4418 * (2 / r - 1 / (EARTH_RADIUS_KM + sat.meanAltKm))));
-    tooltip.querySelector('.tip-live')!.textContent = `${fmtInt(r - EARTH_RADIUS_KM)} km up, ${fmt(speed, 2)} km/s`;
+    tooltip.querySelector('.tip-live')!.textContent = `${fmtKm(r - EARTH_RADIUS_KM)} up, ${fmtKmS(speed)}`;
   }
   // beside the pointer, flipped to the left near the right edge so it never leaves the screen
   tooltip.classList.toggle('is-left', pointer.x > window.innerWidth - 340);
@@ -974,6 +1012,19 @@ function updateHover(): void {
 
 let wantShot = false;
 $('shot').addEventListener('click', () => (wantShot = true));
+
+// Picture and video live in a small menu behind one button: two deliberate clicks, so a
+// stray click on the toolbar can no longer start a recording or drop a file in Downloads.
+const captureMenu = $('capture-menu');
+const setCaptureMenu = (open: boolean) => {
+  captureMenu.classList.toggle('is-hidden', !open);
+  $('capture-open').setAttribute('aria-expanded', String(open));
+};
+$('capture-open').addEventListener('click', () => setCaptureMenu(captureMenu.classList.contains('is-hidden')));
+captureMenu.addEventListener('click', () => setCaptureMenu(false)); // a choice was made
+document.addEventListener('pointerdown', (event) => {
+  if (!$('capture').contains(event.target as Node)) setCaptureMenu(false);
+});
 function saveShot(): void {
   // Called right after a frame was drawn, while the picture is still in the canvas.
   canvas.toBlob((blob) => {
@@ -1192,6 +1243,7 @@ $('home').addEventListener('keydown', (event) => {
 });
 
 window.addEventListener('keydown', (event) => {
+  if (landing.showing) return; // the welcome page is up: its own Enter key is the only shortcut
   const el = event.target as HTMLElement;
   if (el instanceof HTMLInputElement && el.type !== 'checkbox' && el.type !== 'range') return; // typing in a field
   if (event.metaKey || event.ctrlKey || event.altKey) return;
@@ -1306,14 +1358,26 @@ function updateEncounter(realSeconds: number): void {
   const screen = toScreen(encFrame.mid);
   rangeTag.classList.toggle('is-hidden', !screen);
   if (screen) {
-    rangeTag.textContent = encFrame.rangeKm < 1 ? `${fmtInt(encFrame.rangeKm * 1000)} m` : `${fmt(encFrame.rangeKm, 2)} km`;
+    rangeTag.textContent = fmtRange(encFrame.rangeKm);
     rangeTag.style.left = `${screen.x.toFixed(1)}px`;
     rangeTag.style.top = `${screen.y.toFixed(1)}px`;
   }
 }
 
-function updateGrid(): void {
+function updateGrid(realSeconds: number): void {
   if (!gridOn) return;
+  // A close approach is open: the picture is about that pair — each object's cell, the block
+  // of 27 cells the search looks through, and both cells lit red while they are inside the
+  // alert distance.
+  if (encPanel.isOpen && encFrame) {
+    const toKm = (v: THREE.Vector3) => kit.eciGroup.worldToLocal(v.clone());
+    grid.update(screeningDistance, encFrame.midEci, -1, cloud.visible, { a: toKm(encFrame.a), b: toKm(encFrame.b), rangeKm: encFrame.rangeKm }, realSeconds);
+    const where = grid.pairState === 'same' ? 'Both objects are in the same cell'
+      : grid.pairState === 'neighbours' ? 'The two objects are in neighbouring cells (cyan and amber)'
+      : 'The two objects are now more than one cell apart, so the search no longer pairs them';
+    $('grid-note').textContent = `${where}. Cells are ${alertDistance(screeningDistance)} wide; they turn red while the pair is closer than that.`;
+    return;
+  }
   // Centre on the selected object; otherwise on the low-orbit region the camera is looking at.
   let focus = { x: 0, y: 0, z: 0 };
   if (selected && selEci) {
@@ -1325,7 +1389,7 @@ function updateGrid(): void {
   }
   grid.update(screeningDistance, focus, selected ? selected.index : -1, cloud.visible);
   $('grid-note').textContent =
-    `${grid.cellsDrawn} occupied cells drawn, each ${screeningDistance} km wide.` +
+    `${grid.cellsDrawn} occupied cells drawn, each ${alertDistance(screeningDistance)} wide.` +
     (selected ? ' Bright cell: this object’s; the lattice around it is what gets searched.' : ' Select an object and zoom in to see the cells around it.');
 }
 
@@ -1378,7 +1442,7 @@ function updateStatus(realSeconds: number): void {
   const cameraEci = kit.eciGroup.worldToLocal(kit.camera.position.clone());
   const geo = eciToGeodetic(cameraEci, gstime(new Date(clock.time)));
   const lat = THREE.MathUtils.radToDeg(geo.latitude), lon = wrapLon(THREE.MathUtils.radToDeg(geo.longitude));
-  $('sb-cam').textContent = `${fmtInt(geo.height)} km up`;
+  $('sb-cam').textContent = `${fmtKm(geo.height)} up`;
   $('sb-sub').textContent = `${fmt(Math.abs(lat), 1)}° ${lat >= 0 ? 'N' : 'S'}  ${fmt(Math.abs(lon), 1)}° ${lon >= 0 ? 'E' : 'W'}`;
 }
 
@@ -1467,7 +1531,7 @@ function step(now: number): void {
   if (!uiHidden) constPanel.frame(realSeconds);
   if (!uiHidden) watch.frame(realSeconds);
   markers.update(realSeconds);
-  updateGrid();
+  updateGrid(realSeconds);
   updateTrace(realSeconds);
   updateHover();
   if (!uiHidden) updateStatus(realSeconds);
@@ -1503,6 +1567,9 @@ async function boot(): Promise<void> {
     // first click on a satellite (and every autopilot scene change) does not stutter.
     prewarmModels(kit.renderer, kit.scene, kit.camera);
     tiles.prewarm(kit.renderer, kit.scene, kit.camera);
+    // Everything is ready. If the welcome page is still up, wait there until the visitor comes in.
+    landing.status(`${fmtInt(first.sats.length)} objects loaded and moving`);
+    await landing.entered;
     await loading.finish();
 
     // Running normally: forget any earlier graphics resets so the reload guard starts fresh.
@@ -1535,6 +1602,7 @@ async function boot(): Promise<void> {
     }
   } catch (error) {
     loading.fail(error instanceof Error ? error.message : String(error));
+    landing.status('The tracker could not load. Open it to see why.');
   }
 }
 

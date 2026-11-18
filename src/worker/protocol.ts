@@ -19,11 +19,13 @@ export interface ScreenStats {
   bruteChecks: number; // what brute force would need: n(n−1)/2
   hashMs: number; // build + query time
   totalPairs: number; // pairs found (the arrays below may be capped)
+  passing: number; // … of which the two objects are crossing each other's path
+  together: number; // … and of which they are flying together (docked, in formation, one launch train)
 }
 
 export type FromWorker =
   | { type: 'ready'; count: number }
   | { type: 'positions'; t: number; epoch: number; positions: Float32Array }
-  | { type: 'screen'; t: number; d: number; seq: number; pairA: Uint32Array; pairB: Uint32Array; pairDist: Float32Array; stats: ScreenStats }
+  | { type: 'screen'; t: number; d: number; seq: number; pairA: Uint32Array; pairB: Uint32Array; pairDist: Float32Array; pairSpeed: Float32Array; stats: ScreenStats }
   | { type: 'benchRow'; row: BenchRow; index: number; total: number }
   | { type: 'benchDone'; d: number };

@@ -6,7 +6,7 @@
 import type { Catalog } from '../data/catalog.ts';
 import { CATEGORY_COLORS, type Satellite } from '../data/types.ts';
 import type { SimClient } from '../worker/SimClient.ts';
-import { $, fmtInt } from './dom.ts';
+import { $, fmtKm } from './dom.ts';
 
 const STORAGE_KEY = 'apsis.watchlist';
 const EARTH_RADIUS_KM = 6371;
@@ -101,7 +101,7 @@ export class Watchlist {
     this.lastTick = realSeconds;
     const p = { x: 0, y: 0, z: 0 };
     for (const [index, cell] of this.altitude) {
-      cell.textContent = this.sim.getPosition(index, p) ? `${fmtInt(Math.hypot(p.x, p.y, p.z) - EARTH_RADIUS_KM)} km` : '';
+      cell.textContent = this.sim.getPosition(index, p) ? fmtKm(Math.hypot(p.x, p.y, p.z) - EARTH_RADIUS_KM) : '';
     }
   }
 }

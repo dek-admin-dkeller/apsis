@@ -10,14 +10,17 @@
 
 import type { SatRec } from 'satellite.js';
 import { benchmarkSize, benchmarkSizes, shuffledPositions } from '../hashing/benchmark.ts';
-import { hashedPairs } from '../hashing/conjunction.ts';
+import { hashedPairs, TOGETHER_KM_S } from '../hashing/conjunction.ts';
 import { buildSatrecs, propagateAll } from './propagate.ts';
 import type { FromWorker, ToWorker } from './protocol.ts';
 
-const MAX_PAIRS_SENT = 2000; // the UI never needs more than this; the true total is reported too
+// The UI never needs more pairs than this of each kind; the true totals are reported too.
+const MAX_PASSING_SENT = 1500;
+const MAX_TOGETHER_SENT = 500;
 
 let satrecs: SatRec[] = [];
 let scratch = new Float64Array(0); // full-precision positions for screening
+let velocity = new Float64Array(0); // … and velocities, to tell a passing pair from one flying together
 
 const post = (msg: FromWorker, transfer: Transferable[] = []) =>
   (self as unknown as Worker).postMessage(msg, transfer);
@@ -28,6 +31,7 @@ self.onmessage = (event: MessageEvent<ToWorker>) => {
     case 'init': {
       satrecs = buildSatrecs(msg.records);
       scratch = new Float64Array(satrecs.length * 3);
+      velocity = new Float64Array(satrecs.length * 3);
       post({ type: 'ready', count: satrecs.length });
       break;
     }
@@ -40,7 +44,7 @@ self.onmessage = (event: MessageEvent<ToWorker>) => {
     }
 
     case 'screen': {
-      propagateAll(satrecs, msg.t, scratch);
+      propagateAll(satrecs, msg.t, scratch, velocity);
 
       // Screen only the objects that are currently shown (filters) and have a valid position.
       const ids: number[] = [];
@@ -60,17 +64,26 @@ self.onmessage = (event: MessageEvent<ToWorker>) => {
       const result = hashedPairs(pos, n, msg.d); // ← the spatial hash (src/hashing)
       const hashMs = performance.now() - start;
 
-      const sent = Math.min(result.pairs.length, MAX_PAIRS_SENT);
-      const pairA = new Uint32Array(sent);
-      const pairB = new Uint32Array(sent);
-      const pairDist = new Float32Array(sent);
-      for (let k = 0; k < sent; k++) {
-        pairA[k] = ids[result.pairs[k].a]; // local index → catalogue index
-        pairB[k] = ids[result.pairs[k].b];
-        pairDist[k] = result.pairs[k].dist;
+      // Sort every pair into "passing" or "flying together" by its relative speed, and keep
+      // the closest of each kind for the list (the pairs are already ordered by distance).
+      const sentA: number[] = [], sentB: number[] = [], sentDist: number[] = [], sentSpeed: number[] = [];
+      let passing = 0, together = 0;
+      for (const pair of result.pairs) {
+        const i = ids[pair.a], j = ids[pair.b]; // local index → catalogue index
+        const speed = Math.hypot(velocity[3 * i] - velocity[3 * j], velocity[3 * i + 1] - velocity[3 * j + 1], velocity[3 * i + 2] - velocity[3 * j + 2]);
+        const isTogether = speed < TOGETHER_KM_S;
+        if (isTogether ? together++ >= MAX_TOGETHER_SENT : passing++ >= MAX_PASSING_SENT) continue;
+        sentA.push(i);
+        sentB.push(j);
+        sentDist.push(pair.dist);
+        sentSpeed.push(speed);
       }
+      const pairA = Uint32Array.from(sentA);
+      const pairB = Uint32Array.from(sentB);
+      const pairDist = Float32Array.from(sentDist);
+      const pairSpeed = Float32Array.from(sentSpeed);
       post({
-        type: 'screen', t: msg.t, d: msg.d, seq: msg.seq, pairA, pairB, pairDist,
+        type: 'screen', t: msg.t, d: msg.d, seq: msg.seq, pairA, pairB, pairDist, pairSpeed,
         stats: {
           objects: n,
           occupiedCells: result.stats.occupiedCells,
@@ -81,8 +94,10 @@ self.onmessage = (event: MessageEvent<ToWorker>) => {
           bruteChecks: (n * (n - 1)) / 2,
           hashMs,
           totalPairs: result.pairs.length,
+          passing,
+          together,
         },
-      }, [pairA.buffer, pairB.buffer, pairDist.buffer]);
+      }, [pairA.buffer, pairB.buffer, pairDist.buffer, pairSpeed.buffer]);
       break;
     }
 

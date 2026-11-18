@@ -13,8 +13,8 @@ import './designer.css';
 import { CATEGORY_COLORS, type OmmRecord, type Satellite } from '../data/types.ts';
 import type { FutureApproach } from '../hashing/lookahead.ts';
 import type { LookaheadReply, LookaheadRequest } from '../worker/lookahead.worker.ts';
-import { fmt, fmtInt } from './dom.ts';
-import { duration } from './inspector.ts';
+import { fmt, fmtInt, fmtKm, fmtKmS, fmtRange } from './dom.ts';
+import { alertDistance, duration } from './inspector.ts';
 
 export interface DesignerHost {
   /** Put this record into the live catalogue (replacing any previous custom one) and select it. Returns its Satellite, or null if the catalogue is not loaded. */
@@ -84,6 +84,10 @@ export class Designer {
   private scanStart = 0;
   private scanSats: Satellite[] = [];
   private focusIndex = -1;
+  // The last completed check and the distance it was run with, kept so that its result can
+  // be written again in other units.
+  private finished: LookaheadReply | null = null;
+  private scanKm = 20;
 
   constructor(container: HTMLElement, host: DesignerHost) {
     this.host = host;
@@ -124,7 +128,7 @@ export class Designer {
       <div class="d-check is-hidden">
         <p class="field-label">What comes close in the next ${SCAN_HOURS} hours? Report passes within</p>
         <div class="segmented d-alert">
-          <button data-value="5">5 km</button><button data-value="20" class="is-on">20 km</button><button data-value="50">50 km</button>
+          <button data-value="5"></button><button data-value="20" class="is-on"></button><button data-value="50"></button>
         </div>
         <button class="btn wide d-scan">Check the next ${SCAN_HOURS} hours</button>
         <div class="designer-bar is-hidden"><i></i></div>
@@ -184,8 +188,20 @@ export class Designer {
     }
     this.el('.d-scan').addEventListener('click', () => (this.worker ? this.stopScan('Check stopped.') : this.startScan()));
 
-    this.syncControls();
+    this.refreshUnits();
     this.syncLaunched();
+  }
+
+  /**
+   * Write everything that names a distance or speed again. The readouts are otherwise only
+   * written when a slider moves and a finished check is never redrawn by itself, so call
+   * this when the units setting changes.
+   */
+  refreshUnits(): void {
+    this.syncControls();
+    // The choices are kept in km (data-value); only their labels follow the setting.
+    for (const button of this.el('.d-alert').querySelectorAll<HTMLElement>('button')) button.textContent = alertDistance(Number(button.dataset.value));
+    if (this.finished) this.showResult(this.finished);
   }
 
   /** Call when the catalogue was rebuilt for any reason, so stale results are cleared. `hasCustom` = the custom object is in it. */
@@ -220,13 +236,13 @@ export class Designer {
     this.el('.d-apogee-field').classList.toggle('is-off', this.circular);
     this.input('.d-inc').value = String(this.inclination);
     this.input('.d-raan').value = String(this.raan);
-    this.el('.d-perigee-out').textContent = `${fmtInt(this.perigee)} km`;
-    this.el('.d-apogee-out').textContent = `${fmtInt(this.apogee)} km`;
+    this.el('.d-perigee-out').textContent = fmtKm(this.perigee);
+    this.el('.d-apogee-out').textContent = fmtKm(this.apogee);
     this.el('.d-inc-out').textContent = `${fmt(this.inclination, 1)}°`;
     this.el('.d-raan-out').textContent = `${fmtInt(this.raan)}°`;
     const orbit = orbitFrom(this.perigee, this.apogee);
     this.el('.d-period').textContent = orbit.periodMin < 180 ? `${fmt(orbit.periodMin, 1)} min` : `${fmt(orbit.periodMin / 60, 2)} h`;
-    this.el('.d-speed').textContent = `${fmt(orbit.perigeeSpeedKmS, 2)} km/s`;
+    this.el('.d-speed').textContent = fmtKmS(orbit.perigeeSpeedKmS);
     this.el('.d-ecc').textContent = orbit.eccentricity < 0.0005 ? '0 (circular)' : orbit.eccentricity.toFixed(3);
   }
 
@@ -283,6 +299,8 @@ export class Designer {
     this.scanSats = ctx.sats;
     this.scanStart = ctx.startMs;
     this.focusIndex = custom.index;
+    this.scanKm = this.alertKm;
+    this.finished = null;
     this.el('.designer-list').replaceChildren();
     this.worker = new Worker(new URL('../worker/lookahead.worker.ts', import.meta.url), { type: 'module' });
     this.worker.onmessage = (event: MessageEvent<LookaheadReply>) => this.onReply(event.data);
@@ -300,6 +318,7 @@ export class Designer {
   private stopScan(message: string): void {
     this.worker?.terminate();
     this.worker = null;
+    this.finished = null;
     this.el('.d-scan').textContent = `Check the next ${SCAN_HOURS} hours`;
     this.el('.designer-bar').classList.add('is-hidden');
     this.el('.d-status').textContent = message;
@@ -316,25 +335,33 @@ export class Designer {
       this.el('.d-status').textContent = `Checking… ${Math.round(reply.fraction * 100)}%, ${fmtInt(reply.total)} found so far.`;
       return;
     }
-    if (reply.total === 0) {
-      this.stopScan(`Nothing comes within ${this.alertKm} km in the next ${SCAN_HOURS} h.`);
-      return;
-    }
+    this.stopScan(this.summary(reply));
+    this.finished = reply;
+  }
+
+  /** Draw a completed check again (same rows and sentence, current units). */
+  private showResult(reply: LookaheadReply): void {
+    this.render(reply.closest.slice(0, MAX_ROWS));
+    this.el('.d-status').textContent = this.summary(reply);
+  }
+
+  private summary(reply: LookaheadReply): string {
+    const within = `within ${alertDistance(this.scanKm)} in the next ${SCAN_HOURS} h`;
+    if (reply.total === 0) return `Nothing comes ${within}.`;
     const nearest = reply.closest[0];
     const objects = new Set(reply.closest.map((approach) => this.other(approach).index)).size;
     const complete = reply.total <= reply.closest.length; // the worker sends at most its closest 250
     const count = complete
-      ? `${fmtInt(objects)} object${objects === 1 ? '' : 's'} pass${objects === 1 ? 'es' : ''} within ${this.alertKm} km in the next ${SCAN_HOURS} h`
+      ? `${fmtInt(objects)} object${objects === 1 ? '' : 's'} pass${objects === 1 ? 'es' : ''} ${within}`
         + (reply.total > objects ? ` (${fmtInt(reply.total)} passes in all)` : '')
-      : `${fmtInt(reply.total)} passes within ${this.alertKm} km in the next ${SCAN_HOURS} h`;
-    this.stopScan(
-      `${count}; the closest is ${this.other(nearest).name} at ${this.distance(nearest.missKm)}.`
-      + (reply.total > MAX_ROWS ? ` Showing the closest ${MAX_ROWS}.` : ''),
-    );
+      : `${fmtInt(reply.total)} passes ${within}`;
+    return `${count}; the closest is ${this.other(nearest).name} at ${this.distance(nearest.missKm)}.`
+      + (reply.total > MAX_ROWS ? ` Showing the closest ${MAX_ROWS}.` : '');
   }
 
+  /** Metres (or feet) under 1 km, two decimals up to 10 km, one beyond. */
   private distance(km: number): string {
-    return km < 1 ? `${fmtInt(km * 1000)} m` : `${fmt(km, km < 10 ? 2 : 1)} km`;
+    return km < 10 ? fmtRange(km) : fmtKm(km, 1);
   }
 
   private render(approaches: FutureApproach[]): void {
@@ -345,7 +372,7 @@ export class Designer {
       li.innerHTML = '<i class="sev"></i><div class="names"><span><i class="dot"></i><b></b></span><small></small></div><span class="dist"><b></b><small></small></span>';
       li.querySelector('.names b')!.textContent = sat.name;
       li.querySelector<HTMLElement>('.dot')!.style.color = CATEGORY_COLORS[sat.category];
-      li.querySelector('.names small')!.textContent = `passing at ${fmt(approach.relSpeedKmS, 1)} km/s`;
+      li.querySelector('.names small')!.textContent = `passing at ${fmtKmS(approach.relSpeedKmS, 1)}`;
       const dist = li.querySelector('.dist')!;
       dist.firstElementChild!.textContent = this.distance(approach.missKm);
       dist.lastElementChild!.textContent = `in ${duration(approach.tcaMs - this.scanStart)}`;

@@ -6,6 +6,12 @@
  *   teal  = a cell holding one object        red = a cell holding 2+ objects (a shared bucket)
  *   cyan  = the selected object's cell, with the 3 × 3 × 3 block of cells around it —
  *           the 27 buckets a neighbour query looks into.
+ *
+ * While a close approach is open the drawing is about that pair instead: object A's cell in
+ * cyan with the block of 27 its query searches, object B's cell in amber, both lightly
+ * filled so they read as boxes. The pair is found because B's cell lies inside A's block
+ * (or is the very same cell). While the two are inside the alert distance both cells turn
+ * red and pulse: that is the moment the screening flags them.
  */
 
 import * as THREE from 'three';
@@ -14,7 +20,17 @@ import type { SimClient } from '../worker/SimClient.ts';
 import type { SceneKit } from './scene.ts';
 
 const MAX_CELLS = 500;
-const MAX_SEGMENTS = MAX_CELLS * 12 + 12 + 48; // cubes + selected cell + neighbour lattice
+const MAX_SEGMENTS = MAX_CELLS * 12 + 6 * 12 + 48; // cubes + highlighted cells (drawn three times for weight) + neighbour lattice
+const CYAN: [number, number, number] = [0.5, 1.6, 2.0]; // object A / the selected object
+const AMBER: [number, number, number] = [2.0, 1.25, 0.45]; // object B
+const HOT: [number, number, number] = [2.0, 0.3, 0.36]; // inside the alert distance
+
+/** The two objects of an open close approach (ECI km) and how far apart they are right now. */
+export interface PairCells {
+  a: Vec3;
+  b: Vec3;
+  rangeKm: number;
+}
 
 type Vec3 = { x: number; y: number; z: number };
 
@@ -30,8 +46,11 @@ export class GridViz {
   private readonly colors = new Float32Array(MAX_SEGMENTS * 6);
   private readonly sim: SimClient;
   private cursor = 0; // vertices written so far this frame
+  private readonly fills: THREE.Mesh<THREE.BoxGeometry, THREE.MeshBasicMaterial>[] = [];
   /** Shown in the UI: how many cells are currently drawn. */
   cellsDrawn = 0;
+  /** For a pair: do the two share a cell, sit in neighbouring cells, or neither (too far apart to be found)? */
+  pairState: 'same' | 'neighbours' | 'apart' = 'apart';
 
   constructor(kit: SceneKit, sim: SimClient) {
     this.sim = sim;
@@ -46,10 +65,22 @@ export class GridViz {
     this.lines.visible = false;
     this.lines.renderOrder = 1;
     kit.eciGroup.add(this.lines);
+    // Two see-through boxes for the cells of a close-approach pair.
+    for (let k = 0; k < 2; k++) {
+      const fill = new THREE.Mesh(
+        new THREE.BoxGeometry(1, 1, 1),
+        new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.1, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
+      );
+      fill.visible = false;
+      fill.renderOrder = 1;
+      kit.eciGroup.add(fill);
+      this.fills.push(fill);
+    }
   }
 
   setVisible(on: boolean): void {
     this.lines.visible = on;
+    if (!on) for (const fill of this.fills) fill.visible = false;
   }
 
   private segment(x1: number, y1: number, z1: number, x2: number, y2: number, z2: number, r: number, g: number, b: number): void {
@@ -70,15 +101,43 @@ export class GridViz {
     }
   }
 
+  /** A cell drawn with weight: three cubes a hair apart read as one thick outline. */
+  private boldCube(ix: number, iy: number, iz: number, d: number, [r, g, b]: [number, number, number]): void {
+    for (const grow of [0, 0.012, -0.012]) this.cube(ix - grow / 2, iy - grow / 2, iz - grow / 2, d, 1 + grow, r, g, b);
+  }
+
+  /** The lattice of the 3 × 3 × 3 block of cells around cell (cx, cy, cz): what a neighbour query visits. */
+  private block(cx: number, cy: number, cz: number, d: number): void {
+    for (let u = -1; u <= 2; u++) {
+      for (let v = -1; v <= 2; v++) {
+        this.segment((cx - 1) * d, (cy + u) * d, (cz + v) * d, (cx + 2) * d, (cy + u) * d, (cz + v) * d, 0.1, 0.3, 0.42);
+        this.segment((cx + u) * d, (cy - 1) * d, (cz + v) * d, (cx + u) * d, (cy + 2) * d, (cz + v) * d, 0.1, 0.3, 0.42);
+        this.segment((cx + u) * d, (cy + v) * d, (cz - 1) * d, (cx + u) * d, (cy + v) * d, (cz + 2) * d, 0.1, 0.3, 0.42);
+      }
+    }
+  }
+
+  private fill(which: number, ix: number, iy: number, iz: number, d: number, [r, g, b]: [number, number, number], opacity: number): void {
+    const fill = this.fills[which];
+    fill.visible = true;
+    fill.position.set((ix + 0.5) * d, (iy + 0.5) * d, (iz + 0.5) * d);
+    fill.scale.setScalar(d);
+    fill.material.color.setRGB(r, g, b).multiplyScalar(0.5);
+    fill.material.opacity = opacity;
+  }
+
   /**
    * @param d        cell size = screening distance (km)
    * @param focus    centre of the region to visualise (ECI km)
    * @param selected index of the selected object, or −1
    * @param visible  filter mask (hidden objects are not hashed)
+   * @param pair     the two objects of an open close approach, if one is open
+   * @param seconds  real time, for the pulse
    */
-  update(d: number, focus: Vec3, selected: number, visible: Uint8Array): void {
+  update(d: number, focus: Vec3, selected: number, visible: Uint8Array, pair: PairCells | null = null, seconds = 0): void {
     if (!this.lines.visible || !this.sim.hasData) return;
     this.cursor = 0;
+    for (const fill of this.fills) fill.visible = false;
 
     // Hash the objects near the focus point — exactly what the screening does for all of them.
     const grid = new SpatialHash(d);
@@ -102,18 +161,27 @@ export class GridViz {
     }
     this.cellsDrawn = cells.length;
 
-    // The selected object's own cell and the 27-cell neighbourhood a query visits.
-    if (selected >= 0 && this.sim.getPosition(selected, p)) {
-      const cx = Math.floor(p.x / d), cy = Math.floor(p.y / d), cz = Math.floor(p.z / d);
-      this.cube(cx, cy, cz, d, 1, 0.5, 1.6, 2.0);
-      for (let u = -1; u <= 2; u++) {
-        for (let v = -1; v <= 2; v++) {
-          // lattice lines of the 3×3×3 block, along each of the three axes
-          this.segment((cx - 1) * d, (cy + u) * d, (cz + v) * d, (cx + 2) * d, (cy + u) * d, (cz + v) * d, 0.1, 0.3, 0.42);
-          this.segment((cx + u) * d, (cy - 1) * d, (cz + v) * d, (cx + u) * d, (cy + 2) * d, (cz + v) * d, 0.1, 0.3, 0.42);
-          this.segment((cx + u) * d, (cy + v) * d, (cz - 1) * d, (cx + u) * d, (cy + v) * d, (cz + 2) * d, 0.1, 0.3, 0.42);
-        }
+    if (pair) {
+      // A close approach: each object's cell, and the block of 27 that A's query searches.
+      const cell = (p: Vec3) => [Math.floor(p.x / d), Math.floor(p.y / d), Math.floor(p.z / d)] as const;
+      const [ax, ay, az] = cell(pair.a), [bx, by, bz] = cell(pair.b);
+      const apart = Math.max(Math.abs(ax - bx), Math.abs(ay - by), Math.abs(az - bz)); // in cells
+      this.pairState = apart === 0 ? 'same' : apart === 1 ? 'neighbours' : 'apart';
+      const inside = pair.rangeKm < d;
+      const pulse = 0.5 + 0.5 * Math.sin(seconds * 5);
+      const glow = inside ? 0.05 + 0.05 * pulse : 0.035; // faint: the bloom pass brightens anything additive
+      this.block(ax, ay, az, d);
+      this.boldCube(ax, ay, az, d, inside ? HOT : CYAN);
+      this.fill(0, ax, ay, az, d, inside ? HOT : CYAN, glow);
+      if (apart > 0) {
+        this.boldCube(bx, by, bz, d, inside ? HOT : AMBER);
+        this.fill(1, bx, by, bz, d, inside ? HOT : AMBER, glow);
       }
+    } else if (selected >= 0 && this.sim.getPosition(selected, p)) {
+      // The selected object's own cell and the 27-cell neighbourhood a query visits.
+      const cx = Math.floor(p.x / d), cy = Math.floor(p.y / d), cz = Math.floor(p.z / d);
+      this.cube(cx, cy, cz, d, 1, ...CYAN);
+      this.block(cx, cy, cz, d);
     }
 
     const geometry = this.lines.geometry;

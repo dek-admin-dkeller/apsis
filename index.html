@@ -13,10 +13,61 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
     <title>Apsis — orbital tracking console</title>
+    <!-- The welcome page is hidden until its stylesheet arrives, and skipped altogether (before the
+         first paint) for share links and when the setting is off. See src/ui/landing.ts. -->
+    <style>#landing { visibility: hidden; }</style>
+    <script>
+      try {
+        var saved = JSON.parse(localStorage.getItem('orbithash.settings.v2') || '{}');
+        if (location.hash.length > 1 || saved.landing === false) document.documentElement.classList.add('no-landing');
+      } catch (error) { /* no storage: show the page */ }
+    </script>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23070d18'/%3E%3Cg transform='rotate(-30 16 16)'%3E%3Cpath d='M27.5 16a11.5 7 0 1 1-3.4-4.95' fill='none' stroke='%23e8f1fb' stroke-width='2.2' stroke-linecap='round'/%3E%3Ccircle cx='12.4' cy='16' r='3.5' fill='%23e8f1fb'/%3E%3Ccircle cx='26.7' cy='13.3' r='2.4' fill='%237fe3ff'/%3E%3C/g%3E%3C/svg%3E" />
   </head>
   <body>
     <canvas id="scene"></canvas>
+
+    <!-- Welcome page: shown first, while the tracker loads behind it -->
+    <div id="landing">
+      <header class="ld-top">
+        <span class="ld-mark">
+          <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
+            <g transform="rotate(-30 16 16)">
+              <path d="M27.5 16a11.5 7 0 1 1-3.4-4.95" fill="none" stroke="#e8f1fb" stroke-width="1.9" stroke-linecap="round" />
+              <circle cx="12.4" cy="16" r="3.3" fill="#e8f1fb" />
+              <circle cx="26.7" cy="13.3" r="2.1" fill="#7fe3ff" />
+            </g>
+          </svg>
+          Apsis
+        </span>
+      </header>
+      <main class="ld-main">
+        <div class="ld-copy">
+          <h1>Everything in orbit around Earth, right now.</h1>
+          <p class="ld-lede">Every tracked satellite, rocket stage and fragment, on a 3D globe and moving in real time. Follow any one of them, ride along with the Space Station, or watch for objects passing close to each other.</p>
+          <div class="ld-go">
+            <button id="landing-enter" class="ld-button">Open the tracker</button>
+            <p id="landing-status" class="ld-status" aria-live="polite">Getting the catalogue ready</p>
+          </div>
+        </div>
+        <figure class="ld-orbit" aria-hidden="true">
+          <div class="ld-turn">
+            <svg viewBox="0 0 500 400" preserveAspectRatio="none">
+              <line x1="20" y1="200" x2="480" y2="200" />
+              <ellipse cx="250" cy="200" rx="230" ry="184" />
+            </svg>
+            <i class="ld-earth"></i>
+            <div class="ld-sat"><i></i></div>
+            <span class="ld-tag ld-peri">periapsis<small>nearest point</small></span>
+            <span class="ld-tag ld-apo">apoapsis<small>farthest point</small></span>
+          </div>
+        </figure>
+      </main>
+      <footer class="ld-foot">
+        <p><dfn>apsis</dfn>, noun. Either of the two points on an orbit that lie nearest to and farthest from the body being orbited.</p>
+        <p>Orbital data from CelesTrak, imagery from NASA. Nothing to install and no account.</p>
+      </footer>
+    </div>
 
     <!-- Loading screen -->
     <div id="loading">
@@ -80,12 +131,22 @@
           <button id="autopilot" class="tool" aria-pressed="false" title="Autopilot: a hands-free tour of the view (A)" aria-label="Autopilot">
             <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5" /><path d="M8.2 6.8v6.4l5-3.2z" /></svg>
           </button>
-          <button id="record" class="tool" aria-pressed="false" title="Record a video of the view (M)" aria-label="Record a video of the view">
-            <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="5.5" width="10.5" height="9" rx="1.5" /><path d="M13 9l4.5-2.5v7L13 11z" /></svg>
-          </button>
-          <button id="shot" class="tool" title="Save a picture of the view (P)" aria-label="Save a picture of the view">
-            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6.5h3l1.2-2h5.6l1.2 2h3v9H3z" /><circle cx="10" cy="10.8" r="2.8" /></svg>
-          </button>
+          <!-- Picture and video sit one click deeper, behind this button, so neither is started by a stray click. -->
+          <div class="tool-group" id="capture">
+            <button id="capture-open" class="tool" aria-haspopup="menu" aria-expanded="false" title="Save a picture or record a video" aria-label="Save a picture or record a video">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6.5h3l1.2-2h5.6l1.2 2h3v9H3z" /><circle cx="10" cy="10.8" r="2.8" /></svg>
+            </button>
+            <div class="tool-menu is-hidden" id="capture-menu" role="menu" aria-label="Capture">
+              <button id="shot" role="menuitem">
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6.5h3l1.2-2h5.6l1.2 2h3v9H3z" /><circle cx="10" cy="10.8" r="2.8" /></svg>
+                <span>Save a picture</span><kbd>P</kbd>
+              </button>
+              <button id="record" role="menuitem" aria-pressed="false">
+                <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="5.5" width="10.5" height="9" rx="1.5" /><path d="M13 9l4.5-2.5v7L13 11z" /></svg>
+                <span class="rec-start">Record a video</span><span class="rec-stop">Stop recording</span><kbd>M</kbd>
+              </button>
+            </div>
+          </div>
           <button id="fullscreen" class="tool" title="Full screen (F)" aria-label="Full screen">
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7.5V3h4.5M12.5 3H17v4.5M17 12.5V17h-4.5M7.5 17H3v-4.5" /></svg>
           </button>
@@ -306,11 +367,14 @@
               <input type="range" id="d-slider" min="1" max="50" step="1" value="10" aria-label="Alert distance in km" />
             </div>
             <dl class="tiles">
-              <div><dt>Pairs inside</dt><dd id="conj-count">–</dd></div>
+              <div><dt id="conj-count-label">Passing now</dt><dd id="conj-count">–</dd></div>
               <div><dt>Closest</dt><dd id="conj-closest">–</dd></div>
               <div><dt>Scan time</dt><dd id="conj-time">–</dd></div>
             </dl>
-            <label class="row-toggle"><span>Hide docked and co-flying pairs</span><input type="checkbox" id="conj-hide-docked" checked /></label>
+            <div class="segmented" id="conj-kind" role="group" aria-label="Kind of pair">
+              <button data-value="passing" class="is-on">Passing <b id="conj-n-passing"></b></button><button data-value="together">Flying together <b id="conj-n-together"></b></button>
+            </div>
+            <p class="note" id="conj-kind-note"></p>
             <p class="note" id="conj-off-note">Switch the monitor on to check every shown object against all the others about once a second.</p>
             <ol id="pair-list" class="is-hidden"></ol>
             <p class="note" id="conj-foot"></p>
@@ -323,12 +387,28 @@
           <header class="panel-head"><h2>Settings</h2><button class="icon-btn" data-close-panel aria-label="Close panel">×</button></header>
           <div class="panel-body">
             <details class="sec" open>
+              <summary>Units and time</summary>
+              <p class="field-label">Distances and speeds</p>
+              <div class="segmented" data-setting="units">
+                <button data-value="metric">Kilometres</button><button data-value="imperial">Miles</button>
+              </div>
+              <p class="field-label">Clock</p>
+              <div class="segmented" data-setting="clockZone">
+                <button data-value="utc">UTC</button><button data-value="local">My local time</button>
+              </div>
+            </details>
+            <details class="sec" open>
+              <summary>Interface</summary>
+              <label class="row-toggle"><span>Info card when pointing at an object</span><input type="checkbox" data-setting="hoverCard" /></label>
+              <label class="row-toggle"><span>Welcome page when the site opens</span><input type="checkbox" data-setting="landing" /></label>
+              <label class="row-toggle"><span>Frosted panels</span><input type="checkbox" data-setting="glass" /></label>
+              <label class="row-toggle"><span>Shrink and fade the time bar when not in use</span><input type="checkbox" data-setting="quietUi" /></label>
+            </details>
+            <details class="sec" open>
               <summary>Rendering <span class="sum-note" id="fps-label"></span></summary>
               <div class="segmented" data-setting="quality">
                 <button data-value="auto">Auto</button><button data-value="high">High</button><button data-value="balanced">Balanced</button><button data-value="fast">Fast</button>
               </div>
-              <label class="row-toggle"><span>Frosted panels</span><input type="checkbox" data-setting="glass" /></label>
-              <label class="row-toggle"><span>Shrink and fade the time bar when not in use</span><input type="checkbox" data-setting="quietUi" /></label>
             </details>
             <details class="sec" open>
               <summary>Ground station</summary>

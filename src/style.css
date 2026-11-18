@@ -740,6 +740,14 @@ canvas.chart.square { height: auto; aspect-ratio: 1; max-width: 240px; margin: 0
 :is(#pair-list, #ahead-list) .dist { font: 12px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text); white-space: nowrap; }
 :is(#pair-list, #ahead-list) .sev-mid .dist { color: var(--amber); }
 :is(#pair-list, #ahead-list) .sev-high .dist { color: var(--red); }
+#pair-list .dist { display: grid; justify-items: end; line-height: 1.3; }
+#pair-list .dist b { font-weight: 400; }
+#pair-list .dist small { font: 10.5px var(--font-ui); color: var(--muted); }
+#pair-list .sev-calm .sev { background: rgba(255, 255, 255, 0.16); }
+#conj-kind { margin-top: 4px; }
+#conj-kind b { margin-left: 5px; font: 11px var(--font-mono); font-weight: 400; color: var(--muted); }
+#conj-kind .is-on b { color: inherit; opacity: 0.75; }
+#conj-kind-note { margin: 7px 0 2px; }
 :is(#pair-list, #ahead-list) li.empty { display: block; padding: 8px 2px; color: var(--muted); cursor: default; }
 :is(#pair-list, #ahead-list) li.empty:hover { background: none; }
 #conj-foot { margin-top: 8px; }
@@ -1237,7 +1245,45 @@ body.quiet-ui .timebar[data-direction='back']:not(.is-open) #speeds button.is-on
 /* ---------- top-bar toggles (autopilot, record) ---------- */
 
 .tool[aria-pressed='true'] { color: var(--cyan); border-color: rgba(127, 227, 255, 0.5); background: rgba(127, 227, 255, 0.1); }
-#record[aria-pressed='true'] { color: var(--red); border-color: rgba(255, 77, 94, 0.55); background: rgba(255, 77, 94, 0.12); }
+/* Capture menu: picture and video, one click deeper than the rest of the toolbar. */
+.tool-group { position: relative; display: flex; }
+.tool-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  display: grid;
+  gap: 2px;
+  min-width: 204px;
+  padding: 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--solid-strong);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+}
+.tool-menu button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: none;
+  color: var(--text);
+  font: 12.5px var(--font-ui);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tool-menu button:hover { background: var(--hover); }
+.tool-menu svg { flex: none; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; color: var(--muted); }
+.tool-menu kbd { margin-left: auto; }
+.tool-menu .rec-stop, #record[aria-pressed='true'] .rec-start { display: none; }
+#record[aria-pressed='true'] .rec-stop { display: inline; }
+#record[aria-pressed='true'], #record[aria-pressed='true'] svg { color: var(--red); }
+/* While a recording runs the camera button itself says so (and one click on it leads to Stop). */
+.tool-group:has(#record[aria-pressed='true']) #capture-open { color: var(--red); border-color: rgba(255, 77, 94, 0.55); background: rgba(255, 77, 94, 0.12); }
 
 /* ---------- "may we use your location?" ---------- */
 

@@ -52,15 +52,16 @@ status line sit along the bottom.
 | Inspector tabs | **Live** telemetry, ground-track map, altitude chart · **Orbit** shape to scale, orbital elements, speed and sunlight charts · **Passes** over your ground station with a sky chart · **Record** owner, launch, size, a Wikipedia summary and the raw element record |
 | Objects panel (`O`) | filter by type, orbit regime, altitude band; colour by type, orbit, altitude, owner, launch year or tilt; labels, marker size; shortcuts to notable objects |
 | Layers panel (`L`) | orbit path, ground track, coverage footprint, 3D model; ground-station marker, clouds, atmosphere, coastlines and borders, lat/long grid, day/night line; stars, constellations, planets, names in the sky; screening cells (`G`) |
-| Close-approach monitor (`C`) | **Right now**: switch it on, set the alert distance; the list shows every pair inside it. **Coming hours**: scan up to 24 hours ahead for predicted close passes. Click any pair to open the **close-approach view** (time keeps running live; the panel's replay and scrubber give a slow-motion or frozen look): both spacecraft as 3D models, their flight paths, the live distance between them, a range chart you can scrub, and a slow-motion replay |
+| Close-approach monitor (`C`) | **Right now**: switch it on, set the alert distance; the pairs inside it are sorted into two lists — **Passing** (objects on different orbits crossing paths, with their passing speed) and **Flying together** (docked spacecraft, formations and launch trains, which are close all the time). The counts in the top bar and on the globe are of the passing kind only. **Coming hours**: scan up to 24 hours ahead for predicted close passes. Click any pair to open the **close-approach view** (time keeps running live; the panel's replay and scrubber give a slow-motion or frozen look): both spacecraft as 3D models, their flight paths, the live distance between them, a range chart you can scrub, and a slow-motion replay |
 | Ride along (`V`) | from the inspector: sit on the selected object and look out from it. Drag to look around, scroll to zoom |
 | Sky view (`4`) | the **Sky** button at the foot of the rail: stand at the ground station and watch objects cross overhead |
 | Your location | Apsis asks once whether it may show where you are; the crosshair button in the top bar does the same at any time. Only after a yes does the browser's own permission prompt appear. You are then a green dot, and passes and the sky view use that spot |
 | Watchlist (`S`) | star an object in the inspector; it stays in the Objects panel and keeps its name tag on the globe |
+| Screening cells in a close approach (`G`) | with a close approach open, the cells drawing shows that pair: one object's cell in cyan with the block of 27 cells its search covers, the other's in amber, and both lit red while the two are inside the alert distance |
 | Share | the link button in the top bar copies an address that reopens the same object, close approach, time or camera position |
 | Tour | offered on the first visit and always available from the controls sheet (`?`) |
 | Autopilot (`A`) | a hands-free cinematic tour of the view; any key or click stops it |
-| Record (`M`) | saves a video of the 3D view (with captions) to your downloads |
+| Picture and video (`P`, `M`) | the camera button in the top bar opens a two-item menu: save a picture, or record a video of the 3D view (with captions). They sit one click deeper on purpose, so neither starts from a stray click |
 | Launch and re-entry feed | Objects panel: **Newest in orbit** (grouped by launch), **Satellite trains** (recent batches still flying in a line; click to light one up) and **Lowest orbits** (next to come down) |
 | Constellations | Objects panel: pick GPS, Starlink, Iridium and so on to draw all its orbits and a live map of how many of its satellites can see each point on the ground |
 | Aurora | Layers → Earth: tonight's aurora oval from NOAA's forecast, with the current geomagnetic activity |
@@ -73,7 +74,8 @@ status line sit along the bottom.
 | Time | the bar at the bottom: drag the timeline to move up to 12 hours either way, pause (`Space`), 1× – 1000×, run backwards (`R`), step 10 minutes (`[` `]`), **Now** (`N`), or click the clock to type a date |
 | Hover | pointing at an object shows a small card: picture, what it is, who runs it, height and speed |
 | Views | `1` `2` `3`, `5` (Earth with the Moon beyond it), or the buttons at the foot of the tool rail. Left alone, a whole-Earth view drifts slowly around the planet (Layers → Earth to switch off) |
-| Settings (`,`) | rendering quality, ground-station location, download current elements |
+| Settings (`,`) | kilometres or miles, UTC or local time, the hover card and the welcome page on or off, rendering quality, ground-station location, download current elements |
+| Welcome page | the first thing a visitor sees, while the tracker loads behind it; skipped for share links and when switched off in Settings |
 | How it works | the button in the top bar: a walkthrough of the screening algorithm with a live trace, live hash-table statistics, the look-ahead method and the benchmark |
 | Phones | below 760 px the layout becomes a map-style app: a floating search field with view chips under it, round buttons on the right edge, a floating four-tool tab bar, and rounded sheets you can drag to any height or flick open and shut. It can be added to the home screen and then runs full screen like an app |
 | Other keys | `P` save a picture, `F` full screen, `H` hide the interface, `?` all controls, `Esc` close / deselect |
@@ -221,6 +223,7 @@ src/
     constellations.ts    constellation picker                      contacts.ts   ground-station contact timeline
     crew.ts              people in space                           share.ts   QR code and link
     cinema.ts            autopilot tour and video recording        sheet.ts   draggable bottom sheets on phones
+    landing.ts           the welcome page shown before the tracker  dom.ts   DOM, number, unit and clock helpers
     launch.ts            the loading screen's launch scene         intro.ts   loading progress and hand-over
     howto.ts             the walkthrough page                     hashTrace.ts   one object through the hash
     filters.ts  search.ts  settings.ts  timeControls.ts  labels.ts  benchmarkModal.ts  intro.ts
@@ -292,8 +295,9 @@ reporting the same pass twice.
   closest approach for each candidate pair and compute a collision probability from
   position uncertainty. Two objects that pass close *between* two ticks are not reported.
 - **Many "close pairs" are intentional:** docked spacecraft, formation-flying pairs such
-  as TerraSAR-X / TanDEM-X, and co-located geostationary satellites. Pairs under 100 m are
-  counted and drawn but left out of the list, because they are parts of one station.
+  as TerraSAR-X / TanDEM-X, and co-located geostationary satellites. The monitor separates
+  them by relative speed: under 100 m/s a pair is listed as "flying together", not as an
+  approach. That threshold is a rule of thumb, not a standard.
 - **Cell size is tied to `d`.** That is what makes the 27-cell argument work, but a very
   large `d` puts many objects in each cell and the method slides towards O(n²).
 - The grid covers ±65,536 cells per axis; coordinates beyond that are clamped to the edge

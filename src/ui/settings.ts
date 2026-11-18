@@ -8,7 +8,7 @@
 
 import type { ColorMode } from '../render/satellites.ts';
 import type { Quality } from '../render/scene.ts';
-import { $ } from './dom.ts';
+import { $, type ClockZone, type Units } from './dom.ts';
 import type { LabelMode } from './labels.ts';
 
 export interface Settings {
@@ -37,6 +37,11 @@ export interface Settings {
   constellations: boolean;
   planets: boolean;
   skyLabels: boolean;
+  // units and interface
+  units: Units; // kilometres or miles, for every distance and speed shown
+  clockZone: ClockZone; // times shown in UTC or in the browser's local time
+  hoverCard: boolean; // the small card that appears when pointing at an object
+  landing: boolean; // the welcome page shown when the site opens
   // rendering
   glass: boolean;
   quietUi: boolean; // bars fade back when no panel is open and the pointer is elsewhere
@@ -70,6 +75,10 @@ const DEFAULTS: Settings = {
   constellations: true,
   planets: true,
   skyLabels: true,
+  units: 'metric',
+  clockZone: 'utc',
+  hoverCard: true,
+  landing: true,
   glass: true,
   quietUi: true,
   quality: 'auto',

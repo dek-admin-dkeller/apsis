@@ -690,3 +690,130 @@
   #loc-ask { left: 10px; right: 10px; width: auto; transform: none; animation: none; }
 }
 @keyframes menu-in { from { opacity: 0; transform: scale(0.94); } }
+
+/* ============================================================== 7. the globe comes first
+ * The chrome gets out of the way: a short, narrow tab bar, smaller round buttons, and a
+ * search pill that takes less height. And in the object sheet only the name stays pinned:
+ * the photo, the four switches and the tabs scroll with the readouts, so the list is no
+ * longer a thin strip under a stack of fixed blocks.
+ */
+
+@media (max-width: 760px) {
+  :root {
+    --top: calc(54px + var(--safe-top));
+    --status: calc(62px + var(--safe-bottom));
+    --m-glass: rgba(11, 17, 29, 0.66);
+    --m-solid: rgba(12, 18, 30, 0.94); /* pinned sheet headers: content scrolls underneath */
+  }
+
+  /* ---- top row ---- */
+  .topbar { padding: calc(7px + var(--safe-top)) 10px 0; gap: 6px; }
+  .brand, #howto-open { width: 40px; height: 40px; box-shadow: none; }
+  .brand .logo { width: 21px; height: 21px; }
+  .search, #search { height: 40px; }
+  #search { padding: 0 14px 0 38px; border-radius: 20px; box-shadow: none; }
+  .search-icon { left: 14px; width: 15px; height: 15px; }
+  #suggestions { top: calc(53px + var(--safe-top)); }
+  #capture { display: none; } /* picture and video are desktop tools */
+
+  /* ---- round buttons on the right edge ---- */
+  #m-stack { top: calc(56px + var(--safe-top)); gap: 6px; }
+  #m-stack button { width: 38px; height: 38px; box-shadow: none; }
+  #m-stack svg { width: 18px; height: 18px; }
+  #m-views { top: calc(56px + var(--safe-top)); right: 56px; }
+  #m-views button { min-height: 42px; font-size: 14.5px; }
+
+  /* ---- tab bar: short, and only as wide as its four buttons need ---- */
+  .rail {
+    left: 14px;
+    right: 14px;
+    max-width: 330px;
+    margin: 0 auto;
+    bottom: calc(8px + var(--safe-bottom));
+    height: 48px;
+    padding: 4px;
+    gap: 2px;
+    border-radius: 24px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  }
+  .rail-btn { gap: 1px; border-radius: 20px; font-size: 9.5px; letter-spacing: 0.01em; }
+  .rail-btn svg { width: 19px; height: 19px; }
+  .rail-badge { top: 3px; left: calc(50% + 5px); }
+
+  /* ---- time pill ---- */
+  body.quiet-ui .timebar:not(.is-open) { padding: 4px 11px; box-shadow: none; }
+  body.quiet-ui .timebar:not(.is-open) #clock-time { font-size: 13px; }
+  body.quiet-ui .timebar:not(.is-open) .play { width: 26px; height: 26px; }
+  #hud:has(#inspector:not(.is-hidden)) .timebar,
+  #hud:has(#encounter:not(.is-hidden)) .timebar { top: calc(56px + var(--safe-top)); }
+
+  /* With a sheet up the time pill moves to the top; opened there, it needs the round buttons' corner. */
+  #hud:has(.timebar.is-open):has(:is(#inspector, #encounter):not(.is-hidden)) :is(#m-stack, #m-views) { visibility: hidden; }
+
+  /* ---- sheets ---- */
+  #hud > .dock-left, #hud > .dock-right { left: 6px; right: 6px; }
+  #hud > .dock > .panel { border-radius: 24px; }
+  /* The grip belongs to the header (which stays put) rather than to the panel (which may scroll). */
+  .dock > .panel::before { display: none; }
+  .dock > .panel > :is(.panel-head, .insp-head) { position: relative; padding: 15px 8px 7px 16px; }
+  .dock > .panel > :is(.panel-head, .insp-head)::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 6px;
+    width: 34px;
+    height: 4px;
+    margin-left: -17px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.26);
+    pointer-events: none;
+  }
+  .panel-head h2, .insp-title h2 { font-size: 16.5px; }
+  .icon-btn { width: 32px; height: 32px; }
+  .panel-body, .insp-body { padding: 4px 16px 18px; }
+
+  /* The object sheet scrolls as ONE page: name pinned, everything else moves. */
+  #inspector { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+  #inspector::-webkit-scrollbar { display: none; }
+  #inspector > .insp-head {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    flex: none;
+    min-height: 56px;
+    background: var(--m-solid);
+    backdrop-filter: var(--m-blur);
+    -webkit-backdrop-filter: var(--m-blur);
+  }
+  #inspector > .insp-hero { flex: none; height: 138px; margin: 2px 12px 0; border-radius: 16px; }
+  #inspector > .acts { flex: none; padding: 10px 12px 2px; gap: 6px; }
+  #inspector .act { min-height: 38px; border-radius: 12px; font-size: 12.5px; }
+  /* The tabs pin themselves under the name once the photo has scrolled away. */
+  #inspector > .tabs {
+    position: sticky;
+    top: 56px;
+    z-index: 4;
+    flex: none;
+    background: var(--m-solid);
+    backdrop-filter: var(--m-blur);
+    -webkit-backdrop-filter: var(--m-blur);
+  }
+  #inspector > .tabs button { min-height: 40px; }
+  #inspector > .insp-body { flex: none; min-height: auto; overflow: visible; padding-top: 10px; }
+
+  /* roomy, but not oversized, controls */
+  .row-toggle, .sec > summary { min-height: 42px; }
+  .btn, .chip { min-height: 42px; }
+  .segmented button { min-height: 38px; }
+  :is(#pair-list, #ahead-list) li { min-height: 50px; }
+
+  .tour-card { top: calc(56px + var(--safe-top)) !important; }
+  .fp-banner { top: calc(54px + var(--safe-top)); }
+  #toast { bottom: calc(var(--status) + 52px); }
+}
+
+@media (max-width: 760px) and (orientation: landscape) {
+  :root { --status: calc(52px + var(--safe-bottom)); }
+  .rail { height: 42px; bottom: calc(5px + var(--safe-bottom)); }
+  #inspector > .insp-hero { height: 84px; }
+}

@@ -22,7 +22,7 @@ import { CATEGORY_COLORS, type Satellite } from '../data/types.ts';
 import { articleFor, wikiSummary } from '../data/wiki.ts';
 import { ModelPreview } from '../render/satModels.ts';
 import { drawGroundMap, drawLineChart, drawOrbitShape, drawPolar, drawSunStrip } from './charts.ts';
-import { $, fmt, fmtInt } from './dom.ts';
+import { $, fmt, fmtKm, fmtKmS, getClockZone, getUnits, type Units } from './dom.ts';
 
 const EARTH_RADIUS_KM = 6371;
 const DEG = 180 / Math.PI;
@@ -43,12 +43,57 @@ export interface InspectorHandlers {
 
 const latText = (lat: number) => `${fmt(Math.abs(lat), 2)}° ${lat >= 0 ? 'N' : 'S'}`;
 const lonText = (lon: number) => `${fmt(Math.abs(lon), 2)}° ${lon >= 0 ? 'E' : 'W'}`;
+/** "412 – 425 km": a range with the unit written once (the helpers in dom.ts put one on every value). */
+const span = (lo: string, hi: string) => `${lo.slice(0, lo.lastIndexOf(' '))} – ${hi}`;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// ---- clock (Settings → Units) --------------------------------------------------------------
+//
+// Times are Unix milliseconds (UTC) everywhere in the app. Only the text shown is read on the
+// clock the user chose, UTC or the browser's local time, and every module does that through
+// the three helpers below, so no two panels can disagree about what time it is.
+
+/**
+ * Milliseconds to add to an instant so that its getUTC… fields (and toISOString) read as the
+ * chosen clock: 0 for UTC; for local time the browser's offset from UTC at that instant, so
+ * daylight saving is right for the date being shown rather than for today.
+ */
+export function clockShiftMs(ms: number): number {
+  return getClockZone() === 'utc' ? 0 : -new Date(ms).getTimezoneOffset() * 60000;
+}
+
+let zoneNames: Intl.DateTimeFormat | null = null; // made on first use; building one is slow
+/**
+ * What to write after a time: "UTC", or a short name for the browser's zone at that instant
+ * ("PST", "GMT+1"), or plain "local" where the browser cannot name it.
+ */
+export function zoneLabel(ms: number = Date.now()): string {
+  if (getClockZone() === 'utc') return 'UTC';
+  try {
+    zoneNames ??= new Intl.DateTimeFormat('en-US', { timeZoneName: 'short' });
+    return zoneNames.formatToParts(new Date(ms)).find((part) => part.type === 'timeZoneName')?.value ?? 'local';
+  } catch {
+    return 'local';
+  }
+}
+
+/**
+ * A short date and time, "18 Nov 21:03" (optionally with seconds), on the chosen clock. The
+ * name is historical: it was written when the app only showed UTC, and it has many callers.
+ * It does not say which clock it used — use clockStamp where that has to be shown.
+ */
 export function utcStamp(ms: number, seconds = false): string {
-  const d = new Date(ms);
+  const d = new Date(ms + clockShiftMs(ms)); // shifted, so the UTC fields below read as the chosen clock
   const two = (n: number) => String(n).padStart(2, '0');
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${two(d.getUTCHours())}:${two(d.getUTCMinutes())}${seconds ? ':' + two(d.getUTCSeconds()) : ''}`;
 }
+/** utcStamp with the name of its clock: "18 Nov 21:03 UTC" or "18 Nov 16:03 EST". */
+export const clockStamp = (ms: number, seconds = false): string => `${utcStamp(ms, seconds)} ${zoneLabel(ms)}`;
+/**
+ * An alert distance (always a round number of km) in the chosen unit. Miles get a decimal
+ * below 10 km so that neighbouring choices stay distinct: 1 km and 2 km are 0.6 and 1.2 mi.
+ */
+export const alertDistance = (km: number): string => fmtKm(km, getUnits() === 'metric' || km >= 10 ? 0 : 1);
 export function duration(ms: number): string {
   const s = Math.abs(ms) / 1000;
   if (s < 10) return `${fmt(s, 1)} s`;
@@ -77,6 +122,7 @@ export class Inspector {
   private lastFast = -Infinity;
   private lastSlow = -Infinity;
   private token = 0; // guards against a late Wikipedia reply for a previous selection
+  private elementUnits: Units | null = null; // units the lengths on the Orbit tab were last written in
 
   constructor(handlers: InspectorHandlers, getObserver: () => Observer) {
     this.handlers = handlers;
@@ -165,12 +211,9 @@ export class Inspector {
     this.setPhoto(null, null);
 
     // ---- Orbit tab: the elements as published
-    const a = EARTH_RADIUS_KM + sat.meanAltKm; // semi-major axis
     $('el-regime').textContent = { LEO: 'Low Earth orbit', MEO: 'Medium Earth orbit', GEO: 'Geostationary', HEO: 'Highly elliptical' }[sat.orbitClass];
     $('el-period').textContent = sat.periodMin < 180 ? `${fmt(sat.periodMin, 2)} min` : `${fmt(sat.periodMin / 60, 2)} h`;
-    $('el-perigee').textContent = `${fmtInt(a * (1 - o.ECCENTRICITY) - EARTH_RADIUS_KM)} km`;
-    $('el-apogee').textContent = `${fmtInt(a * (1 + o.ECCENTRICITY) - EARTH_RADIUS_KM)} km`;
-    $('el-sma').textContent = `${fmtInt(a)} km`;
+    this.writeElementLengths();
     $('el-ecc').textContent = o.ECCENTRICITY.toFixed(7);
     $('el-inc').textContent = `${fmt(o.INCLINATION, 4)}°`;
     $('el-raan').textContent = `${fmt(o.RA_OF_ASC_NODE, 4)}°`;
@@ -216,6 +259,20 @@ export class Inspector {
 
     this.root.classList.remove('is-hidden');
     this.showTab(this.tab);
+  }
+
+  /**
+   * The lengths among the elements. Everything else on the Orbit tab is written once per
+   * object; these are written again by frame() if the units setting changes meanwhile.
+   */
+  private writeElementLengths(): void {
+    if (!this.sat) return;
+    const e = this.sat.omm.ECCENTRICITY;
+    const a = EARTH_RADIUS_KM + this.sat.meanAltKm; // semi-major axis
+    $('el-perigee').textContent = fmtKm(a * (1 - e) - EARTH_RADIUS_KM);
+    $('el-apogee').textContent = fmtKm(a * (1 + e) - EARTH_RADIUS_KM);
+    $('el-sma').textContent = fmtKm(a);
+    this.elementUnits = getUnits();
   }
 
   private setPhoto(url: string | null, page: { title: string; pageUrl: string } | null): void {
@@ -276,8 +333,8 @@ export class Inspector {
         const gmst = gstime(new Date(simTime));
         const geo = eciToGeodetic(state.position, gmst);
         const lat = geo.latitude * DEG, lon = wrapLon(geo.longitude * DEG);
-        $('tm-alt').textContent = `${fmt(geo.height, 1)} km`;
-        $('tm-speed').textContent = `${fmt(Math.hypot(state.velocity.x, state.velocity.y, state.velocity.z), 3)} km/s`;
+        $('tm-alt').textContent = fmtKm(geo.height, 1);
+        $('tm-speed').textContent = fmtKmS(Math.hypot(state.velocity.x, state.velocity.y, state.velocity.z), 3);
         $('tm-lat').textContent = latText(lat);
         $('tm-lon').textContent = lonText(lon);
         const lit = isSunlit(state.position, sun);
@@ -286,14 +343,16 @@ export class Inspector {
         $('tm-over').textContent = regionName(lat, lon);
       }
       $('tm-range-label').textContent = `Range from ${observer.name || 'ground station'}`;
-      $('tm-range').textContent = look ? `${fmtInt(look.rangeKm)} km` : '–';
+      $('tm-range').textContent = look ? fmtKm(look.rangeKm) : '–';
       $('tm-look').textContent = look ? `${fmt(look.azDeg, 1)}° / ${fmt(look.elDeg, 1)}°` : '–';
       $('tm-look').classList.toggle('is-dim', !look || look.elDeg < 0);
       const sunLon = wrapLon((Math.atan2(sun.y, sun.x) - gstime(new Date(simTime))) * DEG);
       drawGroundMap($<HTMLCanvasElement>('map-canvas'), this.mapImage, series, nowIndex, Math.asin(sun.z) * DEG, sunLon, observer);
-      this.nextOrbitChart('alt-canvas', series.altKm, simTime, (v) => `${fmtInt(v)} km`);
-      $('alt-range').textContent = `${fmtInt(series.minAlt)} – ${fmtInt(series.maxAlt)} km`;
+      // The curve stays in km; only its labels are converted, which is the same picture.
+      this.nextOrbitChart('alt-canvas', series.altKm, simTime, (v) => fmtKm(v));
+      $('alt-range').textContent = span(fmtKm(series.minAlt), fmtKm(series.maxAlt));
     } else if (this.tab === 'orbit') {
+      if (getUnits() !== this.elementUnits) this.writeElementLengths();
       // Where it is along the ellipse: mean anomaly → eccentric anomaly (Newton) → true anomaly.
       const e = sat.omm.ECCENTRICITY;
       const revs = ((simTime - Date.parse(sat.omm.EPOCH.endsWith('Z') ? sat.omm.EPOCH : sat.omm.EPOCH + 'Z')) / 86400000) * sat.omm.MEAN_MOTION;
@@ -302,7 +361,7 @@ export class Inspector {
       for (let i = 0; i < 8; i++) E -= (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
       const nu = 2 * Math.atan2(Math.sqrt(1 + e) * Math.sin(E / 2), Math.sqrt(1 - e) * Math.cos(E / 2));
       drawOrbitShape($<HTMLCanvasElement>('shape-canvas'), EARTH_RADIUS_KM + sat.meanAltKm, e, nu);
-      this.nextOrbitChart('speed-canvas', series.speedKmS, simTime, (v) => `${fmt(v, 3)} km/s`, '#ffb454');
+      this.nextOrbitChart('speed-canvas', series.speedKmS, simTime, (v) => fmtKmS(v, 3), '#ffb454');
       const from = SAMPLES_PER_ORBIT, to = SAMPLES_PER_ORBIT * 2;
       let lo = Infinity, hi = -Infinity, lit = 0;
       for (let i = from; i <= to; i++) {
@@ -310,7 +369,7 @@ export class Inspector {
         hi = Math.max(hi, series.speedKmS[i]);
         lit += series.sunlit[i];
       }
-      $('speed-range').textContent = `${fmt(lo, 2)} – ${fmt(hi, 2)} km/s`;
+      $('speed-range').textContent = span(fmtKmS(lo), fmtKmS(hi));
       const fraction = lit / (to - from + 1);
       $('sun-note').textContent = fraction > 0.995 ? 'sunlit all the way round' : `${Math.round(fraction * 100)}% in sunlight`;
       drawSunStrip($<HTMLCanvasElement>('sun-canvas'), series.sunlit.subarray(from, to + 1), (simTime - this.seriesNow) / periodMs);
@@ -356,7 +415,7 @@ export class Inspector {
       this.renderPassList(simTime); // refresh the "in 12 min" countdowns
     }
     const pass = this.passes[this.shownPass] ?? null;
-    $('polar-title').textContent = pass ? `Path across the sky, ${utcStamp(pass.startMs)} UTC` : 'Position in the sky now';
+    $('polar-title').textContent = pass ? `Path across the sky, ${clockStamp(pass.startMs)}` : 'Position in the sky now';
     drawPolar($<HTMLCanvasElement>('polar-canvas'), pass ? pass.track : null, look);
   }
 
@@ -366,7 +425,7 @@ export class Inspector {
       const li = document.createElement('li');
       li.className = i === this.shownPass ? 'is-on' : '';
       const when = document.createElement('b');
-      when.textContent = `${utcStamp(pass.startMs)} UTC`;
+      when.textContent = clockStamp(pass.startMs);
       const until = document.createElement('span');
       until.className = 'until';
       until.textContent = simTime >= pass.startMs ? 'in progress' : `in ${duration(pass.startMs - simTime)}`;

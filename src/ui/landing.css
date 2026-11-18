@@ -1,0 +1,166 @@
+/*
+ * The welcome page (markup in index.html, behaviour in landing.ts).
+ *
+ * One idea carries it: the drawing is the logo taken apart — an orbit, the body it goes
+ * round, and a satellite — with the two APSIDES marked, which is where the name comes from.
+ * The satellite keeps real time: it sweeps equal areas in equal times (Kepler's second law),
+ * so it whips round the near point and lingers at the far one.
+ */
+
+html #landing {
+  --ld-ink: #e8f1fb;
+  --ld-soft: #9aa8bd;
+  --ld-faint: rgba(232, 241, 251, 0.16);
+  --ld-accent: #7fe3ff;
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  visibility: visible; /* index.html hides it until this stylesheet has arrived */
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  padding: clamp(18px, 3vw, 38px) clamp(20px, 5vw, 72px);
+  overflow-y: auto;
+  background: radial-gradient(58% 64% at 74% 46%, #0c1627 0%, #05080f 72%);
+  color: var(--ld-ink);
+  font-family: var(--font-ui);
+  transition: opacity 420ms ease;
+}
+html.no-landing #landing { display: none; }
+#landing.is-leaving { opacity: 0; pointer-events: none; }
+
+.ld-top { display: flex; align-items: center; }
+.ld-mark { display: inline-flex; align-items: center; gap: 10px; font: 600 17px var(--font-display); letter-spacing: 0.02em; }
+.ld-mark .logo { width: 26px; height: 26px; }
+
+.ld-main {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  align-items: center;
+  gap: clamp(24px, 4vw, 72px);
+  padding: clamp(16px, 4vh, 48px) 0;
+}
+.ld-copy h1 {
+  margin: 0;
+  max-width: 13ch;
+  font: 600 clamp(36px, 4.7vw, 70px) / 1.03 var(--font-display);
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+.ld-lede { margin: clamp(16px, 2.4vh, 26px) 0 0; max-width: 44ch; font-size: clamp(15px, 1.25vw, 17.5px); line-height: 1.6; color: var(--ld-soft); }
+.ld-go { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 18px; margin-top: clamp(22px, 3.6vh, 38px); }
+.ld-button {
+  height: 50px;
+  padding: 0 26px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--ld-ink);
+  color: #05080f;
+  font: 600 15.5px var(--font-ui);
+  cursor: pointer;
+  transition: background 160ms ease, transform 90ms ease;
+}
+.ld-button:hover { background: var(--ld-accent); }
+.ld-button:active { transform: scale(0.98); }
+.ld-button:focus-visible { outline: 2px solid var(--ld-accent); outline-offset: 3px; }
+.ld-status { margin: 0; font-size: 13.5px; color: var(--ld-soft); font-variant-numeric: tabular-nums; }
+
+/* ---- the orbit ---- */
+.ld-orbit { position: relative; justify-self: end; width: min(100%, 700px); aspect-ratio: 5 / 4; margin: 0; }
+.ld-turn { position: absolute; inset: 0; transform: rotate(-13deg); }
+.ld-turn svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.ld-turn ellipse { fill: none; stroke: rgba(232, 241, 251, 0.34); stroke-width: 1.2; vector-effect: non-scaling-stroke; }
+.ld-turn line { stroke: var(--ld-faint); stroke-width: 1; stroke-dasharray: 2 7; vector-effect: non-scaling-stroke; }
+.ld-earth {
+  position: absolute;
+  left: 22.4%; /* one focus of the ellipse: centre − eccentricity × half-width */
+  top: 50%;
+  width: 11%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, #ffffff 0%, #dbe6f2 46%, #93a5bd 100%);
+}
+/* A box the size of the whole drawing, moved by percentages of itself: a transform-only
+   animation, so the browser can run it smoothly even while the tracker is loading. */
+.ld-sat { position: absolute; inset: 0; animation: ld-kepler 18s linear infinite; will-change: transform; pointer-events: none; }
+.ld-sat i { position: absolute; left: -6px; top: -6px; width: 12px; height: 12px; border-radius: 50%; background: var(--ld-accent); box-shadow: 0 0 0 6px rgba(127, 227, 255, 0.13); }
+.ld-tag { position: absolute; top: 50%; font-size: 13px; line-height: 1.35; color: var(--ld-ink); white-space: nowrap; }
+.ld-tag small { display: block; font-size: 12px; color: var(--ld-soft); }
+.ld-tag::before { content: ''; position: absolute; left: 50%; top: -31px; width: 1px; height: 18px; background: rgba(232, 241, 251, 0.5); }
+/* The near point's label hangs under it; the far point's sits inside the orbit, clear of the line. */
+.ld-peri { left: 4%; transform: translate(-50%, 22px) rotate(13deg); text-align: center; }
+.ld-apo { left: 96%; transform: translate(calc(-100% - 18px), -50%) rotate(13deg); text-align: right; }
+.ld-apo::before { left: auto; right: -12px; top: 50%; width: 7px; height: 1px; }
+
+@keyframes ld-kepler {
+  0.00% { transform: translate(4.00%, 50.00%); }
+  0.84% { transform: translate(4.39%, 56.00%); }
+  1.70% { transform: translate(5.57%, 61.91%); }
+  2.60% { transform: translate(7.50%, 67.60%); }
+  3.56% { transform: translate(10.16%, 73.00%); }
+  4.60% { transform: translate(13.51%, 78.00%); }
+  5.75% { transform: translate(17.47%, 82.53%); }
+  7.01% { transform: translate(22.00%, 86.49%); }
+  8.40% { transform: translate(27.00%, 89.84%); }
+  9.93% { transform: translate(32.40%, 92.50%); }
+  11.61% { transform: translate(38.09%, 94.43%); }
+  13.45% { transform: translate(44.00%, 95.61%); }
+  15.45% { transform: translate(50.00%, 96.00%); }
+  17.62% { transform: translate(56.00%, 95.61%); }
+  19.94% { transform: translate(61.91%, 94.43%); }
+  22.43% { transform: translate(67.60%, 92.50%); }
+  25.06% { transform: translate(73.00%, 89.84%); }
+  27.84% { transform: translate(78.00%, 86.49%); }
+  30.75% { transform: translate(82.53%, 82.53%); }
+  33.77% { transform: translate(86.49%, 78.00%); }
+  36.89% { transform: translate(89.84%, 73.00%); }
+  40.10% { transform: translate(92.50%, 67.60%); }
+  43.36% { transform: translate(94.43%, 61.91%); }
+  46.67% { transform: translate(95.61%, 56.00%); }
+  50.00% { transform: translate(96.00%, 50.00%); }
+  53.33% { transform: translate(95.61%, 44.00%); }
+  56.64% { transform: translate(94.43%, 38.09%); }
+  59.90% { transform: translate(92.50%, 32.40%); }
+  63.11% { transform: translate(89.84%, 27.00%); }
+  66.23% { transform: translate(86.49%, 22.00%); }
+  69.25% { transform: translate(82.53%, 17.47%); }
+  72.16% { transform: translate(78.00%, 13.51%); }
+  74.94% { transform: translate(73.00%, 10.16%); }
+  77.57% { transform: translate(67.60%, 7.50%); }
+  80.06% { transform: translate(61.91%, 5.57%); }
+  82.38% { transform: translate(56.00%, 4.39%); }
+  84.55% { transform: translate(50.00%, 4.00%); }
+  86.55% { transform: translate(44.00%, 4.39%); }
+  88.39% { transform: translate(38.09%, 5.57%); }
+  90.07% { transform: translate(32.40%, 7.50%); }
+  91.60% { transform: translate(27.00%, 10.16%); }
+  92.99% { transform: translate(22.00%, 13.51%); }
+  94.25% { transform: translate(17.47%, 17.47%); }
+  95.40% { transform: translate(13.51%, 22.00%); }
+  96.44% { transform: translate(10.16%, 27.00%); }
+  97.40% { transform: translate(7.50%, 32.40%); }
+  98.30% { transform: translate(5.57%, 38.09%); }
+  99.16% { transform: translate(4.39%, 44.00%); }
+  100.00% { transform: translate(4.00%, 50.00%); }
+}
+
+.ld-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 40px; padding-top: 14px; border-top: 1px solid var(--ld-faint); font-size: 12.5px; line-height: 1.55; color: var(--ld-soft); }
+.ld-foot p { margin: 0; max-width: 62ch; }
+.ld-foot dfn { font-style: italic; color: var(--ld-ink); }
+
+@media (max-width: 860px) {
+  .ld-main { grid-template-columns: 1fr; align-content: center; gap: 8px; padding: 8px 0 20px; }
+  .ld-orbit { order: -1; justify-self: center; width: min(92%, 400px); margin: 6px 0 22px; }
+  .ld-copy h1 { max-width: 14ch; font-size: clamp(32px, 9.4vw, 46px); }
+  .ld-go { flex-direction: column; align-items: stretch; gap: 10px; }
+  .ld-button { width: 100%; height: 52px; }
+  .ld-status { text-align: center; }
+  .ld-tag { font-size: 11.5px; }
+  .ld-tag small { font-size: 10.5px; }
+  .ld-sat i { left: -5px; top: -5px; width: 10px; height: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ld-sat { animation: none; transform: translate(85.97%, 21.32%); }
+  html #landing { transition: none; }
+}

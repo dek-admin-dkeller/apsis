@@ -17,7 +17,7 @@ import './contacts.css';
 import { findPasses, lookAngles, makeSatrec, type Observer, type Pass } from '../data/ephemeris.ts';
 import { CATEGORY_COLORS, type Satellite } from '../data/types.ts';
 import { fmt } from './dom.ts';
-import { duration, utcStamp } from './inspector.ts';
+import { clockShiftMs, clockStamp, duration, utcStamp, zoneLabel } from './inspector.ts';
 
 export interface ContactsHost {
   watchlist(): Satellite[]; // the starred objects (may be empty)
@@ -351,7 +351,7 @@ export class Contacts {
     this.lanes = this.stations.map(() => this.sats.map(() => ({ passes: [], always: false, done: false })));
     this.hideTip();
     this.renderStations();
-    this.subtitle.textContent = `24 hours from ${utcStamp(this.startMs)} UTC`;
+    this.subtitle.textContent = `24 hours from ${clockStamp(this.startMs)}`;
 
     const none = this.sats.length === 0;
     this.empty.classList.toggle('is-hidden', !none);
@@ -407,6 +407,7 @@ export class Contacts {
       this.recompute();
       return;
     }
+    this.subtitle.textContent = `24 hours from ${clockStamp(this.startMs)}`; // again, in case the clock setting changed
     if (this.sats.length === 0) return;
     this.draw();
     if (this.finished) this.summarise();
@@ -470,9 +471,12 @@ export class Contacts {
     ctx.font = MONO;
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
-    const firstHour = Math.ceil(this.startMs / HOUR) * HOUR;
+    // Ticks fall on whole hours of the chosen clock (UTC or local), which in a zone such as
+    // India's (UTC+5:30) are not whole hours of UTC: round in clock time, then shift back.
+    const shift = clockShiftMs(this.startMs);
+    const firstHour = Math.ceil((this.startMs + shift) / HOUR) * HOUR - shift;
     for (let t = firstHour; t <= this.startMs + WINDOW_MS; t += HOUR) {
-      const hour = new Date(t).getUTCHours();
+      const hour = new Date(t + clockShiftMs(t)).getUTCHours();
       const x = Math.round(X(t)) + 0.5;
       const major = hour % 3 === 0;
       ctx.strokeStyle = hour === 0 ? GRID_STRONG : major ? GRID : 'rgba(150, 185, 230, 0.05)';
@@ -487,7 +491,7 @@ export class Contacts {
     }
     ctx.textAlign = 'left';
     ctx.fillStyle = MUTED;
-    ctx.fillText('UTC', 8, 10);
+    ctx.fillText(zoneLabel(this.startMs), 8, 10);
 
     // ---- one block per station
     let y = AXIS_H;
@@ -627,7 +631,7 @@ export class Contacts {
     this.tipFor = hit;
     const lines: string[] = hit.pass
       ? [
-          `Rises ${utcStamp(hit.pass.startMs)} UTC`,
+          `Rises ${clockStamp(hit.pass.startMs)}`,
           `${duration(hit.pass.endMs - hit.pass.startMs)}, peaks ${Math.round(hit.pass.peakElDeg)}° up`,
           hit.pass.sunlit ? 'In sunlight' : 'In the Earth’s shadow',
         ]

@@ -11,7 +11,7 @@
 import type { Catalog } from '../data/catalog.ts';
 import type { CatalogFacts } from '../data/satcat.ts';
 import { CATEGORY_COLORS, type Satellite } from '../data/types.ts';
-import { $, fmtInt } from './dom.ts';
+import { $, fmtKm } from './dom.ts';
 
 const EARTH_RADIUS_KM = 6371;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -74,7 +74,7 @@ export function renderFeed(catalog: Catalog, facts: Map<number, CatalogFacts>, o
   $('feed-trains').replaceChildren(...trains.map(([id, launch]) => {
     const when = launch.date ? `${Number(launch.date.slice(8, 10))} ${MONTHS[Number(launch.date.slice(5, 7)) - 1]}` : id;
     const family = launch.first.name.replace(/[-\s]?\d+.*$/, '') || launch.first.name;
-    const li = row(launch.first, `${launch.count} × ${family}, ${fmtInt(launch.altSum / launch.count)} km`, when, () => {
+    const li = row(launch.first, `${launch.count} × ${family}, ${fmtKm(launch.altSum / launch.count)}`, when, () => {
       // First click: light up the whole batch and go to its lead object. Second click: back to normal.
       activeTrain = activeTrain === id ? '' : id;
       onTrain(activeTrain ? launch.members : null, activeTrain ? launch.first : null);
@@ -91,5 +91,5 @@ export function renderFeed(catalog: Catalog, facts: Map<number, CatalogFacts>, o
     .filter((entry) => entry.perigee > 120 && entry.perigee < 2000)
     .sort((a, b) => a.perigee - b.perigee)
     .slice(0, 7);
-  $('feed-low').replaceChildren(...lowest.map((entry) => row(entry.sat, entry.sat.name, `${fmtInt(entry.perigee)} km`, onSelect)));
+  $('feed-low').replaceChildren(...lowest.map((entry) => row(entry.sat, entry.sat.name, fmtKm(entry.perigee), onSelect)));
 }

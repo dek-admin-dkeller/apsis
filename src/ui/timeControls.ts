@@ -1,10 +1,17 @@
 /**
- * The time bar: a draggable day-long timeline on top; below it the UTC clock (click it to
- * set a date), play / pause, direction, 10-minute steps, speed and "Now".
+ * The time bar: a draggable day-long timeline on top; below it the clock (click it to set a
+ * date), play / pause, direction, 10-minute steps, speed and "Now".
+ *
+ * The clock reads in UTC or in the browser's local time, whichever Settings → Units says.
+ * The simulation itself only ever knows Unix milliseconds; the choice is applied here, to
+ * the text shown and to the date the user types.
  */
 
-import { $ } from './dom.ts';
-import { duration } from './inspector.ts';
+import { $, getClockZone, type ClockZone } from './dom.ts';
+import { clockShiftMs, duration, zoneLabel } from './inspector.ts';
+
+/** "2026-11-16T21:03:11.000Z"-shaped text whose fields read on the chosen clock (the "Z" is then not meant literally). */
+const wallIso = (ms: number): string => new Date(ms + clockShiftMs(ms)).toISOString();
 
 export interface SimClock {
   time: number; // simulated time, Unix ms
@@ -24,6 +31,9 @@ export class TimeControls {
   private readonly onJump: (timeMs: number) => void;
   private readonly timeline = $<HTMLInputElement>('timeline');
   private shownSecond = -1;
+  private shownZone: ClockZone | null = null; // the clock setting the display was last drawn with
+  /** The "UTC" written beside the date in index.html: a bare text node just before #clock-offset. */
+  private readonly zoneText: ChildNode | null = $('clock-offset').previousSibling;
   /** Centre of the timeline window: the real present, unless the clock has been taken far from it. */
   private anchorMs: number | null = null; // null = follow the real present
   private dragging = false;
@@ -68,9 +78,10 @@ export class TimeControls {
     this.timeline.addEventListener('change', () => (this.dragging = false));
     this.timeline.addEventListener('keydown', (event) => event.stopPropagation()); // arrow keys nudge the slider only
 
-    // Clicking the clock swaps it for a date-time field (UTC).
+    // Clicking the clock swaps it for a date-time field, on the same clock (UTC or local) as the display.
     $('clock-btn').addEventListener('click', () => {
-      this.input.value = new Date(clock.time).toISOString().slice(0, 19);
+      this.input.value = wallIso(clock.time).slice(0, 19);
+      this.input.setAttribute('aria-label', `Simulation date and time, ${zoneLabel(clock.time)}`);
       this.input.classList.remove('is-hidden');
       $('clock-btn').classList.add('is-hidden');
       this.input.focus();
@@ -79,7 +90,8 @@ export class TimeControls {
       if (this.input.classList.contains('is-hidden')) return;
       this.input.classList.add('is-hidden');
       $('clock-btn').classList.remove('is-hidden');
-      const t = Date.parse(this.input.value + 'Z');
+      // A date-time without a zone is read by Date.parse as local time; the "Z" makes it UTC.
+      const t = Date.parse(getClockZone() === 'utc' ? this.input.value + 'Z' : this.input.value);
       if (apply && Number.isFinite(t)) onJump(t);
     };
     this.input.addEventListener('keydown', (event) => {
@@ -162,12 +174,15 @@ export class TimeControls {
     this.shownSecond = -1;
   }
 
-  /** Call every frame; touches the DOM only when the displayed second changes. */
+  /** Call every frame; touches the DOM only when the displayed second (or the clock setting) changes. */
   render(): void {
     const second = Math.floor(this.clock.time / 1000);
-    if (second === this.shownSecond) return;
+    // The zone is part of the test so a paused clock still redraws when the setting is switched.
+    if (second === this.shownSecond && getClockZone() === this.shownZone) return;
     this.shownSecond = second;
-    const iso = new Date(second * 1000).toISOString(); // 2026-11-16T21:03:11.000Z
+    this.shownZone = getClockZone();
+    if (this.zoneText?.nodeType === Node.TEXT_NODE) this.zoneText.nodeValue = `${zoneLabel(second * 1000)} `;
+    const iso = wallIso(second * 1000); // 2026-11-16T21:03:11.000Z
     $('clock-date').textContent = iso.slice(0, 10);
     $('clock-time').textContent = iso.slice(11, 19);
     // How far the simulation is from the real present.
@@ -188,7 +203,7 @@ export class TimeControls {
       this.timeline.value = String(Math.round((this.clock.time - this.windowCentre()) / 60000));
     }
     const centre = this.windowCentre();
-    const stamp = (ms: number) => new Date(ms).toISOString().slice(5, 16).replace('T', ' ');
+    const stamp = (ms: number) => wallIso(ms).slice(5, 16).replace('T', ' ');
     $('tl-start').textContent = this.anchorMs === null ? '−12 h' : stamp(centre - HALF_WINDOW_MS);
     $('tl-end').textContent = this.anchorMs === null ? '+12 h' : stamp(centre + HALF_WINDOW_MS);
     const nowAt = (Date.now() - centre) / (2 * HALF_WINDOW_MS) + 0.5; // where the real present falls in the window

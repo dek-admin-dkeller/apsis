@@ -9,8 +9,8 @@ import { closestApproach, makeSatrec, rangeKm, wrapLon, type Approach, type Vec3
 import { regionName } from '../data/regions.ts';
 import type { Satellite } from '../data/types.ts';
 import { drawLineChart } from './charts.ts';
-import { $, fmt, fmtInt } from './dom.ts';
-import { duration, utcStamp } from './inspector.ts';
+import { $, fmt, fmtInt, fmtKm, fmtKmS, fmtRange, fmtSlow, getClockZone, getUnits } from './dom.ts';
+import { alertDistance, clockStamp, duration } from './inspector.ts';
 
 const CHART_SAMPLES = 161;
 const DEG = 180 / Math.PI;
@@ -38,7 +38,8 @@ export interface Encounter {
   windowS: number;
 }
 
-const rangeText = (km: number) => (km < 1 ? `${fmtInt(km * 1000)} m` : `${fmt(km, km < 100 ? 2 : 0)} km`);
+/** Metres (or feet) when very close, two decimals up to 100 km, whole numbers beyond. */
+const rangeText = (km: number) => (km >= 100 ? fmtKm(km) : fmtRange(km));
 
 export class EncounterPanel {
   private readonly root = $('encounter');
@@ -48,6 +49,7 @@ export class EncounterPanel {
   private alertKm = 10;
   private lastDraw = -Infinity;
   private scrubbing = false;
+  private factsFor = ''; // units + clock setting the fixed facts were last written with
 
   constructor(handlers: EncounterHandlers) {
     $('enc-close').addEventListener('click', handlers.onClose);
@@ -103,11 +105,7 @@ export class EncounterPanel {
     ($('enc-a').lastElementChild as HTMLElement).textContent = a.name;
     ($('enc-b').lastElementChild as HTMLElement).textContent = b.name;
     $('enc-kind').textContent = approach.coMoving ? 'Flying together' : 'Crossing paths';
-    $('enc-miss').textContent = rangeText(approach.missKm);
-    $('enc-speed').textContent = approach.relSpeedKmS < 0.01
-      ? `${fmt(approach.relSpeedKmS * 1000, 1)} m/s`
-      : `${fmt(approach.relSpeedKmS, 2)} km/s  (${fmtInt(approach.relSpeedKmS * 3600)} km/h)`;
-    $('enc-tca').textContent = `${utcStamp(approach.tcaMs, true)} UTC`;
+    this.writeFacts();
     $('enc-span').textContent = `${duration(windowS * 1000)} either side`;
     $<HTMLButtonElement>('enc-replay').disabled = approach.coMoving;
     $('enc-note').textContent = approach.coMoving
@@ -116,6 +114,25 @@ export class EncounterPanel {
     this.root.classList.remove('is-hidden');
     this.lastDraw = -Infinity;
     return this.current;
+  }
+
+  /**
+   * The facts that do not change while the panel is open but do depend on the units and
+   * clock settings. frame() writes them again if either setting is switched meanwhile.
+   */
+  private writeFacts(): void {
+    if (!this.current) return;
+    const { approach } = this.current;
+    $('enc-miss').textContent = rangeText(approach.missKm);
+    // Metric gives the speed twice (km/s is the field's unit, km/h the one people can picture);
+    // mph is already the everyday unit, so it stands alone.
+    $('enc-speed').textContent = approach.relSpeedKmS < 0.01
+      ? fmtSlow(approach.relSpeedKmS)
+      : getUnits() === 'metric'
+        ? `${fmtKmS(approach.relSpeedKmS)}  (${fmtInt(approach.relSpeedKmS * 3600)} km/h)`
+        : fmtKmS(approach.relSpeedKmS);
+    $('enc-tca').textContent = clockStamp(approach.tcaMs, true);
+    this.factsFor = `${getUnits()} ${getClockZone()}`;
   }
 
   close(): void {
@@ -128,13 +145,14 @@ export class EncounterPanel {
     const e = this.current;
     if (!e || realSeconds - this.lastDraw < 0.066) return;
     this.lastDraw = realSeconds;
+    if (this.factsFor !== `${getUnits()} ${getClockZone()}`) this.writeFacts();
     const dt = simTime - e.approach.tcaMs;
     $('enc-range').textContent = rangeText(nowRangeKm);
     $('enc-range').classList.toggle('is-alert', nowRangeKm < this.alertKm);
     $('enc-count-label').textContent = dt < 0 ? 'To closest point' : 'Since closest point';
     $('enc-countdown').textContent = Math.abs(dt) < 60000 ? `${fmt(Math.abs(dt) / 1000, 1)} s` : duration(dt);
     const geo = eciToGeodetic(mid, gstime(new Date(simTime)));
-    $('enc-alt').textContent = `${fmtInt(geo.height)} km`;
+    $('enc-alt').textContent = fmtKm(geo.height);
     $('enc-over').textContent = regionName(geo.latitude * DEG, wrapLon(geo.longitude * DEG));
 
     const cursor = dt / (e.windowS * 2000) + 0.5;
@@ -145,7 +163,7 @@ export class EncounterPanel {
       min: 0,
       cursor,
       format: rangeText,
-      threshold: { value: this.alertKm, label: `alert ${this.alertKm} km` },
+      threshold: { value: this.alertKm, label: `alert ${alertDistance(this.alertKm)}` }, // the line itself stays in km, like the curve
       xLabels: [`−${duration(e.windowS * 1000)}`, 'closest', `+${duration(e.windowS * 1000)}`],
     });
   }

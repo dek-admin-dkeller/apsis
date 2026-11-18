@@ -9,8 +9,8 @@ import type { OmmRecord } from '../data/types.ts';
 import { CATEGORY_COLORS, type Satellite } from '../data/types.ts';
 import type { FutureApproach } from '../hashing/lookahead.ts';
 import type { LookaheadReply, LookaheadRequest } from '../worker/lookahead.worker.ts';
-import { $, fmt, fmtCompact, fmtInt } from './dom.ts';
-import { duration, utcStamp } from './inspector.ts';
+import { $, fmt, fmtCompact, fmtInt, fmtKmS, fmtRange } from './dom.ts';
+import { alertDistance, clockStamp, duration } from './inspector.ts';
 
 export interface AheadContext {
   records: OmmRecord[];
@@ -27,6 +27,11 @@ export class AheadPanel {
   private hours = 6;
   private alertKm = 1;
   private sort: 'miss' | 'time' = 'miss';
+  // The last completed scan and what it was asked for, kept so that its summary can be
+  // written again in other units (the choices above may have been changed since).
+  private finished: LookaheadReply | null = null;
+  private scanHours = 6;
+  private scanKm = 1;
   private readonly list = $('ahead-list');
   private readonly run = $<HTMLButtonElement>('ahead-run');
   private readonly bar = $('ahead-bar');
@@ -52,12 +57,25 @@ export class AheadPanel {
       this.render();
     });
     this.run.addEventListener('click', () => (this.worker ? this.cancel('Scan stopped.') : this.start()));
+    this.refreshUnits();
+  }
+
+  /**
+   * Write everything that names a distance, speed or clock time again. The choices are built
+   * once and a finished scan is never redrawn by itself, so call this when the units or
+   * clock setting changes (it also runs whenever the list is drawn).
+   */
+  refreshUnits(): void {
+    // index.html labels the choices in km; the values behind them (data-value) stay in km.
+    for (const button of $('ahead-km').querySelectorAll<HTMLElement>('button')) button.textContent = alertDistance(Number(button.dataset.value));
+    this.render();
   }
 
   /** Throw away results that belong to a previous catalogue. */
   reset(): void {
     this.cancel('');
     this.results = [];
+    this.finished = null;
     this.render();
   }
 
@@ -67,6 +85,9 @@ export class AheadPanel {
     this.sats = ctx.sats;
     this.startMs = ctx.startMs;
     this.results = [];
+    this.finished = null;
+    this.scanHours = this.hours;
+    this.scanKm = this.alertKm;
     this.render();
     this.worker = new Worker(new URL('../worker/lookahead.worker.ts', import.meta.url), { type: 'module' });
     this.worker.onmessage = (event: MessageEvent<LookaheadReply>) => this.onReply(event.data);
@@ -76,7 +97,7 @@ export class AheadPanel {
     this.run.classList.remove('btn-primary');
     this.bar.classList.remove('is-hidden');
     (this.bar.firstElementChild as HTMLElement).style.width = '0%';
-    $('ahead-status').textContent = `Scanning the next ${this.hours} h from ${utcStamp(ctx.startMs)} UTC…`;
+    $('ahead-status').textContent = `Scanning the next ${this.hours} h from ${clockStamp(ctx.startMs)}…`;
   }
 
   private cancel(message: string): void {
@@ -96,15 +117,19 @@ export class AheadPanel {
       $('ahead-status').textContent = `Scanning… ${Math.round(reply.fraction * 100)}%, ${fmtInt(reply.total)} found so far.`;
       return;
     }
+    this.cancel(this.summary(reply));
+    this.finished = reply;
+  }
+
+  private summary(reply: LookaheadReply): string {
     const shown = reply.closest.length;
-    this.cancel(
-      `${fmtInt(reply.total)} passes within ${this.alertKm} km in the next ${this.hours} h`
+    return `${fmtInt(reply.total)} passes within ${alertDistance(this.scanKm)} in the next ${this.scanHours} h`
       + (reply.total > shown ? `; showing the closest ${shown}` : '')
-      + `. Found in ${fmt(reply.elapsedMs / 1000, 1)} s by examining ${fmtCompact(reply.examined)} candidate pairs.`,
-    );
+      + `. Found in ${fmt(reply.elapsedMs / 1000, 1)} s by examining ${fmtCompact(reply.examined)} candidate pairs.`;
   }
 
   private render(): void {
+    if (this.finished) $('ahead-status').textContent = this.summary(this.finished);
     $('ahead-sort').classList.toggle('is-hidden', this.results.length < 2);
     const rows = this.sort === 'time' ? [...this.results].sort((p, q) => p.tcaMs - q.tcaMs) : this.results;
     this.list.replaceChildren(...rows.map((approach) => {
@@ -119,9 +144,9 @@ export class AheadPanel {
       dots[0].style.color = CATEGORY_COLORS[a.category];
       dots[1].style.color = CATEGORY_COLORS[b.category];
       const dist = li.querySelector('.dist')!;
-      dist.firstElementChild!.textContent = approach.missKm < 1 ? `${fmtInt(approach.missKm * 1000)} m` : `${fmt(approach.missKm, 2)} km`;
+      dist.firstElementChild!.textContent = fmtRange(approach.missKm);
       dist.lastElementChild!.textContent = `in ${duration(approach.tcaMs - this.startMs)}`;
-      li.title = `${utcStamp(approach.tcaMs, true)} UTC, passing at ${fmt(approach.relSpeedKmS, 1)} km/s`;
+      li.title = `${clockStamp(approach.tcaMs, true)}, passing at ${fmtKmS(approach.relSpeedKmS, 1)}`;
       li.addEventListener('click', () => this.onPick(approach));
       return li;
     }));
