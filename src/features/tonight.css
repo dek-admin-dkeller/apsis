@@ -1,0 +1,40 @@
+/* Visible tonight (Objects panel) — see features/tonight.ts. Rows reuse .watch-list / .watch-pick from style.css. */
+
+#tonight-body > .btn.wide { margin-top: 8px; }
+#tonight-body > .note { margin: 0; }
+#tonight-body > .tonight-status, #tonight-body > .tonight-stale { margin-top: 8px; }
+#tonight-body > .tonight-list + .note { margin-top: 8px; }
+.tonight-default { color: var(--text); }
+.tonight-stale { color: var(--amber); }
+
+.tonight-list { margin-top: 8px; }
+/* A pass takes several lines, so each row is a block with a hairline above it rather than one flex line. */
+.tonight-list li { display: block; padding: 2px 0 4px; }
+.tonight-list li + li { border-top: 1px solid var(--line-soft); border-radius: 0; }
+.tonight-list.is-stale { opacity: 0.5; }
+.tonight-pick { width: 100%; align-items: flex-start; }
+.tonight-pick:disabled, .tonight-watch:disabled { cursor: default; }
+.tonight-pick .dot { margin-top: 5px; }
+.tonight-text { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.tonight-head { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.tonight-bright { display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--text); }
+.tonight-bright > :first-child { flex: 1; min-width: 0; }
+.tonight-bright small { font-size: 11px; color: var(--muted); white-space: nowrap; }
+/* Where to look: a two-column table of "Rises / Highest / Sets" against the place in the sky. */
+.tonight-path { display: grid; grid-template-columns: max-content 1fr; gap: 1px 9px; font-size: 11.5px; line-height: 1.4; color: var(--muted); }
+.tonight-path b { font-weight: 400; }
+.tonight-path span { color: var(--text); opacity: 0.86; }
+.tonight-watch { display: block; margin: 0 6px 2px 21px; }
+
+/* Phone sheets and touch screens: larger type, and the second control becomes a full touch target. */
+@media (max-width: 760px) {
+  .tonight-bright { font-size: 13.5px; }
+  .tonight-bright small { font-size: 12px; }
+  .tonight-path { font-size: 13px; }
+  .tonight-pick .dot { margin-top: 8px; }
+  .tonight-head .alt { font-size: 12px; }
+}
+@media (pointer: coarse), (max-width: 760px) {
+  /* Two classes on purpose: mobile.css sizes every button in a .watch-list row to 36px, and this has to win. */
+  .tonight-list .tonight-watch { min-height: 40px; font-size: 13px; }
+}
