@@ -1,6 +1,7 @@
 # Builds the site and publishes it to GitHub Pages.
 #
-#   push to main      → build and deploy what is in the repository
+#   push to main      → build and deploy what is in the repository, with the data the site
+#                       is already showing (scripts/carry-over.mjs; no outside download)
 #   every 8 hours     → first download fresh orbital data from CelesTrak, then build and deploy
 #   "Run workflow"    → same as the schedule (use it to refresh the data by hand)
 #
@@ -42,16 +43,26 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # Where the site is published. Asked of GitHub, with the usual address as the fallback.
+      - name: Find the published site
+        id: site
+        run: |
+          site=$(gh api "repos/${{ github.repository }}/pages" --jq .html_url 2>/dev/null) || site="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"
+          echo "url=${site%/}/" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      # A push must not put the site back on the older snapshot stored in the repository: the
+      # data files it is showing now are read back from the site itself and kept if they are
+      # newer. Nothing is downloaded from CelesTrak or SatNOGS here. Never fatal.
+      - name: Keep the data the site is already showing
+        if: github.event_name == 'push'
+        run: node scripts/carry-over.mjs "${{ steps.site.outputs.url }}" || echo "Could not read the published data - building with the stored snapshot"
       # The previous elements are not in the repository (see the top of this file), so they are
       # read back from the published site. Never fatal: on the first run, or if the site cannot
       # be read, the app simply says that no comparison is available yet.
       - name: Keep the elements published last time, to compare the new ones against
         if: github.event_name != 'push'
-        run: |
-          site=$(gh api "repos/${{ github.repository }}/pages" --jq .html_url 2>/dev/null) || site="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"
-          curl -fsSL --retry 2 --max-time 120 -o "$RUNNER_TEMP/previous-elements.json" "${site%/}/data/satellites.json" || echo "The published elements could not be read - no comparison this time"
-        env:
-          GH_TOKEN: ${{ github.token }}
+        run: curl -fsSL --retry 2 --max-time 120 -o "$RUNNER_TEMP/previous-elements.json" "${{ steps.site.outputs.url }}data/satellites.json" || echo "The published elements could not be read - no comparison this time"
       - name: Refresh orbital data (CelesTrak asks for at most one download every 2 hours)
         if: github.event_name != 'push'
         run: node scripts/fetch-data.mjs --previous="$RUNNER_TEMP/previous-elements.json" || echo "CelesTrak unreachable - publishing the stored snapshot"

@@ -11,6 +11,7 @@
  */
 
 import type { Observer } from '../data/ephemeris.ts';
+import { DEFAULT_SITE } from '../ui/settings.ts';
 import { CATEGORY_COLORS } from '../data/types.ts';
 import { DARK_SUN_DEG, MIN_ELEVATION_DEG, pickCandidates } from '../data/visibility.ts';
 import type { App } from '../ui/app.ts';
@@ -29,7 +30,7 @@ const LEAD_MS = 30000; // a click puts the clock this long before the pass, so i
  * ui/settings.ts (which does not export it): while the place still equals this, it is the
  * app's example and not the visitor's own, and the panel says so.
  */
-const BUILT_IN_PLACE: Observer = { name: 'High Point, NC', latDeg: 35.97, lonDeg: -79.99 };
+const BUILT_IN_PLACE: Observer = DEFAULT_SITE; // the example ground station from settings.ts
 
 /** One finished search and what it was asked: enough to write its summary again in another clock setting. */
 interface Search {

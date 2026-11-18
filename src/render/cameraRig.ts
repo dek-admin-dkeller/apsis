@@ -27,6 +27,7 @@ export class CameraRig {
   /** In a whole-Earth view left alone, drift slowly around the planet. */
   earthDrift = true;
   private idle = 0; // seconds since the user last touched the camera
+  private held = false; // the view was sent to look at a particular place: do not drift off it
   private interacting = false;
   private focus: FocusFn | null = null;
   private flight: Flight | null = null;
@@ -39,6 +40,7 @@ export class CameraRig {
     kit.controls.addEventListener('start', () => {
       this.flight = null;
       this.interacting = true;
+      this.held = false; // the visitor has taken over: the slow drift may come back once they let go
     });
     kit.controls.addEventListener('end', () => {
       this.interacting = false;
@@ -50,6 +52,21 @@ export class CameraRig {
     return this.flight !== null;
   }
 
+  /**
+   * Keep an Earth-centred view where it is until the visitor next moves it. Used after flying
+   * to a place on the ground (a launch pad, a city): the slow idle drift would otherwise carry
+   * the camera ten degrees east of it within a quarter of a minute.
+   */
+  holdStill(): void {
+    this.held = true;
+  }
+
+  /** Is the slow idle drift round the planet happening right now? (The phone layout dims its controls then.) */
+  get drifting(): boolean {
+    const earthCentred = !this.focus && this.kit.controls.target.lengthSq() < 1;
+    return earthCentred && this.earthDrift && !this.held && !this.flight && this.idle > 4;
+  }
+
   /** Where the current flight will end (null when not flying), so the ground imagery there can load before the camera arrives. */
   get destination(): { pos: THREE.Vector3; target: THREE.Vector3 } | null {
     return this.flight ? this.flight.end() : null;
@@ -58,6 +75,7 @@ export class CameraRig {
   /** Fly to a fixed viewpoint (used by the intro and the 1 / 2 / 3 presets). */
   flyToView(pos: THREE.Vector3, target: THREE.Vector3, duration = 1.8): void {
     this.idle = 0;
+    this.held = false;
     this.focus = null;
     this.lastFocus = null;
     this.kit.controls.minDistance = target.lengthSq() === 0 ? EARTH_RADIUS * 1.12 : 0.05;
@@ -163,7 +181,7 @@ export class CameraRig {
       // An Earth-centred view left alone: turn very slowly about the polar axis — the same
       // idea as circling a selected object, but about a third of the pace.
       this.idle = this.interacting ? 0 : this.idle + dt;
-      if (this.earthDrift && this.idle > 4 && controls.target.lengthSq() < 1) {
+      if (this.earthDrift && !this.held && this.idle > 4 && controls.target.lengthSq() < 1) {
         const ease = Math.min(1, (this.idle - 4) / 4);
         camera.position.applyAxisAngle(WORLD_UP, dt * 0.022 * ease);
       }

@@ -49,6 +49,8 @@ export const FEATURES: FeatureGroup[] = [
       { name: 'Colour and filter', text: 'Colour the dots by type, orbit, height, owner, launch year or tilt, and hide what you do not need.' },
       { name: 'The sky behind', text: 'Real stars, constellations, the planets, the Moon, and tonight’s aurora over the poles.' },
       { name: 'Views and time', text: 'Whole Earth, low orbit, the geostationary ring, Earth with the Moon. Pause time, run it backwards, or up to a thousand times faster.' },
+      { name: 'Growth by year', text: 'Drag a slider from 1957 to today and see what is still up there from each year.', fresh: true },
+      { name: 'Data age', text: 'Colour every object by how recently its orbit was measured, so stale ones stand out.', fresh: true },
     ],
   },
   {
@@ -61,6 +63,9 @@ export const FEATURES: FeatureGroup[] = [
       { name: 'Passes over you', text: 'When it will next cross your sky, and the path it will take across it.' },
       { name: 'Watchlist and contact timeline', text: 'Star the objects you care about and see when ground stations can reach each of them.' },
       { name: 'People in space', text: 'Who is aboard the International Space Station and Tiangong right now.' },
+      { name: 'Last heard', text: 'When a volunteer ground station last picked up its radio, and from where.', fresh: true },
+      { name: 'Radio and Doppler', text: 'The frequencies it transmits on, and how far the signal is shifted by its speed as it passes you.', fresh: true },
+      { name: 'Freshness and orbit changes', text: 'How old its tracking data is, and whether its orbit has been raised or lowered since the last update.', fresh: true },
     ],
   },
   {
@@ -71,6 +76,7 @@ export const FEATURES: FeatureGroup[] = [
       { name: 'Close-approach view', text: 'Both objects in 3D, their flight paths, the distance between them as it changes, and a slow-motion replay.' },
       { name: 'Coming hours', text: 'A scan up to 24 hours ahead for predicted close passes.' },
       { name: 'Screening cells', text: 'The grid that makes the search fast, drawn in space around the objects it is sorting.' },
+      { name: 'Report and data', text: 'Save any close approach as a one-page report to print, or as a table of numbers.', fresh: true },
     ],
   },
   {
@@ -82,6 +88,11 @@ export const FEATURES: FeatureGroup[] = [
       { name: 'Design a satellite', text: 'Choose an orbit, put your own object into the catalogue, and see what it would pass close to.' },
       { name: 'Autopilot and recording', text: 'A hands-free tour of the highlights. Save a picture or record a video of what you see.' },
       { name: 'Share', text: 'A link or QR code that reopens exactly what you are looking at.' },
+      { name: 'Visible tonight', text: 'The bright passes you could see with your own eyes in the next 24 hours, and where to look.', fresh: true },
+      { name: 'Upcoming launches', text: 'What is due to launch next, with a countdown and the pads marked on the globe.', fresh: true },
+      { name: 'Orbit changes', text: 'Which satellites have raised or lowered their orbits since the data was last refreshed, and what is new or gone.', fresh: true },
+      { name: 'Space weather and re-entries', text: 'How active the Sun is today, and roughly how long the lowest objects have left.', fresh: true },
+      { name: 'Command bar', text: 'Press Ctrl K and type an object, a place, a time or an action.', fresh: true },
     ],
   },
   {

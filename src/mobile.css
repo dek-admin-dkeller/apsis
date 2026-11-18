@@ -887,3 +887,16 @@
     white-space: nowrap;
   }
 }
+
+/* ============================================================== 11. the controls step back
+ * Left alone in a whole-Earth view the globe starts to turn slowly. `main.ts` then puts
+ * `m-rest` on <body> and the search pill, the round buttons and the tab bar dim, slowly, so
+ * the picture has the screen to itself. The next touch anywhere brings them back at once.
+ * Nothing is disabled: a dimmed button still works on the first tap.
+ */
+@media (max-width: 760px) {
+  .topbar, #m-stack { transition: opacity 0.22s ease; }
+  .rail { transition: border-radius 220ms ease, left 220ms ease, right 220ms ease, opacity 0.22s ease; } /* section 8's list, plus opacity */
+  body.m-rest .topbar, body.m-rest #m-stack { opacity: 0.34; transition: opacity 2.2s ease; }
+  body.m-rest .rail { opacity: 0.34; transition: border-radius 220ms ease, left 220ms ease, right 220ms ease, opacity 2.2s ease; }
+}

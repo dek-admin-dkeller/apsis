@@ -126,6 +126,13 @@ export function installGrowth(app: App): void {
     render();
   }
 
+  // Home puts everything back, and that includes this filter: a year left on by accident would
+  // quietly hide most of the catalogue.
+  app.onHome(() => {
+    stop();
+    setYear(null);
+  });
+
   function stop(): void {
     clearInterval(timer);
     timer = 0;

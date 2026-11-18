@@ -107,4 +107,6 @@ export interface App {
   onFacts(run: (facts: Map<number, CatalogFacts>) => void): void;
   onSettings(run: (settings: Settings, changed: keyof Settings | null) => void): void;
   onEncounter(run: (encounter: Encounter | null) => void): void;
+  /** The logo (or `0`) was pressed: everything is being put back the way it started. Undo what you changed. */
+  onHome(run: () => void): void;
 }

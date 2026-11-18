@@ -88,6 +88,9 @@ const DEFAULTS: Settings = {
 };
 const STORAGE_KEY = 'orbithash.settings.v2';
 
+/** The ground station used until the visitor sets their own (so a module can say "this is only an example place"). */
+export const DEFAULT_SITE = { name: DEFAULTS.siteName, latDeg: DEFAULTS.siteLat, lonDeg: DEFAULTS.siteLon };
+
 export class SettingsStore {
   readonly settings: Settings;
   private readonly apply: (settings: Settings, changed: keyof Settings | null) => void;
