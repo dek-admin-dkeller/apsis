@@ -977,6 +977,10 @@ label.act:has(input:focus-visible) { outline: 2px solid var(--cyan); outline-off
 
 /* ---------- How it works ---------- */
 
+/* The walkthrough and the benchmark can be opened from the home page, which lies above every
+   other layer, so these two sit above it. */
+#howto, #bench { z-index: 210; }
+
 .doc { width: min(1040px, 100%); height: min(86vh, 900px); display: grid; grid-template-columns: 200px minmax(0, 1fr); overflow: hidden; }
 .doc-nav { display: flex; flex-direction: column; gap: 1px; padding: 20px 10px 16px 0; border-right: 1px solid var(--line); overflow-y: auto; }
 .doc-brand { margin: 0 0 12px 16px; font: 600 15px var(--font-display); }

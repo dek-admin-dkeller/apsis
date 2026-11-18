@@ -107,8 +107,8 @@
   .top-actions { gap: 2px; }
   .top-actions .tool { width: 34px; height: 34px; }
   /* "How it works" keeps its name for screen readers but shows as a compact "?" */
-  #howto-open { width: 34px; height: 34px; min-height: 0; margin-left: 2px; padding: 0; font-size: 0; }
-  #howto-open::before { content: '?'; font: 600 14px var(--font-display); }
+  #landing-open { width: 34px; height: 34px; min-height: 0; margin-left: 2px; padding: 0; font-size: 0; }
+  #landing-open::before { content: '?'; font: 600 14px var(--font-display); }
 
   /* ---------- tool rail → bottom tab bar ---------- */
 
@@ -411,7 +411,7 @@
   .search-icon { left: 16px; width: 16px; height: 16px; z-index: 1; color: var(--muted); }
   .top-actions { gap: 0; margin: 0; padding: 0; border: 0; }
   .top-actions .tool { display: none; } /* location and share live in the round buttons on the right */
-  #howto-open {
+  #landing-open {
     width: 46px;
     height: 46px;
     margin: 0;
@@ -422,7 +422,7 @@
     -webkit-backdrop-filter: var(--m-blur);
     box-shadow: var(--m-shadow);
   }
-  #howto-open::before { content: 'i'; font: 600 16px var(--font-display); }
+  #landing-open::before { content: 'i'; font: 600 16px var(--font-display); }
   #suggestions {
     top: calc(60px + var(--safe-top));
     left: 10px;
@@ -708,7 +708,7 @@
 
   /* ---- top row ---- */
   .topbar { padding: calc(7px + var(--safe-top)) 10px 0; gap: 6px; }
-  .brand, #howto-open { width: 40px; height: 40px; box-shadow: none; }
+  .brand, #landing-open { width: 40px; height: 40px; box-shadow: none; }
   .brand .logo { width: 21px; height: 21px; }
   .search, #search { height: 40px; }
   #search { padding: 0 14px 0 38px; border-radius: 20px; box-shadow: none; }

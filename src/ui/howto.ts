@@ -32,7 +32,7 @@ export class HowTo {
   private readonly links = [...$('howto-nav').querySelectorAll<HTMLAnchorElement>('a')];
 
   constructor(onGrid: (on: boolean) => void, onBenchmark: () => void) {
-    $('howto-open').addEventListener('click', () => this.open());
+    // (Opened from the home page, the monitor panel and the About sheet; there is no button of its own.)
     $('howto-close').addEventListener('click', () => this.close());
     this.overlay.addEventListener('pointerdown', (event) => {
       if (event.target === this.overlay) this.close();

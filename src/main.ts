@@ -119,6 +119,7 @@ let screenPending = false;
 let screenDirty = false; // something changed → screen again right away
 let lastScreenAt = -Infinity;
 let lastStats: ScreenStats | null = null;
+let frameCount = 0;
 
 // Listeners registered by the feature modules (src/features/, through the App interface).
 const frameHooks: ((frame: FrameInfo) => void)[] = [];
@@ -267,7 +268,20 @@ const ahead = new AheadPanel(
   },
 );
 const bench = new BenchmarkModal(() => sim.send({ type: 'benchmark', t: clock.time, d: screeningDistance }));
-const howto = new HowTo((on) => setGrid(on), () => bench.start(screeningDistance));
+const howto = new HowTo((on) => {
+  // "Draw the cells on the globe" pressed while reading the walkthrough from the home page:
+  // there is no globe to see there, so go into the tracker first.
+  if (on && landing.showing) {
+    howto.close();
+    landing.enter();
+  }
+  setGrid(on);
+}, () => bench.start(screeningDistance));
+landing.setHost({ howItWorks: () => howto.open() });
+$('landing-open').addEventListener('click', () => {
+  if (cinema.isPlaying) cinema.stop();
+  landing.open();
+});
 const timeControls = new TimeControls(
   clock,
   () => {
@@ -1666,7 +1680,10 @@ function step(now: number): void {
     const info: FrameInfo = { timeMs: clock.time, realSeconds, dt, uiHidden };
     for (const run of frameHooks) run(info);
   }
-  kit.render();
+  // Behind the home page nobody can see the globe: draw it only now and then (often enough to
+  // keep textures and shaders warm, so going in is instant) and leave the GPU to the page.
+  frameCount++;
+  if (!landing.showing || frameCount % 15 === 0) kit.render();
   if (wantShot) {
     wantShot = false;
     saveShot();
@@ -1786,6 +1803,7 @@ async function boot(): Promise<void> {
     tiles.prewarm(kit.renderer, kit.scene, kit.camera);
     // Everything is ready. If the welcome page is still up, wait there until the visitor comes in.
     landing.status(`${fmtInt(first.sats.length)} objects loaded and moving`);
+    landing.setCount(first.sats.length);
     await landing.entered;
     await loading.finish();
 

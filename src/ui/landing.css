@@ -16,9 +16,8 @@ html #landing {
   inset: 0;
   z-index: 200;
   visibility: visible; /* index.html hides it until this stylesheet has arrived */
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  padding: clamp(18px, 3vw, 38px) clamp(20px, 5vw, 72px);
+  display: block;
+  padding: 0 clamp(20px, 5vw, 72px) clamp(18px, 3vw, 38px);
   overflow: hidden auto; /* scrolls down on a short screen; never sideways */
   overscroll-behavior: contain;
   background: radial-gradient(58% 64% at 74% 46%, #0c1627 0%, #05080f 72%);
@@ -28,8 +27,30 @@ html #landing {
 }
 html.no-landing #landing { display: none; }
 #landing.is-leaving { opacity: 0; pointer-events: none; }
+#landing.is-away { display: none; } /* put away once the visitor is in the tracker; "About" brings it back */
 
-.ld-top { display: flex; align-items: center; }
+/* The bar stays at the top while the page scrolls, so the way into the tracker is always there. */
+.ld-top {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: clamp(14px, 3vw, 40px);
+  margin: 0 calc(-1 * clamp(20px, 5vw, 72px));
+  padding: 14px clamp(20px, 5vw, 72px);
+  background: rgba(5, 8, 15, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid transparent;
+}
+.ld-nav { display: flex; align-items: center; gap: clamp(10px, 2vw, 28px); margin-left: auto; }
+.ld-nav button { padding: 6px 2px; border: 0; background: none; color: var(--ld-soft); font: 14px var(--font-ui); cursor: pointer; transition: color 140ms ease; }
+.ld-nav button:hover { color: var(--ld-ink); }
+.ld-nav button:focus-visible, .ld-text-button:focus-visible { outline: 2px solid var(--ld-accent); outline-offset: 3px; border-radius: 3px; }
+/* The games link is there for whoever looks for it; it does not compete with the tool. */
+.ld-nav .ld-quiet { font-size: 12.5px; opacity: 0.62; }
+.ld-button.ld-small { height: 38px; padding: 0 16px; border-radius: 8px; font-size: 13.5px; }
 .ld-mark { display: inline-flex; align-items: center; gap: 10px; font: 600 17px var(--font-display); letter-spacing: 0.02em; }
 .ld-mark .logo { width: 26px; height: 26px; }
 
@@ -38,6 +59,8 @@ html.no-landing #landing { display: none; }
   grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
   align-items: center;
   gap: clamp(24px, 4vw, 72px);
+  min-height: calc(100vh - 150px); /* the opening screen is the headline and the drawing, nothing else */
+  min-height: calc(100svh - 150px);
   padding: clamp(16px, 4vh, 48px) 0;
   /* The tilted drawing's corners must not add to the page's size either. `clip` rather than
      `hidden`: it trims without letting this row shrink below its content on a short screen. */
@@ -154,11 +177,50 @@ html.no-landing #landing { display: none; }
   100.00% { transform: translate(4.00%, 50.00%); }
 }
 
+/* ---- the sections below the opening screen ---- */
+.ld-section { padding: clamp(44px, 9vh, 104px) 0; border-top: 1px solid var(--ld-faint); scroll-margin-top: 64px; }
+.ld-section h2 { margin: 0; font: 600 clamp(26px, 2.8vw, 40px) / 1.08 var(--font-display); letter-spacing: -0.02em; }
+.ld-intro { margin: 12px 0 0; max-width: 58ch; font-size: clamp(15px, 1.2vw, 17px); line-height: 1.6; color: var(--ld-soft); }
+
+/* What it does: a set list in columns, like the contents page of a manual — not a wall of cards. */
+.ld-features { columns: 3 270px; column-gap: clamp(28px, 4.5vw, 72px); margin: clamp(26px, 4vh, 44px) 0 clamp(8px, 2vh, 20px); }
+.ld-group { break-inside: avoid; margin: 0 0 34px; }
+.ld-group h3 { margin: 0; padding-bottom: 9px; border-bottom: 1px solid rgba(232, 241, 251, 0.3); font: 600 15.5px var(--font-display); letter-spacing: 0.005em; }
+.ld-group dl { margin: 0; }
+.ld-group dt { margin-top: 13px; font-size: 14px; font-weight: 600; color: var(--ld-ink); }
+.ld-group dd { margin: 3px 0 0; font: 13.5px/1.55 var(--font-ui); color: var(--ld-soft); } /* (the tracker sets every <dd> in its monospace face; not here) */
+.ld-fresh { margin-left: 7px; font-size: 11px; font-weight: 500; color: var(--ld-accent); }
+
+/* How it works: the explanation, with the figures that make the point set beside it. */
+.ld-how { display: grid; grid-template-columns: minmax(0, 62ch) minmax(240px, 1fr); gap: clamp(28px, 6vw, 96px); align-items: start; margin-top: clamp(20px, 3vh, 34px); }
+.ld-prose h3 { margin: 26px 0 0; font: 600 16px var(--font-display); }
+.ld-prose h3:first-child { margin-top: 0; }
+.ld-prose p { margin: 8px 0 0; font-size: 15px; line-height: 1.65; color: var(--ld-soft); }
+.ld-prose p span { color: var(--ld-ink); font-variant-numeric: tabular-nums; }
+.ld-text-button { margin-top: 26px; padding: 0 0 2px; border: 0; border-bottom: 1px solid currentColor; background: none; color: var(--ld-accent); font: 500 15px var(--font-ui); text-align: left; cursor: pointer; }
+.ld-text-button:hover { color: var(--ld-ink); }
+.ld-sum { width: 100%; border-collapse: collapse; font-size: 14px; }
+.ld-sum caption { padding-bottom: 10px; text-align: left; font: 600 15.5px var(--font-display); color: var(--ld-ink); border-bottom: 1px solid rgba(232, 241, 251, 0.3); }
+.ld-sum th { padding: 13px 16px 13px 0; text-align: left; font-weight: 400; line-height: 1.4; color: var(--ld-soft); border-bottom: 1px solid var(--ld-faint); }
+.ld-sum td { padding: 13px 0; text-align: right; font: 500 17px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ld-ink); white-space: nowrap; border-bottom: 1px solid var(--ld-faint); }
+
+/* Games: small, last, and quiet. */
+.ld-games { padding: clamp(26px, 5vh, 48px) 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 22px; }
+.ld-games h2 { font-size: 17px; letter-spacing: 0; color: var(--ld-soft); }
+.ld-games p { margin: 0; font-size: 13.5px; color: var(--ld-soft); opacity: 0.8; }
+
 .ld-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 40px; padding-top: 14px; border-top: 1px solid var(--ld-faint); font-size: 12.5px; line-height: 1.55; color: var(--ld-soft); }
 .ld-foot p { margin: 0; max-width: 62ch; }
 .ld-foot dfn { font-style: italic; color: var(--ld-ink); }
 
 @media (max-width: 860px) {
+  .ld-top { flex-wrap: wrap; gap: 6px 14px; padding-top: 10px; padding-bottom: 10px; }
+  .ld-nav { order: 3; width: 100%; margin-left: 0; gap: 18px; }
+  .ld-nav button { padding: 4px 0; font-size: 13px; }
+  .ld-button.ld-small { margin-left: auto; width: auto; height: 36px; }
+  .ld-how { grid-template-columns: 1fr; }
+  .ld-features { columns: 1; }
+  .ld-section .ld-button { width: 100%; }
   .ld-main { grid-template-columns: 1fr; align-content: center; gap: 8px; padding: 4px 0 14px; }
   .ld-orbit { order: -1; justify-self: center; width: min(90%, 400px, 40vh); margin: 2px 0 16px; }
   .ld-copy h1 { max-width: 14ch; font-size: clamp(32px, 9.4vw, 46px); }

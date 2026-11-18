@@ -127,8 +127,8 @@ export class Tour {
       },
       {
         title: 'That is the tour',
-        body: '“How it works” explains how the close-approach screening is done, with live numbers. Press ? at any time for all the controls.',
-        target: '#howto-open',
+        body: '“About” opens the home page: everything Apsis can do, and how the close-approach screening is done. Press ? at any time for all the controls.',
+        target: '#landing-open',
         next: 'Finish',
         extra: {
           label: 'Read how it works',

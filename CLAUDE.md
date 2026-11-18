@@ -131,7 +131,7 @@ src/render/                 scene (renderer, bloom, quality presets), globe (Ear
                             sky view, phone motion), orbitLine, groundTrack, encounterViz (close-approach drawing),
                             conjunctionMarkers, gridViz, constellation (orbits + coverage map), siteMarker
 src/features/               optional modules installed through the App interface (see "Feature modules")
-src/ui/                     app (the App interface), inspector (+ charts), monitor (live pairs), ahead (prediction), encounterPanel, howto
+src/ui/                     app (the App interface), featureList (every feature, drawn on the home page), inspector (+ charts), monitor (live pairs), ahead (prediction), encounterPanel, howto
                             (walkthrough), hashTrace, benchmarkModal, filters, search, settings, timeControls, labels,
                             watchlist, feed (launches, trains, lowest), designer, constellations, contacts, crew,
                             share (QR), tour, cinema (autopilot + recording), sheet (phone sheets), landing (welcome
@@ -144,10 +144,22 @@ public/                     data/ (satellites.json, satcat.json, borders.bin), t
 
 ## UI structure (desktop)
 
-Welcome page first (`#landing`, `src/ui/landing.ts`): static markup painted before any
-script, the tracker loading behind it; `boot()` waits on `landing.entered` before the loading
-screen's lift-off. An inline script in `index.html` skips it for share links (any `#hash`)
-and when `Settings.landing` is off.
+Home page first (`#landing`, `src/ui/landing.ts`): static markup painted before any script,
+the tracker loading behind it; `boot()` waits on `landing.entered` before the loading
+screen's lift-off. An inline script in `index.html` skips it on arrival for share links (any
+`#hash` — which is why the page's own navigation uses buttons, never `#anchor` links) and when
+`Settings.landing` is off. It is a scrolling page: opening screen, "What it does", "How it
+works" (a summary plus a button that opens the full walkthrough `#howto` above the page), a
+deliberately quiet "Games" row, footer. "About" in the top bar (`#landing-open`, the round
+**i** on phones) brings it back with `landing.open()`; while it is showing, keyboard
+shortcuts are off and the globe is drawn only every 15th frame. There is no "How it works"
+button in the tracker any more: the walkthrough opens from the home page, the monitor panel
+and the About sheet.
+
+**Keeping the feature list current (a standing rule from the owner):** every user-visible
+feature has an entry in `src/ui/featureList.ts`, and the home page's "What it does" section
+is drawn from that file. Whenever a feature is added, changed or removed, update its entry in
+the same change (and the README's usage table).
 
 Top bar (logo = home/reset, search, readouts, tools; picture and video sit in the
 `#capture` menu so they cannot be hit by accident) · left tool rail opening ONE panel at a

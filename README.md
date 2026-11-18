@@ -75,8 +75,8 @@ status line sit along the bottom.
 | Hover | pointing at an object shows a small card: picture, what it is, who runs it, height and speed |
 | Views | `1` `2` `3`, `5` (Earth with the Moon beyond it), or the buttons at the foot of the tool rail. Left alone, a whole-Earth view drifts slowly around the planet (Layers → Earth to switch off) |
 | Settings (`,`) | kilometres or miles, UTC or local time, the hover card and the welcome page on or off, rendering quality, ground-station location, download current elements |
-| Welcome page | the first thing a visitor sees, while the tracker loads behind it; skipped for share links and when switched off in Settings |
-| How it works | the button in the top bar: a walkthrough of the screening algorithm with a live trace, live hash-table statistics, the look-ahead method and the benchmark |
+| Home page | the first thing a visitor sees, while the tracker loads behind it: what Apsis is, everything it can do, how the search works, and **Open the tracker**. **About** in the tracker's top bar (the round **i** on a phone) brings it back. Skipped on arrival for share links and when switched off in Settings |
+| How it works | summarised on the home page, with a link to the full walkthrough: the screening algorithm with a live trace, live hash-table statistics, the look-ahead method and the benchmark. Also reachable from the monitor panel |
 | Phones | below 760 px the layout is built around the globe: a search field, two round buttons (sky view, and a menu with the views, time and speed, location and share), a short four-tool tab bar, and sheets that rest on the tab bar and can be dragged to any height or tucked away. There is no time bar on a phone; a small chip appears only while time is not running live. It can be added to the home screen and then runs full screen like an app |
 | Other keys | `P` save a picture, `F` full screen, `H` hide the interface, `?` all controls, `Esc` close / deselect |
 
@@ -223,7 +223,8 @@ src/
     constellations.ts    constellation picker                      contacts.ts   ground-station contact timeline
     crew.ts              people in space                           share.ts   QR code and link
     cinema.ts            autopilot tour and video recording        sheet.ts   draggable bottom sheets on phones
-    landing.ts           the welcome page shown before the tracker  dom.ts   DOM, number, unit and clock helpers
+    landing.ts           the home page (what it does, how it works)  dom.ts   DOM, number, unit and clock helpers
+    featureList.ts       every feature in one list; the home page is drawn from it
     launch.ts            the loading screen's launch scene         intro.ts   loading progress and hand-over
     howto.ts             the walkthrough page                     hashTrace.ts   one object through the hash
     filters.ts  search.ts  settings.ts  timeControls.ts  labels.ts  benchmarkModal.ts  intro.ts

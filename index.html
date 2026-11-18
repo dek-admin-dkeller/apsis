@@ -40,13 +40,21 @@
           </svg>
           Apsis
         </span>
+        <!-- Buttons, not links with #anchors: any #hash in the address means "share link" to this page. -->
+        <nav class="ld-nav" aria-label="On this page">
+          <button data-ld-jump="ld-features">What it does</button>
+          <button data-ld-jump="ld-how">How it works</button>
+          <button data-ld-jump="ld-games" class="ld-quiet">Games</button>
+        </nav>
+        <button class="ld-button ld-small" data-ld-enter>Open the tracker</button>
       </header>
+
       <main class="ld-main">
         <div class="ld-copy">
           <h1>Everything in orbit around Earth, right now.</h1>
           <p class="ld-lede">Every tracked satellite, rocket stage and fragment, on a 3D globe and moving in real time. Follow any one of them, ride along with the Space Station, or watch for objects passing close to each other.</p>
           <div class="ld-go">
-            <button id="landing-enter" class="ld-button">Open the tracker</button>
+            <button id="landing-enter" class="ld-button" data-ld-enter>Open the tracker</button>
             <p id="landing-status" class="ld-status" aria-live="polite">Getting the catalogue ready</p>
           </div>
         </div>
@@ -63,6 +71,45 @@
           </div>
         </figure>
       </main>
+
+      <!-- The list itself is drawn by src/ui/landing.ts from src/ui/featureList.ts: edit it there. -->
+      <section class="ld-section" id="ld-features">
+        <h2>What it does</h2>
+        <p class="ld-intro">Apsis is a tracking console that runs in a browser tab. Nothing to install, no account, and it works on a phone.</p>
+        <div class="ld-features" id="ld-feature-list"></div>
+        <button class="ld-button" data-ld-enter>Open the tracker</button>
+      </section>
+
+      <section class="ld-section" id="ld-how">
+        <h2>How it works</h2>
+        <div class="ld-how">
+          <div class="ld-prose">
+            <h3>Where everything is</h3>
+            <p>The orbit of every tracked object is published as a short list of numbers. A standard model, SGP4, turns those numbers and a moment in time into a position. Apsis runs it for the whole catalogue several times a second, in the background, so the picture never waits for it.</p>
+            <h3>Finding what is close to what</h3>
+            <p>To find every pair of objects within 10 km of each other, the obvious way is to measure each object against every other one: <span data-ld-pairs>191 million</span> measurements, every second. Apsis does it another way. Space is cut into cubes 10 km wide and each object is filed under its cube in a hash table. Two objects closer than 10 km must be in the same cube or in cubes that touch, so each object is measured only against the few in the 27 cubes around it. That is a few hundred measurements instead of <span data-ld-pairs>191 million</span>, and the answer is exactly the same.</p>
+            <h3>Looking ahead</h3>
+            <p>Two objects crossing at 15 km a second are close for a fraction of a second, so looking once a minute would miss them. The forecast widens the cubes to catch anything that could get close before the next look, estimates each candidate's closest point with a straight line, and then checks the survivors with the full model.</p>
+            <h3>What it cannot tell you</h3>
+            <p>Public orbit data is good to about a kilometre. Apsis shows where to look and how the search is done. It does not say whether two objects will collide.</p>
+            <button class="ld-text-button" id="landing-how">Read the full walkthrough, with live numbers from the tracker</button>
+          </div>
+          <table class="ld-sum">
+            <caption>The search, in numbers</caption>
+            <tr><th scope="row">Objects in the catalogue</th><td data-ld-count>19,572</td></tr>
+            <tr><th scope="row">Pairs, measuring each against every other</th><td data-ld-pairs-exact>191,521,806</td></tr>
+            <tr><th scope="row">Measurements the grid needs instead</th><td>a few hundred</td></tr>
+            <tr><th scope="row">Time for one full search, on a laptop</th><td>about 20 ms</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- Deliberately small and last: a side door, not part of the tool. -->
+      <section class="ld-section ld-games" id="ld-games">
+        <h2>Games</h2>
+        <p>A side project: small games played on the live catalogue. There is nothing here yet.</p>
+      </section>
+
       <footer class="ld-foot">
         <p><dfn>apsis</dfn>, noun. Either of the two points on an orbit that lie nearest to and farthest from the body being orbited.</p>
         <p>Orbital data from CelesTrak, imagery from NASA. Nothing to install and no account.</p>
@@ -153,7 +200,7 @@
           <button id="keys-open" class="tool" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">
             <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="5" width="15" height="10" rx="1.5" /><path d="M5.5 8h1M9.5 8h1M13.5 8h1M6 12h8" /></svg>
           </button>
-          <button id="howto-open" class="btn">How it works</button>
+          <button id="landing-open" class="btn" title="About Apsis: what it does and how it works">About</button>
         </nav>
       </header>
 
