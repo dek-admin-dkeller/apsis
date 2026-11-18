@@ -233,12 +233,22 @@ of description each ("just a list, a lot of text, an AI feel"). Do not go back t
   are in `SHORTCUTS` in `objectTabs.ts`; each presses a button that already exists.
 - A new feature gets a section in the right tab plus an icon in `ICONS`. Never a fourth tab.
 
+The Layers panel is two columns of small toggle tiles (`.layer-tile`, lit amber while on) in
+plain groups (`.group-label`, not accordions): each is still a `<label>` around a checkbox with
+`data-setting`, the checkbox stretched over the tile and drawn as its box, so nothing in
+`settings.ts` changed. The Settings panel is flat groups with one line per setting (`.set-row`
+for a two-way choice, `.row-toggle` for a switch); anything longer than a name goes in the
+`title`. Camera habits (drift round the Earth, circle a selected object) are in Settings, not
+Layers, and name tags are set in Layers only. Controls that mean nothing on a phone carry
+`d-only`.
+
 The top bar says "Apsis" as the home page writes it (plain, not spaced capitals; no tagline)
 and shows ONE object count: "of 19,572" appears only while a filter is hiding something.
 
 Settings are generic: any control with `data-setting="name"` edits `Settings[name]`
 (`src/ui/settings.ts`), persisted in `localStorage`. To add a toggle: add the field + default
-in `settings.ts`, a control in `index.html`, and apply it in `applySettings()` in `main.ts`.
+in `settings.ts`, a control in `index.html` (a `.layer-tile` with an icon if it is a layer, a
+`.row-toggle` in Settings otherwise), and apply it in `applySettings()` in `main.ts`.
 
 Phones (≤ 760 px, `src/mobile.css`): floating search pill, round buttons on the right edge
 (location, views menu, share), a floating 4-item tab bar (the rail), panels as rounded bottom

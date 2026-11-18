@@ -63,7 +63,7 @@ status line sit along the bottom.
 | Radio, last heard, Doppler | inspector, Live tab: when a volunteer ground station last received the object and on which frequency. Passes tab: its listed transmitters and the Doppler shift of one of them as heard at your ground station right now |
 | Data age | inspector, Live tab: how old the object's orbital elements are, with a warning once they are stale, and its catalogue status. Objects → Browse → Colour by → **Data age** colours the whole catalogue the same way |
 | Close-approach report | with a close approach open: **Report** opens a one-page summary to print or save as a PDF; **Data (CSV)** downloads both objects' positions, velocities and the range between them through the approach |
-| Layers panel (`L`) | orbit path, ground track, coverage footprint, 3D model; ground-station marker, clouds, atmosphere, coastlines and borders, lat/long grid, day/night line; stars, constellations, planets, names in the sky; screening cells (`G`) |
+| Layers panel (`L`) | every layer is a small tile, lit while it is on, so the state of the picture reads at a glance: orbit path, ground track, coverage footprint, 3D model; clouds, atmosphere, coastlines and borders, lat/long grid, day/night line, aurora, sharp ground, ground-station marker; stars, constellations, planets, names in the sky; screening cells (`G`). Name tags (off, well-known, as you zoom) are here too |
 | Close-approach monitor (`C`) | **Right now**: switch it on, set the alert distance; the pairs inside it are sorted into two lists — **Passing** (objects on different orbits crossing paths, with their passing speed) and **Flying together** (docked spacecraft, formations and launch trains, which are close all the time). A spacecraft that the catalogue lists as several objects, such as the Space Station with its modules and docked capsules, appears there once, under a **Joined** heading apart from the formations and trains, and clicking it selects the spacecraft instead of opening a pair. The counts in the top bar and on the globe are of the passing kind only. **Coming hours**: scan up to 24 hours ahead for predicted close passes. Click any pair to open the **close-approach view** (time keeps running live; the panel's replay and scrubber give a slow-motion or frozen look): both spacecraft as 3D models, their flight paths, the live distance between them, a range chart you can scrub, and a slow-motion replay |
 | Ride along (`V`) | from the inspector: sit on the selected object and look out from it. Drag to look around, scroll to zoom |
 | Sky view (`4`) | the **Sky** button at the foot of the rail: stand at the ground station and watch objects cross overhead |
@@ -77,7 +77,7 @@ status line sit along the bottom.
 | Launch and re-entry feed | Objects panel: **Newest in orbit** (grouped by launch), **Satellite trains** (recent batches still flying in a line; click to light one up) and **Lowest orbits** (next to come down) |
 | Constellations | Objects panel: pick GPS, Starlink, Iridium and so on to draw all its orbits and a live map of how many of its satellites can see each point on the ground |
 | Aurora | Layers → Earth: tonight's aurora oval from NOAA's forecast, with the current geomagnetic activity |
-| Sharp ground | zoom in and the ground under the camera is redrawn from detailed NASA imagery, about sixteen times finer than the globe's own picture (Layers → Earth → *Sharp ground when zoomed in*) |
+| Sharp ground | zoom in and the ground under the camera is redrawn from detailed NASA imagery, about sixteen times finer than the globe's own picture (Layers → Earth → *Sharp ground*) |
 | Hover card | point at any dot for a small card: a photo or a 3D picture of it, what it is, who runs it, its height and speed now |
 | People in space | who is aboard the ISS and Tiangong right now, in those stations' Record tab |
 | Contact timeline | Watchlist → **Contact timeline**: when each of several ground stations can see each starred object over the next 24 hours |
@@ -85,8 +85,8 @@ status line sit along the bottom.
 | Design a satellite | Objects panel: choose an orbit, launch your own object into the live catalogue, and check what it will pass close to in the next 24 hours |
 | Time | the bar at the bottom: drag the timeline to move up to 12 hours either way, pause (`Space`), 1× – 1000×, run backwards (`R`), step 10 minutes (`[` `]`), **Now** (`N`), or click the clock to type a date |
 | Hover | pointing at an object shows a small card: picture, what it is, who runs it, height and speed |
-| Views | `1` `2` `3`, `5` (Earth with the Moon beyond it), or the buttons at the foot of the tool rail. Left alone, a whole-Earth view drifts slowly around the planet (Layers → Earth to switch off) |
-| Settings (`,`) | kilometres or miles, UTC or local time, the hover card and the welcome page on or off, rendering quality, ground-station location, download current elements |
+| Views | `1` `2` `3`, `5` (Earth with the Moon beyond it), or the buttons at the foot of the tool rail. Left alone, a whole-Earth view drifts slowly around the planet (Settings → Camera to switch off) |
+| Settings (`,`) | one line per setting, in five groups: **Units** (kilometres or miles, UTC or local time), **Display** (rendering quality, frosted panels, hover card, quiet time bar, home page on arrival), **Camera** (drift around the Earth, circle a selected object), **Ground station** (name, coordinates, use my location), **Data** (download current elements). Reset is at the foot |
 | Home page | the first thing a visitor sees, while the tracker loads behind it: what Apsis is, everything it can do, how the search works, and **Open the tracker**. **About** in the tracker's top bar (the round **i** on a phone) brings it back. Skipped on arrival for share links and when switched off in Settings |
 | How it works | summarised on the home page, with a link to the full walkthrough: the screening algorithm with a live trace, live hash-table statistics, the look-ahead method and the benchmark. Also reachable from the monitor panel |
 | Phones | below 760 px the layout is built around the globe: a search field, two round buttons (sky view, and a menu: the four views as a row of icons, then autopilot, time and speed, the command bar, location and share), a short four-tool tab bar, and sheets that rest on the tab bar and can be dragged to any height or tucked away. There is no time bar on a phone; a small chip appears only while time is not running live. Left alone, once the globe starts its slow turn the controls dim until they are barely there and come back at the next touch. It can be added to the home screen and then runs full screen like an app |
@@ -332,7 +332,7 @@ two `Map<noradId, record>` tables that the orbit-change comparison joins, and th
   rarely seen.
 - **Name tags appear as you zoom.** The whole-Earth view names only the ISS, Tiangong, Hubble
   and your watchlist; closer in, well-known spacecraft and then the nearest objects are named
-  (Layers → Name tags: Off / Well-known / As you zoom).
+  (Layers → Names: Off / Well-known / As you zoom).
 - **Operator logos** beside names are loaded from each operator's Wikipedia article, not
   stored here, and only when the article's picture really is a logo (transparent
   background); they are trademarks of their owners, shown only to identify the operator.

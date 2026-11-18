@@ -916,3 +916,24 @@
   #m-views .m-views-row button svg { width: 21px; height: 21px; color: var(--text); }
   #m-views .m-views-row button:active { color: var(--text); }
 }
+
+/* ============================================================== 13. tiles on a phone
+ * The Objects and Layers tiles a little taller and their names a little larger: they are the
+ * touch targets now. Settings keeps one setting per line, at a height a thumb can hit.
+ */
+@media (max-width: 760px) {
+  .obj-tile { min-height: 72px; padding: 12px 12px 11px; }
+  .obj-tile-name { font-size: 14px; }
+  .obj-tile-value { font-size: 12px; }
+  .layer-tiles { gap: 7px; }
+  .layer-tile { min-height: 46px; padding: 0 12px; gap: 10px; }
+  .layer-tile span { font-size: 14px; }
+  .layer-tile svg { width: 19px; height: 19px; }
+  .obj-tile svg { width: 20px; height: 20px; }
+  .group-label { margin: 18px 0 8px; font-size: 13px; }
+  .set-row { min-height: 46px; font-size: 14.5px; }
+  .set-row .segmented button { padding: 8px 12px; font-size: 13.5px; }
+  #panel-settings .row-toggle { min-height: 46px; }
+  .set-reset { min-height: 40px; font-size: 13.5px; }
+  .d-only { display: none; } /* settings for things a phone does not have: the hover card, the time bar */
+}

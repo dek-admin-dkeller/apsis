@@ -163,7 +163,7 @@ canvas.addEventListener('webglcontextrestored', () => {
     sessionStorage.setItem('apsis.reloads', String(reloads + 1));
   } catch { /* no storage: reload anyway, once */ }
   if (reloads < 2) location.reload();
-  else showProblem('The graphics keep resetting on this device. Try Settings → Rendering → Fast after reloading.', true);
+  else showProblem('The graphics keep resetting on this device. Try Settings → Display → Fast after reloading.', true);
 });
 window.addEventListener('error', (event) => (lastProblem = event.message));
 window.addEventListener('unhandledrejection', (event) => (lastProblem = String(event.reason)));
@@ -1067,9 +1067,10 @@ $('contacts-open').addEventListener('click', () => contacts.open());
 function updateDataNote(): void {
   if (!catalog) return;
   const ageH = (Date.now() - Date.parse(catalog.fetchedAt)) / 3.6e6;
+  // One line: when the elements are from. (The owner, launch and size table is only mentioned when it is missing.)
   $('data-note').textContent =
-    `Orbital elements ${catalog.live ? 'downloaded' : 'saved'} ${clockStamp(Date.parse(catalog.fetchedAt))}, ${ageH < 48 ? `${fmt(ageH, 0)} hours` : `${fmt(ageH / 24, 0)} days`} ago. `
-    + (facts.size > 0 ? `Catalogue facts loaded for ${fmtInt(facts.size)} objects.` : 'Catalogue facts (owner, launch, size) are not bundled yet.');
+    `Elements ${catalog.live ? 'downloaded' : 'from'} ${clockStamp(Date.parse(catalog.fetchedAt))}, ${ageH < 48 ? `${fmt(ageH, 0)} hours` : `${fmt(ageH / 24, 0)} days`} ago.`
+    + (facts.size > 0 ? '' : ' Owner, launch and size details are not loaded.');
   const all = catalog;
   cloud.setOwners((index) => facts.get(all.sats[index].noradId)?.owner);
   renderFeed(catalog, facts, (sat) => select(sat), (members, lead) => {

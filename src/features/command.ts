@@ -146,7 +146,7 @@ export function installCommand(app: App): void {
     section('growth', 'growth by year,growth,by year,history,since 1957', 'Open growth by year');
     section('designer', 'design a satellite,designer,design,my own satellite', 'Open the satellite designer');
     section('watchlist', 'watchlist,watch list,starred,favourites,favorites', 'Open the watchlist');
-    section('appearance', 'colours,colors,colour by,color by,appearance,marker size,labels', 'Open the colour, label and marker settings');
+    section('appearance', 'colours,colors,colour by,color by,appearance,marker size', 'Open the colour and marker settings');
 
     add('Action', 'deselect,clear selection,unselect', false, () => {
       const sat = app.selected();

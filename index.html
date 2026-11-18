@@ -382,10 +382,6 @@
                 <button data-value="fresh" title="How long ago each object’s orbit was last measured">Data age</button>
               </div>
               <div class="legend is-hidden" id="color-legend"></div>
-              <p class="field-label">Name labels</p>
-              <div class="segmented" data-setting="labels">
-                <button data-value="off">Off</button><button data-value="notable" title="Only well-known spacecraft">Well-known</button><button data-value="nearby" title="More names appear as you zoom in">As you zoom</button>
-              </div>
               <div class="field"><div class="field-head"><span>Marker size</span><output id="size-label"></output></div>
                 <input type="range" data-setting="pointSize" min="0.6" max="2.2" step="0.1" aria-label="Marker size" /></div>
               <div class="field"><div class="field-head"><span>Glow</span><output id="glow-label"></output></div>
@@ -444,46 +440,112 @@
         <!-- Layers -->
         <section class="panel is-hidden" id="panel-layers">
           <header class="panel-head"><h2>Layers</h2><button class="icon-btn" data-close-panel aria-label="Close panel">×</button></header>
+          <!-- Every layer is a tile that is lit while it is on: the whole state of the picture at a
+               glance, two to a row, where there used to be nineteen lines of text with a small switch each. A tile
+               is still a <label> around a checkbox, so src/ui/settings.ts binds it as before. -->
           <div class="panel-body">
-            <details class="sec" open>
-              <summary>Selected object</summary>
-              <label class="row-toggle"><span>Orbit path</span><input type="checkbox" data-setting="orbitPath" /></label>
-              <label class="row-toggle"><span>Ground track</span><input type="checkbox" data-setting="groundTrack" /></label>
-              <label class="row-toggle"><span>Coverage footprint</span><input type="checkbox" data-setting="footprint" /></label>
-              <label class="row-toggle"><span>3D model</span><input type="checkbox" data-setting="model" /></label>
-              <label class="row-toggle"><span>Slowly circle the object</span><input type="checkbox" data-setting="autoOrbit" /></label>
-            </details>
-            <details class="sec" open>
-              <summary>Name tags</summary>
-              <div class="segmented" data-setting="labels">
-                <button data-value="off">Off</button><button data-value="notable">Well-known</button><button data-value="nearby">As you zoom</button>
-              </div>
-              <p class="note">A few famous spacecraft are always named. Zoom in and more names and operator logos appear.</p>
-            </details>
-            <details class="sec" open>
-              <summary>Earth</summary>
-              <label class="row-toggle"><span>Slowly circle the Earth</span><input type="checkbox" data-setting="earthDrift" /></label>
-              <label class="row-toggle"><span>Ground station marker</span><input type="checkbox" data-setting="siteMarker" /></label>
-              <label class="row-toggle"><span>Aurora, live <span class="sum-note" id="aurora-status"></span></span><input type="checkbox" data-setting="aurora" /></label>
-              <label class="row-toggle"><span>Sharp ground when zoomed in</span><input type="checkbox" data-setting="sharpGround" /></label>
-              <label class="row-toggle"><span>Clouds</span><input type="checkbox" data-setting="clouds" /></label>
-              <label class="row-toggle"><span>Atmosphere</span><input type="checkbox" data-setting="atmosphere" /></label>
-              <label class="row-toggle"><span>Coastlines and borders</span><input type="checkbox" data-setting="borders" /></label>
-              <label class="row-toggle"><span>Latitude / longitude grid</span><input type="checkbox" data-setting="graticule" /></label>
-              <label class="row-toggle"><span>Day / night line</span><input type="checkbox" data-setting="terminator" /></label>
-            </details>
-            <details class="sec" open>
-              <summary>Sky</summary>
-              <label class="row-toggle"><span>Stars and Milky Way</span><input type="checkbox" data-setting="stars" /></label>
-              <label class="row-toggle"><span>Constellations</span><input type="checkbox" data-setting="constellations" /></label>
-              <label class="row-toggle"><span>Planets</span><input type="checkbox" data-setting="planets" /></label>
-              <label class="row-toggle"><span>Names in the sky</span><input type="checkbox" data-setting="skyLabels" /></label>
-            </details>
-            <details class="sec" open>
-              <summary>Analysis</summary>
-              <label class="row-toggle"><span>Screening cells <kbd>G</kbd></span><input type="checkbox" id="layer-grid" /></label>
-              <p class="note" id="grid-note"></p>
-            </details>
+            <h3 class="group-label">Selected object</h3>
+            <div class="layer-tiles">
+              <label class="layer-tile" title="Draw the whole orbit of the selected object">
+                <input type="checkbox" data-setting="orbitPath" />
+                <svg viewBox="0 0 20 20" aria-hidden="true"><ellipse cx="10" cy="10" rx="8" ry="4.3" transform="rotate(-24 10 10)" /><circle cx="17.3" cy="6.7" r="1.4" /></svg>
+                <span>Orbit path</span>
+              </label>
+              <label class="layer-tile" title="Draw the path it traces over the ground">
+                <input type="checkbox" data-setting="groundTrack" />
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 10c2.6-5.5 5.4-5.5 8 0s5.4 5.5 8 0" /></svg>
+                <span>Ground track</span>
+              </label>
+              <label class="layer-tile" title="Shade the part of the Earth it can see">
+                <input type="checkbox" data-setting="footprint" />
+                <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="4" r="1.4" /><path d="M9.2 5.2L4 13.5M10.8 5.2l5.2 8.3" /><ellipse cx="10" cy="14.5" rx="6.5" ry="2.5" /></svg>
+                <span>Footprint</span>
+              </label>
+              <label class="layer-tile" title="Show the spacecraft itself when you are close">
+                <input type="checkbox" data-setting="model" />
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5l6.5 3.6v7.8L10 17.5l-6.5-3.6V6.1zM3.5 6.1L10 9.8l6.5-3.7M10 9.8v7.7" /></svg>
+                <span>3D model</span>
+              </label>
+            </div>
+            <h3 class="group-label">Names</h3>
+            <div class="segmented" data-setting="labels" title="A few famous spacecraft are always named. Zoom in and more names and operator logos appear.">
+              <button data-value="off">Off</button><button data-value="notable">Well-known</button><button data-value="nearby">As you zoom</button>
+            </div>
+            <h3 class="group-label">Earth</h3>
+            <div class="layer-tiles">
+              <label class="layer-tile" title="The cloud layer and its shadows">
+                <input type="checkbox" data-setting="clouds" />
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 15.5a3.5 3.5 0 0 1-.5-6.96 4.5 4.5 0 0 1 8.8.96A3 3 0 0 1 14 15.5z" /></svg>
+                <span>Clouds</span>
+              </label>
+              <label class="layer-tile" title="The glow of air at the edge of the planet">
+                <input type="checkbox" data-setting="atmosphere" />
+                <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="4.5" /><circle cx="10" cy="10" r="7.8" stroke-dasharray="1.5 2.6" /></svg>
+                <span>Atmosphere</span>
+              </label>
+              <label class="layer-tile" title="Coastlines and country borders">
+                <input type="checkbox" data-setting="borders" />
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 6l4.5-2.5 3 2 4.5-.5 1 4.5-2.5 2 .5 3.5-4.5 1L8 12.5 4.5 12z" /></svg>
+                <span>Borders</span>
+              </label>
+              <label class="layer-tile" title="Lines of latitude and longitude">
+                <input type="checkbox" data-setting="graticule" />
+                <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" /><path d="M3.8 7.2h12.4M3.8 12.8h12.4" /><ellipse cx="10" cy="10" rx="3" ry="7" /></svg>
+                <span>Lat / long</span>
+              </label>
+              <label class="layer-tile" title="The line between day and night">
+                <input type="checkbox" data-setting="terminator" />
+                <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" /><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor" stroke="none" opacity="0.55" /></svg>
+                <span>Day / night</span>
+              </label>
+              <label class="layer-tile" title="Tonight’s aurora oval, from NOAA’s live forecast">
+                <input type="checkbox" data-setting="aurora" />
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 15c.5-5 1.5-8.5 3.5-10M8.5 15.5c.5-5.5 1.5-9 3.5-11M13 15c.5-4.5 1.3-7.5 3-9" /></svg>
+                <span>Aurora</span><small id="aurora-status"></small>
+              </label>
+              <label class="layer-tile" title="Detailed NASA imagery under the camera when you zoom in">
+                <input type="checkbox" data-setting="sharpGround" />
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2.5 15.5l4.8-7 3.2 4.2 2.3-2.7 4.7 5.5z" /><circle cx="14.5" cy="5.5" r="1.5" /></svg>
+                <span>Sharp ground</span>
+              </label>
+              <label class="layer-tile" title="Mark the ground station on the globe">
+                <input type="checkbox" data-setting="siteMarker" />
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 17.5s5-4.7 5-8.7a5 5 0 0 0-10 0c0 4 5 8.7 5 8.7z" /><circle cx="10" cy="8.7" r="1.8" /></svg>
+                <span>Station</span>
+              </label>
+            </div>
+            <h3 class="group-label">Sky</h3>
+            <div class="layer-tiles">
+              <label class="layer-tile" title="Real bright stars and the Milky Way">
+                <input type="checkbox" data-setting="stars" />
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3l1.7 4.6 4.6 1.7-4.6 1.7L10 15.6 8.3 11 3.7 9.3l4.6-1.7z" /><circle cx="15.8" cy="15" r="0.8" /></svg>
+                <span>Stars</span>
+              </label>
+              <label class="layer-tile" title="The constellation figures">
+                <input type="checkbox" data-setting="constellations" />
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 14.5l4-8 5 3.5 3.5-5.5M13 10l-1 6" /><circle cx="4" cy="14.5" r="1.3" /><circle cx="8" cy="6.5" r="1.3" /><circle cx="13" cy="10" r="1.3" /><circle cx="16.5" cy="4.5" r="1.3" /><circle cx="12" cy="16" r="1.3" /></svg>
+                <span>Constellations</span>
+              </label>
+              <label class="layer-tile" title="The planets, the Sun and the Moon">
+                <input type="checkbox" data-setting="planets" />
+                <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="4" /><ellipse cx="10" cy="10" rx="8.5" ry="2.6" transform="rotate(-18 10 10)" /></svg>
+                <span>Planets</span>
+              </label>
+              <label class="layer-tile" title="Names beside the stars and planets">
+                <input type="checkbox" data-setting="skyLabels" />
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 3.5H10l6.5 6.5-6.5 6.5L3.5 10z" /><circle cx="7" cy="7" r="1.1" /></svg>
+                <span>Sky names</span>
+              </label>
+            </div>
+            <h3 class="group-label">Analysis</h3>
+            <div class="layer-tiles">
+              <label class="layer-tile is-wide" title="The hash grid, drawn around the objects it is sorting (G)">
+                <input type="checkbox" id="layer-grid" />
+                <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="1" /><path d="M3 7.7h14M3 12.3h14M7.7 3v14M12.3 3v14" /></svg>
+                <span>Screening cells</span><small><kbd>G</kbd></small>
+              </label>
+            </div>
+            <p class="note" id="grid-note"></p>
           </div>
         </section>
 
@@ -540,48 +602,43 @@
         <!-- Settings -->
         <section class="panel is-hidden" id="panel-settings">
           <header class="panel-head"><h2>Settings</h2><button class="icon-btn" data-close-panel aria-label="Close panel">×</button></header>
+          <!-- Flat groups, one line per setting: the name on the left, its control on the right.
+               Anything longer than a name is in the tooltip. -->
           <div class="panel-body">
-            <details class="sec" open>
-              <summary>Units and time</summary>
-              <p class="field-label">Distances and speeds</p>
-              <div class="segmented" data-setting="units">
-                <button data-value="metric">Kilometres</button><button data-value="imperial">Miles</button>
-              </div>
-              <p class="field-label">Clock</p>
-              <div class="segmented" data-setting="clockZone">
-                <button data-value="utc">UTC</button><button data-value="local">My local time</button>
-              </div>
-            </details>
-            <details class="sec" open>
-              <summary>Interface</summary>
-              <label class="row-toggle"><span>Info card when pointing at an object</span><input type="checkbox" data-setting="hoverCard" /></label>
-              <label class="row-toggle"><span>Welcome page when the site opens</span><input type="checkbox" data-setting="landing" /></label>
-              <label class="row-toggle"><span>Frosted panels</span><input type="checkbox" data-setting="glass" /></label>
-              <label class="row-toggle"><span>Shrink and fade the time bar when not in use</span><input type="checkbox" data-setting="quietUi" /></label>
-            </details>
-            <details class="sec" open>
-              <summary>Rendering <span class="sum-note" id="fps-label"></span></summary>
-              <div class="segmented" data-setting="quality">
-                <button data-value="auto">Auto</button><button data-value="high">High</button><button data-value="balanced">Balanced</button><button data-value="fast">Fast</button>
-              </div>
-            </details>
-            <details class="sec" open>
-              <summary>Ground station</summary>
-              <p class="note">Passes, range and look angles are worked out for this place.</p>
-              <label class="text-field"><span>Name</span><input type="text" data-setting="siteName" maxlength="40" spellcheck="false" /></label>
-              <div class="pair-fields">
-                <label class="text-field"><span>Latitude °</span><input type="number" data-setting="siteLat" min="-90" max="90" step="0.01" /></label>
-                <label class="text-field"><span>Longitude °</span><input type="number" data-setting="siteLon" min="-180" max="180" step="0.01" /></label>
-              </div>
-              <button class="btn wide" id="locate">Use my location</button>
-            </details>
-            <details class="sec" open>
-              <summary>Data</summary>
-              <p class="note" id="data-note"></p>
-              <button id="refresh" class="btn wide" title="One request to CelesTrak; keeps the saved data if it fails">Download current elements</button>
-            </details>
-            <button class="btn wide m-only" data-proxy="#tour-start">Take the tour</button>
-            <button id="display-reset" class="btn wide">Reset all settings</button>
+            <h3 class="group-label">Units</h3>
+            <div class="set-row"><span>Distances</span>
+              <div class="segmented" data-setting="units"><button data-value="metric">Kilometres</button><button data-value="imperial">Miles</button></div>
+            </div>
+            <div class="set-row"><span>Clock</span>
+              <div class="segmented" data-setting="clockZone"><button data-value="utc">UTC</button><button data-value="local">Local time</button></div>
+            </div>
+
+            <h3 class="group-label">Display <span class="sum-note" id="fps-label"></span></h3>
+            <div class="segmented" data-setting="quality" title="How much detail to draw. Auto lowers it by itself if the picture gets slow.">
+              <button data-value="auto">Auto</button><button data-value="high">High</button><button data-value="balanced">Balanced</button><button data-value="fast">Fast</button>
+            </div>
+            <label class="row-toggle" title="Blur what is behind the panels. Off is faster on older machines."><span>Frosted panels</span><input type="checkbox" data-setting="glass" /></label>
+            <label class="row-toggle d-only" title="A small card with a picture and a few facts when you point at an object"><span>Hover card</span><input type="checkbox" data-setting="hoverCard" /></label>
+            <label class="row-toggle d-only" title="Shrink and fade the time bar while it is not in use"><span>Quiet time bar</span><input type="checkbox" data-setting="quietUi" /></label>
+            <label class="row-toggle" title="Show the home page first when the site opens"><span>Home page on arrival</span><input type="checkbox" data-setting="landing" /></label>
+
+            <h3 class="group-label">Camera</h3>
+            <label class="row-toggle" title="Left alone in a whole-Earth view, the camera drifts slowly around the planet"><span>Drift around the Earth</span><input type="checkbox" data-setting="earthDrift" /></label>
+            <label class="row-toggle" title="Left alone while following an object, the camera circles it slowly"><span>Circle a selected object</span><input type="checkbox" data-setting="autoOrbit" /></label>
+
+            <h3 class="group-label" title="Passes, range and look angles are worked out for this place">Ground station</h3>
+            <label class="text-field"><span>Name</span><input type="text" data-setting="siteName" maxlength="40" spellcheck="false" /></label>
+            <div class="pair-fields">
+              <label class="text-field"><span>Latitude °</span><input type="number" data-setting="siteLat" min="-90" max="90" step="0.01" /></label>
+              <label class="text-field"><span>Longitude °</span><input type="number" data-setting="siteLon" min="-180" max="180" step="0.01" /></label>
+            </div>
+            <button class="btn wide" id="locate">Use my location</button>
+
+            <h3 class="group-label">Data</h3>
+            <p class="note" id="data-note"></p>
+            <button id="refresh" class="btn wide" title="One request to CelesTrak; keeps the saved data if it fails">Download current elements</button>
+
+            <button id="display-reset" class="link set-reset">Reset all settings</button>
           </div>
         </section>
       </aside>
