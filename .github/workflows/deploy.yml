@@ -7,6 +7,9 @@
 # The refreshed data is NOT committed back: it lives only in the published site, so the
 # repository does not grow by 7 MB three times a day. If CelesTrak cannot be reached, the
 # snapshot stored in the repository is published instead.
+#
+# Each refresh is also compared with the one before it (the "Orbit changes" list in the app,
+# public/data/changes.json). The one before is taken from the site as it is published now.
 name: Build and deploy
 
 on:
@@ -39,9 +42,19 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # The previous elements are not in the repository (see the top of this file), so they are
+      # read back from the published site. Never fatal: on the first run, or if the site cannot
+      # be read, the app simply says that no comparison is available yet.
+      - name: Keep the elements published last time, to compare the new ones against
+        if: github.event_name != 'push'
+        run: |
+          site=$(gh api "repos/${{ github.repository }}/pages" --jq .html_url 2>/dev/null) || site="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"
+          curl -fsSL --retry 2 --max-time 120 -o "$RUNNER_TEMP/previous-elements.json" "${site%/}/data/satellites.json" || echo "The published elements could not be read - no comparison this time"
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Refresh orbital data (CelesTrak asks for at most one download every 2 hours)
         if: github.event_name != 'push'
-        run: node scripts/fetch-data.mjs || echo "CelesTrak unreachable - publishing the stored snapshot"
+        run: node scripts/fetch-data.mjs --previous="$RUNNER_TEMP/previous-elements.json" || echo "CelesTrak unreachable - publishing the stored snapshot"
       # GitHub switches off scheduled workflows in a repository that has had no activity for
       # 60 days (the site stays up; only this refresh would stop). Re-enabling the workflow
       # through the API on each scheduled run resets that timer.

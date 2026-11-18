@@ -8,6 +8,7 @@
 
 import * as THREE from 'three';
 import type { Catalog } from '../data/catalog.ts';
+import { elementAgeDays } from '../data/changes.ts';
 import { CATEGORY_COLORS, ORBIT_COLORS, type Satellite } from '../data/types.ts';
 import type { SimClient } from '../worker/SimClient.ts';
 import { EARTH_RADIUS_KM, type SceneKit } from './scene.ts';
@@ -44,19 +45,24 @@ const fragmentShader = /* glsl */ `
     gl_FragColor = vec4(vColor * (0.55 + core * 1.25), core * 0.95 + halo * 0.35);
   }`;
 
-export type ColorMode = 'category' | 'orbit' | 'altitude' | 'owner' | 'age' | 'tilt';
+export type ColorMode = 'category' | 'orbit' | 'altitude' | 'owner' | 'age' | 'tilt' | 'fresh';
 
 /** A colour ramp: value → colour stops, interpolated (optionally on a log scale). */
 type Ramp = { stops: [number, string][]; log?: boolean };
 
 /** Altitude (km), on a log scale from low orbit to beyond GEO. */
 export const ALTITUDE_STOPS: [number, string][] = [[300, '#5ad1ff'], [800, '#6dffb0'], [2000, '#f7f06a'], [20000, '#ff9d4d'], [40000, '#ff5d8f']];
-const RAMPS: Record<'altitude' | 'age' | 'tilt', Ramp> = {
+const RAMPS: Record<'altitude' | 'age' | 'tilt' | 'fresh', Ramp> = {
   altitude: { stops: ALTITUDE_STOPS, log: true },
   // launch year: the oldest hardware glows red, this year's is cyan
   age: { stops: [[1975, '#ff5d5d'], [2000, '#ff9d4d'], [2015, '#f7f06a'], [2022, '#6dffb0'], [2026, '#5ad1ff']] },
   // inclination: equatorial → mid-latitude → polar → retrograde (sun-synchronous and beyond)
   tilt: { stops: [[0, '#f7f06a'], [35, '#ff9d4d'], [55, '#5ad1ff'], [90, '#ffffff'], [100, '#b693ff'], [145, '#ff5d8f']] },
+  // days since the elements were measured: today's are bright; older ones fade to a dim grey,
+  // because the further a position is predicted from its measurement the less it can be trusted
+  // (well past STALE_DAYS in data/changes.ts it may be far off). Uneven steps, evenly spaced in
+  // the legend, since nearly everything is under two days old and the interesting part is the tail.
+  fresh: { stops: [[0, '#b8f6ff'], [1, '#5ad1ff'], [3, '#5f8fb8'], [7, '#55626f'], [14, '#3a4048']] },
 };
 
 /** Who owns it, grouped into the handful of operators that own nearly everything. */
@@ -84,7 +90,7 @@ function ramp(r: Ramp, value: number): string {
   return stops[0][1];
 }
 
-export function colorFor(sat: Satellite, mode: ColorMode, owner?: string): string {
+export function colorFor(sat: Satellite, mode: ColorMode, owner?: string, nowMs = Date.now()): string {
   switch (mode) {
     case 'category': return CATEGORY_COLORS[sat.category];
     case 'orbit': return ORBIT_COLORS[sat.orbitClass];
@@ -92,6 +98,7 @@ export function colorFor(sat: Satellite, mode: ColorMode, owner?: string): strin
     case 'age': return sat.launchYear ? ramp(RAMPS.age, sat.launchYear) : OWNER_OTHER;
     case 'tilt': return ramp(RAMPS.tilt, sat.inclinationDeg);
     case 'owner': return (owner && ownerColor.get(owner)) || OWNER_OTHER;
+    case 'fresh': return ramp(RAMPS.fresh, elementAgeDays(sat.omm, nowMs)); // an epoch in the future counts as fresh
   }
 }
 
@@ -103,6 +110,7 @@ export function legendFor(mode: ColorMode): Legend {
     case 'altitude': return { gradient: bar(RAMPS.altitude), ticks: ['300 km', '2,000', '40,000 km'] };
     case 'age': return { gradient: bar(RAMPS.age), ticks: ['1975', '2015', 'this year'] };
     case 'tilt': return { gradient: bar(RAMPS.tilt), ticks: ['equatorial', 'polar', 'backwards'] };
+    case 'fresh': return { gradient: bar(RAMPS.fresh), ticks: ['today', '3 days old', '2 weeks or more'] };
     case 'owner': return { swatches: [...OWNER_GROUPS.map(([name, color]) => [name, color] as [string, string]), ['Everyone else', OWNER_OTHER]] };
     default: return null;
   }
@@ -166,12 +174,16 @@ export class SatelliteCloud {
     this.attrSize = new THREE.BufferAttribute(new Float32Array(sizes), 1);
     this.geometry.setAttribute('aSize', this.attrSize);
     this.highlight = null;
+    // The owner lookup still indexes the PREVIOUS catalogue, and the repaint below would ask it
+    // about slots that catalogue never had (adding a designed satellite did exactly that and
+    // threw). Drop it; main.ts hands over the new lookup straight after (setOwners).
+    this.owners = () => undefined;
     this.setColorMode(this.colorMode);
     this.geometry.setAttribute('aVisible', this.attrVisible);
     this.points.visible = false; // until the first snapshot arrives
   }
 
-  /** Recolour every point by the chosen property (type, orbit, altitude, owner, launch year or tilt). */
+  /** Recolour every point by the chosen property (type, orbit, altitude, owner, launch year, tilt or data age). */
   setColorMode(mode: ColorMode): void {
     this.colorMode = mode;
     this.repaint();
@@ -195,9 +207,10 @@ export class SatelliteCloud {
     const colors = this.attrColor.array as Float32Array;
     const sizes = this.attrSize.array as Float32Array;
     const group = this.highlight;
+    const now = Date.now(); // one "now" for the whole repaint (data age is measured from the real present)
     for (const sat of this.catalog.sats) {
       const i = sat.index;
-      color.set(colorFor(sat, this.colorMode, this.owners(i))); // sRGB hex → linear working space
+      color.set(colorFor(sat, this.colorMode, this.owners(i), now)); // sRGB hex → linear working space
       const level = !group ? 1 : group.has(i) ? 1.5 : 0.14;
       colors[i * 3] = color.r * level;
       colors[i * 3 + 1] = color.g * level;

@@ -6,10 +6,17 @@
 // Politeness: CelesTrak only refreshes its data every ~2 hours and asks clients not to
 // re-download more often than that. This script refuses to re-download a snapshot that
 // is younger than 2 hours (use --force to override) and the app itself never polls.
+//
+// After a successful download it also compares the new elements with the ones it replaces
+// and writes public/data/changes.json (the "Orbit changes" list; see diff-elements.mjs).
+// --previous=<file> compares against that snapshot instead of the one on disk: the deploy
+// workflow passes the elements of the site as published, because the copy in the repository
+// is weeks old. If that file cannot be read there is no comparison, and no changes file.
 
 import { mkdir, readFile, writeFile, access } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readSnapshot, writeChanges } from './diff-elements.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SNAPSHOT = join(ROOT, 'public/data/satellites.json');
@@ -58,8 +65,8 @@ async function fetchTextures() {
 
 async function fetchSatellites() {
   const force = process.argv.includes('--force');
-  if (!force && (await exists(SNAPSHOT))) {
-    const old = JSON.parse(await readFile(SNAPSHOT, 'utf8'));
+  const old = await readSnapshot(SNAPSHOT); // what we have now: the "before" of the comparison below
+  if (!force && old) {
     const ageHours = (Date.now() - Date.parse(old.fetchedAt)) / 3.6e6;
     if (ageHours < 2) {
       console.log(`  snapshot is only ${ageHours.toFixed(1)} h old (${old.objects.length} objects) — not re-downloading.`);
@@ -107,6 +114,10 @@ async function fetchSatellites() {
   await mkdir(dirname(SNAPSHOT), { recursive: true });
   await writeFile(SNAPSHOT, JSON.stringify(snapshot));
   console.log(`  wrote ${snapshot.objects.length} objects to public/data/satellites.json`);
+
+  console.log('Orbit changes since the previous download:');
+  const previousArg = process.argv.find((arg) => arg.startsWith('--previous='));
+  await writeChanges(previousArg ? await readSnapshot(previousArg.slice('--previous='.length)) : old, snapshot);
 }
 
 // ---------------------------------------------------------------- catalogue facts (SATCAT)
