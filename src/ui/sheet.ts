@@ -34,7 +34,14 @@ export class Sheets {
   }
 
   private get tallest(): number {
-    return Math.max(COLLAPSED, window.innerHeight - 48 - 54 - 28); // below the top bar, above the tab bar
+    return Math.max(COLLAPSED, window.innerHeight - 70 - 84 - 12); // below the search field, above the tab bar
+  }
+
+  /** Glide to a height (used after a tap or a flick) instead of jumping. */
+  private glide(px: number): void {
+    document.documentElement.classList.add('sheet-gliding'); // mobile.css animates max-height while this is set
+    this.set(px);
+    setTimeout(() => document.documentElement.classList.remove('sheet-gliding'), 440);
   }
 
   private set(px: number): void {
@@ -45,17 +52,24 @@ export class Sheets {
 
   private makeDraggable(head: HTMLElement): void {
     let startY = 0, startHeight = 0, moved = false, active = false;
+    let lastY = 0, lastT = 0, velocity = 0; // px per ms, positive = moving down
     head.addEventListener('pointerdown', (event) => {
       if (!Sheets.isPhone) return;
       if ((event.target as HTMLElement).closest('button, input, a, label')) return; // close, star, switches still work
       active = true;
       moved = false;
-      startY = event.clientY;
+      startY = lastY = event.clientY;
+      lastT = event.timeStamp;
+      velocity = 0;
       startHeight = head.parentElement!.getBoundingClientRect().height;
       head.setPointerCapture(event.pointerId);
     });
     head.addEventListener('pointermove', (event) => {
       if (!active) return;
+      const dt = event.timeStamp - lastT;
+      if (dt > 0) velocity = 0.7 * velocity + 0.3 * ((event.clientY - lastY) / dt);
+      lastY = event.clientY;
+      lastT = event.timeStamp;
       const dy = event.clientY - startY;
       if (Math.abs(dy) > 4) moved = true;
       if (moved) this.set(startHeight - dy);
@@ -64,7 +78,10 @@ export class Sheets {
       if (!active) return;
       active = false;
       // A tap (no drag) toggles between tucked away and the default height.
-      if (!moved) this.set(this.current <= COLLAPSED + 24 ? window.innerHeight * 0.58 : COLLAPSED);
+      if (!moved) this.glide(this.current <= COLLAPSED + 24 ? window.innerHeight * 0.58 : COLLAPSED);
+      // A quick flick carries on in its direction: down tucks the sheet away, up opens it fully.
+      else if (velocity > 0.5) this.glide(COLLAPSED); // 500 px/s counts as a deliberate fling
+      else if (velocity < -0.5) this.glide(this.tallest);
     };
     head.addEventListener('pointerup', end);
     head.addEventListener('pointercancel', () => (active = false));

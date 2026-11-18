@@ -2,7 +2,16 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="theme-color" content="#05080f" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Apsis" />
+    <meta name="description" content="Every tracked object in Earth orbit, live, in 3D — with real-time close-approach screening." />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
     <title>Apsis — orbital tracking console</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23070d18'/%3E%3Cg transform='rotate(-30 16 16)'%3E%3Cpath d='M27.5 16a11.5 7 0 1 1-3.4-4.95' fill='none' stroke='%23e8f1fb' stroke-width='2.2' stroke-linecap='round'/%3E%3Ccircle cx='12.4' cy='16' r='3.5' fill='%23e8f1fb'/%3E%3Ccircle cx='26.7' cy='13.3' r='2.4' fill='%237fe3ff'/%3E%3C/g%3E%3C/svg%3E" />
   </head>
@@ -106,6 +115,26 @@
           <button id="howto-open" class="btn">How it works</button>
         </nav>
       </header>
+
+      <!-- ============ phones only: view chips under the search field, round buttons on the right edge ============ -->
+      <div id="m-chips" class="m-only" role="group" aria-label="Views">
+        <button data-proxy="[data-view='1']">Earth</button>
+        <button data-proxy="[data-view='2']">Low orbit</button>
+        <button data-proxy="[data-view='3']">GEO ring</button>
+        <button data-proxy="#view-sky">Sky view</button>
+        <button data-proxy="#autopilot">Autopilot</button>
+      </div>
+      <div id="m-stack" class="m-only">
+        <button data-proxy="#locate-top" aria-label="Show where I am on the globe">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="5.5" /><circle cx="10" cy="10" r="1.6" /><path d="M10 1.5v3M10 15.5v3M1.5 10h3M15.5 10h3" /></svg>
+        </button>
+        <button data-proxy="#share" aria-label="Share: QR code and link">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 12.5V3M6.5 6L10 2.5 13.5 6M4.5 10v6.5h11V10" /></svg>
+        </button>
+        <button data-proxy="#keys-open" aria-label="Controls and tour">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5" /><path d="M7.8 7.8a2.3 2.3 0 1 1 3.3 2.1c-.7.4-1.1.9-1.1 1.6M10 14.3v.2" /></svg>
+        </button>
+      </div>
 
       <!-- ============ tool rail ============ -->
       <nav class="rail" aria-label="Tools">

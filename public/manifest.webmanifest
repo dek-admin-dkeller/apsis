@@ -1,0 +1,16 @@
+{
+  "name": "Apsis — orbital tracking console",
+  "short_name": "Apsis",
+  "id": "./",
+  "description": "Every tracked object in Earth orbit, live, in 3D.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#05080f",
+  "theme_color": "#05080f",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

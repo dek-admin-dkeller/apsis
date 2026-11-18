@@ -44,7 +44,7 @@ status line sit along the bottom.
 | What | How |
 | --- | --- |
 | Look around | drag = rotate, scroll = zoom, right-drag = pan |
-| Inspect an object | click a dot, or search by name / NORAD ID (press `/`). The camera flies to the object and locks on: dragging now turns the view around **it**, not the Earth (`T` unlocks) |
+| Inspect an object | click a dot, or search by name / NORAD ID (press `/`; suggestions show a photo or a 3D-model thumbnail). The camera flies to the object and locks on: dragging now turns the view around **it**, not the Earth (`T` unlocks) |
 | Inspector tabs | **Live** telemetry, ground-track map, altitude chart · **Orbit** shape to scale, orbital elements, speed and sunlight charts · **Passes** over your ground station with a sky chart · **Record** owner, launch, size, a Wikipedia summary and the raw element record |
 | Objects panel (`O`) | filter by type, orbit regime, altitude band; colour by type, orbit, altitude, owner, launch year or tilt; labels, marker size; shortcuts to notable objects |
 | Layers panel (`L`) | orbit path, ground track, coverage footprint, 3D model; ground-station marker, clouds, atmosphere, coastlines and borders, lat/long grid, day/night line; stars, constellations, planets, names in the sky; screening cells (`G`) |
@@ -68,7 +68,7 @@ status line sit along the bottom.
 | Views | `1` `2` `3`, or the three buttons at the foot of the tool rail. Left alone, a whole-Earth view drifts slowly around the planet (Layers → Earth to switch off) |
 | Settings (`,`) | rendering quality, ground-station location, download current elements |
 | How it works | the button in the top bar: a walkthrough of the screening algorithm with a live trace, live hash-table statistics, the look-ahead method and the benchmark |
-| Phones | below 760 px the rail becomes a bottom tab bar and panels become bottom sheets. Drag a sheet by its header to any height, or all the way down to give the 3D model the whole screen |
+| Phones | below 760 px the layout becomes a map-style app: a floating search field with view chips under it, round buttons on the right edge, a floating four-tool tab bar, and rounded sheets you can drag to any height or flick open and shut. It can be added to the home screen and then runs full screen like an app |
 | Other keys | `P` save a picture, `F` full screen, `H` hide the interface, `?` all controls, `Esc` close / deselect |
 
 ## How the spatial hash works

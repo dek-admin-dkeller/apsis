@@ -1339,3 +1339,6 @@ body.quiet-ui .timebar[data-direction='back']:not(.is-open) #speeds button.is-on
 #suggestions li .thumb { flex: none; width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--line-strong); background: var(--inset); object-fit: contain; }
 #suggestions li .thumb.is-photo { object-fit: cover; }
 #suggestions li { padding-top: 4px; padding-bottom: 4px; }
+
+/* phone-only controls (laid out in mobile.css) */
+.m-only { display: none; }

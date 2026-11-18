@@ -386,6 +386,15 @@ function updateViewShift(): void {
   else kit.camera.clearViewOffset();
 }
 
+// Phone-only chips and round buttons simply press the control they stand in for.
+for (const button of document.querySelectorAll<HTMLElement>('[data-proxy]')) {
+  button.addEventListener('click', () => document.querySelector<HTMLElement>(button.dataset.proxy!)?.click());
+}
+/** A short tick on phones that support it (Android), so a tap that selects something can be felt. */
+const haptic = () => {
+  if (isPhone()) navigator.vibrate?.(8);
+};
+
 // ---- small helpers -------------------------------------------------------------------------
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -439,6 +448,7 @@ function select(sat: Satellite | null): void {
   model.setKind(describe(sat).kind);
   rig.follow = true;
   if (isPhone()) openPanel(null); // one sheet at a time on a phone
+  haptic();
   inspector.show(sat, facts.get(sat.noradId), true);
   inspector.setStarred(watch.has(sat));
   // The two crewed stations also list who is aboard right now.
