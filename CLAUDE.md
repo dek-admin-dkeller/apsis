@@ -413,7 +413,9 @@ elements with the published ones (`changes.json`), and re-enables itself so GitH
 pause the schedule after 60 days of inactivity. A push build downloads nothing from outside:
 `scripts/carry-over.mjs` reads the data files back from the published site and keeps each one
 that parses, has the same top-level fields as the repository's copy and is newer, so a push
-never puts the site back on older data or drops the orbit-change list. `vite.config.ts` uses `base: './'`,
+never puts the site back on older data or drops the orbit-change list. Runs queue rather
+than cancel each other (`cancel-in-progress: false`): the first scheduled refresh was once
+cancelled by a push that arrived seconds later, and the data stayed two days old. `vite.config.ts` uses `base: './'`,
 so the site works from any sub-path.
 
 ## Ideas not built yet

@@ -26,9 +26,13 @@ permissions:
   id-token: write
   actions: write # only for the keep-alive step below
 
+# One deployment at a time, and a run that has started is allowed to finish. With
+# cancel-in-progress a push that arrived while the 8-hourly refresh was running cancelled it,
+# and the site then kept its old data for another 8 hours. Now the push simply waits its turn
+# (and its build keeps the data the refresh has just published).
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
