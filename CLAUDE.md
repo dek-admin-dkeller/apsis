@@ -130,7 +130,8 @@ src/render/                 scene (renderer, bloom, quality presets), globe (Ear
                             previews, thumbnails), cameraRig (fly-to, object focus, Earth drift), firstPerson (ride-along,
                             sky view, phone motion), orbitLine, groundTrack, encounterViz (close-approach drawing),
                             conjunctionMarkers, gridViz, constellation (orbits + coverage map), siteMarker
-src/ui/                     inspector (+ charts), monitor (live pairs), ahead (prediction), encounterPanel, howto
+src/features/               optional modules installed through the App interface (see "Feature modules")
+src/ui/                     app (the App interface), inspector (+ charts), monitor (live pairs), ahead (prediction), encounterPanel, howto
                             (walkthrough), hashTrace, benchmarkModal, filters, search, settings, timeControls, labels,
                             watchlist, feed (launches, trains, lowest), designer, constellations, contacts, crew,
                             share (QR), tour, cinema (autopilot + recording), sheet (phone sheets), landing (welcome
@@ -168,6 +169,25 @@ switches scroll away. Section 8 joins an open sheet to the tab bar (the sheet re
 bar, one outline, one glass); dragged fully down the sheet is "tucked" (22 px: only its grip,
 class `sheet-tucked` on `<html>`), leaving the tab bar. `sheet.ts`'s `COLLAPSED` and
 `tallest` must match the `min-height` and offsets in `mobile.css`.
+
+Phone sky view: the `#m-sky` button calls `skyFromPhone()` in `main.ts`, which asks for the
+location (and, on iOS, the motion sensors) straight from the tap, then enters the sky view
+with `sky-immersive` on `<body>`: `firstPerson.css` hides the whole interface and leaves only
+a faint close button (the banner's own Exit button, restyled), any message, and "Set north"
+when the phone has no compass. Taps do not select objects in that mode.
+
+## Feature modules (`src/features/`)
+
+Features added after the core — radio details, orbit changes, space weather, launches,
+visible passes, the close-approach report, growth by year, the command bar — do not live in
+`main.ts`. Each is one file in `src/features/` exporting `install…(app)`, and talks to the
+rest of the program only through the `App` interface in `src/ui/app.ts` (getters, actions,
+`on…` hooks). `main.ts` builds the single `app` object and calls every installer inside a
+try/catch, so a broken extra cannot stop the tracker. Each module draws inside an empty
+element reserved for it in `index.html` (`#…-body`, `#insp-…`, `#enc-export`); a reserved
+`<details data-feature>` section stays hidden while its body is empty. To add a feature:
+write the module, reserve an element if it needs one, add one import and one name to the
+installer list in `main.ts`, and extend `App` only if the module needs something new.
 
 ## Browser storage keys
 
@@ -229,10 +249,17 @@ an in-app yes plus the browser's own prompt, and stays in `localStorage`.
 
 ## Close-approach view details
 
-- `gridViz.ts` pair mode draws only the two objects' cells (cyan / amber, red while inside the
+- `gridViz.ts` pair mode draws the usual grid of occupied cells around the pair, dimmed and
+  fading with distance, and on top the two objects' cells (cyan / amber, red while inside the
   alert distance unless the pair flies together) plus a faint outline of A's 27-cell block.
   Cells are fixed in space and the objects cross one about every second, so each lit cell
-  fades in and out (a short trail) instead of jumping; the other occupied cells are left out.
+  fades in and out (a short trail) instead of jumping. (Two earlier attempts were rejected by
+  the owner: a full lattice that jumped with the objects, and the pair's cells alone with no
+  grid.)
+- `encounterViz.ts` draws both flight paths as ten-minute arcs through the closest point and
+  rebuilds them further along as the clock runs. They must never be shorter than what the
+  live view can outrun: with only the few seconds around the closest point drawn, the objects
+  left the ends of their lines at once and "the orbits disappeared".
 - `updateEncounter()` in `main.ts` keeps both objects framed (`encAutoFrame`): the camera eases
   back as they separate and in again during a replay; a manual zoom switches that off until
   the pair is re-centred from the panel.
