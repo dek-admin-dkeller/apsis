@@ -1,0 +1,71 @@
+/* The first-visit tour (ui/tour.ts): a highlight ring and a small card beside it. */
+
+.tour {
+  position: fixed;
+  inset: 0;
+  z-index: 35; /* above the interface (#hud, 15), below the full-page overlays (40) */
+  pointer-events: none; /* the app stays usable underneath; only the card takes clicks */
+}
+
+/* Steps that point at nothing: a soft dim over everything instead of a ring. */
+.tour-dim { position: absolute; inset: 0; background: rgba(2, 4, 10, 0.5); opacity: 0; transition: opacity 180ms ease; }
+.tour.is-centred .tour-dim { opacity: 1; }
+
+/* The ring: a hairline box whose huge shadow gently dims the rest of the screen. */
+.tour-ring {
+  position: fixed;
+  border: 1px solid var(--cyan);
+  border-radius: 10px;
+  box-shadow: 0 0 0 9999px rgba(2, 4, 10, 0.42), 0 0 0 4px rgba(127, 227, 255, 0.14);
+  transition: left 180ms ease, top 180ms ease, width 180ms ease, height 180ms ease, opacity 180ms ease;
+}
+.tour.is-centred .tour-ring { opacity: 0; }
+
+.tour-card {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: min(330px, calc(100vw - 24px));
+  padding: 12px 14px 12px;
+  display: grid;
+  gap: 8px;
+  pointer-events: auto;
+  background: var(--solid-strong, #080d18);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  color: var(--text);
+  opacity: 0;
+}
+.tour-card.is-in { animation: tour-in 170ms ease-out forwards; }
+@keyframes tour-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+.tour-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tour-count { font: 11px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--muted); }
+.tour-skip { font-size: 11.5px; color: var(--muted); }
+.tour-skip:hover { color: var(--text); }
+
+.tour-title { font: 600 16px/1.25 var(--font-display); letter-spacing: -0.01em; margin: 0; }
+.tour-body { margin: 0; font: 13px/1.55 var(--font-ui); color: #b9c8da; }
+.tour-extra { justify-self: start; }
+.tour-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.tour-foot .btn { min-width: 72px; }
+
+.tour-card :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.tour-card .btn-primary:focus-visible { outline-color: var(--text); }
+
+/* Phones: the card docks to the bottom of the screen; the ring is still drawn. */
+@media (max-width: 760px) {
+  .tour-card {
+    left: 12px !important;
+    right: 12px;
+    top: auto !important;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    width: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-card.is-in { animation: none; opacity: 1; }
+  .tour-ring, .tour-dim { transition: none; }
+}

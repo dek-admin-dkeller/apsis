@@ -1,0 +1,9 @@
+node_modules
+dist
+.DS_Store
+*.local
+
+# course hand-outs and working notes: not part of the published project
+*.pdf
+FABLE_BUILD_PROMPT.md
+.claude/

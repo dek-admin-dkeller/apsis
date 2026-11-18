@@ -1,0 +1,766 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Apsis — orbital tracking console</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23070d18'/%3E%3Cg transform='rotate(-30 16 16)'%3E%3Cpath d='M27.5 16a11.5 7 0 1 1-3.4-4.95' fill='none' stroke='%23e8f1fb' stroke-width='2.2' stroke-linecap='round'/%3E%3Ccircle cx='12.4' cy='16' r='3.5' fill='%23e8f1fb'/%3E%3Ccircle cx='26.7' cy='13.3' r='2.4' fill='%237fe3ff'/%3E%3C/g%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+
+    <!-- Loading screen -->
+    <div id="loading">
+      <div class="launch" aria-hidden="true">
+        <div class="rocket">
+          <svg viewBox="0 0 48 124">
+            <defs>
+              <linearGradient id="hull" x1="0" x2="1">
+                <stop offset="0" stop-color="#8fa1b8" /><stop offset="0.35" stop-color="#f4f8fc" /><stop offset="0.7" stop-color="#cfd9e6" /><stop offset="1" stop-color="#6f8098" />
+              </linearGradient>
+            </defs>
+            <path d="M10 90L1 119l9-6zM38 90l9 29-9-6z" fill="#5f7189" />
+            <path d="M24 1C33 14 38 32 38 54v58H10V54C10 32 15 14 24 1z" fill="url(#hull)" />
+            <path d="M24 1c4.2 6 7.5 13 9.8 21H14.200C16.500 14 19.800 7 24 1z" fill="#1b2a41" />
+            <rect x="10" y="80" width="28" height="5" fill="#7fe3ff" />
+            <circle cx="24" cy="46" r="6" fill="#0d2238" stroke="#9fb4c9" stroke-width="1.5" />
+            <path d="M22 112h4l2.500 11h-9z" fill="#3c4a5e" /><path d="M13 112h5l1.500 9h-8zM30 112h5l1.500 9h-8z" fill="#465469" />
+          </svg>
+          <i class="flame"></i>
+          <i class="plume"></i>
+        </div>
+        <i class="smoke s1"></i><i class="smoke s2"></i><i class="smoke s3"></i>
+        <i class="pad"></i>
+      </div>
+      <div class="loading-inner">
+        <p class="wordmark">
+          <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
+            <g transform="rotate(-30 16 16)">
+              <path d="M27.5 16a11.5 7 0 1 1-3.4-4.95" fill="none" stroke="#e8f1fb" stroke-width="1.9" stroke-linecap="round" />
+              <circle cx="12.4" cy="16" r="3.3" fill="#e8f1fb" />
+              <circle cx="26.7" cy="13.3" r="2.1" fill="#7fe3ff" />
+            </g>
+          </svg>
+          <span>Apsis</span>
+        </p>
+        <p class="loading-line">Loading <span id="loading-count" class="num">0</span> tracked objects…</p>
+        <div class="loading-bar"><i id="loading-bar"></i></div>
+        <p class="loading-sub" id="loading-status">Reading orbital elements</p>
+      </div>
+    </div>
+
+    <!-- Things drawn over the globe -->
+    <div id="labels"></div>
+    <div id="reticle" class="is-hidden"></div>
+    <div id="range-tag" class="is-hidden"></div>
+    <div id="tooltip" class="is-hidden"></div>
+
+    <div id="hud" class="hud-hidden">
+      <!-- ============ top bar ============ -->
+      <header class="topbar">
+        <div class="brand">
+          <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
+            <g transform="rotate(-30 16 16)">
+              <path d="M27.5 16a11.5 7 0 1 1-3.4-4.95" fill="none" stroke="#e8f1fb" stroke-width="1.9" stroke-linecap="round" />
+              <circle cx="12.4" cy="16" r="3.3" fill="#e8f1fb" />
+              <circle cx="26.7" cy="13.3" r="2.1" fill="#7fe3ff" />
+            </g>
+          </svg>
+          <h1>Apsis</h1>
+          <span class="brand-sub">Orbital tracking console</span>
+        </div>
+        <div class="search">
+          <svg class="search-icon" viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.8" /><path d="M13 13l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg>
+          <input id="search" type="search" placeholder="Find an object by name or NORAD ID" autocomplete="off" spellcheck="false" aria-label="Search objects" />
+          <kbd class="search-key">/</kbd>
+          <ul id="suggestions" role="listbox"></ul>
+        </div>
+        <dl class="readouts">
+          <div><dt>Tracked</dt><dd id="stat-tracked">0</dd></div>
+          <div><dt>Shown</dt><dd id="visible-count">0</dd></div>
+          <div id="readout-pairs"><dt>Close approaches</dt><dd id="stat-pairs">off</dd></div>
+          <div><dt>Elements from</dt><dd id="data-age">–</dd></div>
+        </dl>
+        <nav class="top-actions">
+          <button id="locate-top" class="tool" title="Show where I am on the globe" aria-label="Show where I am on the globe">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="5.5" /><circle cx="10" cy="10" r="1.6" /><path d="M10 1.5v3M10 15.5v3M1.5 10h3M15.5 10h3" /></svg>
+          </button>
+          <button id="share" class="tool" title="Copy a link to this view" aria-label="Copy a link to this view">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8.5 11.5a3.5 3.5 0 0 0 5 0l3-3a3.5 3.5 0 0 0-5-5l-1 1M11.5 8.5a3.5 3.5 0 0 0-5 0l-3 3a3.5 3.5 0 0 0 5 5l1-1" /></svg>
+          </button>
+          <button id="shot" class="tool" title="Save a picture of the view (P)" aria-label="Save a picture of the view">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6.5h3l1.2-2h5.6l1.2 2h3v9H3z" /><circle cx="10" cy="10.8" r="2.8" /></svg>
+          </button>
+          <button id="fullscreen" class="tool" title="Full screen (F)" aria-label="Full screen">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7.5V3h4.5M12.5 3H17v4.5M17 12.5V17h-4.5M7.5 17H3v-4.5" /></svg>
+          </button>
+          <button id="keys-open" class="tool" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="5" width="15" height="10" rx="1.5" /><path d="M5.5 8h1M9.5 8h1M13.5 8h1M6 12h8" /></svg>
+          </button>
+          <button id="howto-open" class="btn">How it works</button>
+        </nav>
+      </header>
+
+      <!-- ============ tool rail ============ -->
+      <nav class="rail" aria-label="Tools">
+        <button class="rail-btn" data-panel="objects" title="Objects and filters (O)">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h14M5.5 10h9M8 15h4" /></svg><span>Objects</span>
+        </button>
+        <button class="rail-btn" data-panel="layers" title="Map layers (L)">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3l7 3.6-7 3.6-7-3.6zM3 10.2l7 3.6 7-3.6M3 13.6l7 3.6 7-3.6" /></svg><span>Layers</span>
+        </button>
+        <button class="rail-btn" data-panel="conj" title="Close-approach monitor (C)">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" /><circle cx="10" cy="10" r="3" /><path d="M10 1.5v3M10 15.5v3M1.5 10h3M15.5 10h3" /></svg><span>Monitor</span>
+          <i class="rail-badge is-hidden" id="rail-badge"></i>
+        </button>
+        <button class="rail-btn" data-panel="settings" title="Settings (,)">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h7M14 6h3M3 14h3M10 14h7" /><circle cx="12" cy="6" r="2" /><circle cx="8" cy="14" r="2" /></svg><span>Settings</span>
+        </button>
+      <span class="rail-gap"></span>
+        <span class="rail-label">View</span>
+        <button class="rail-view" data-view="1" title="Whole Earth (1)">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" /><path d="M3 10h14M10 3c2.5 2 2.5 12 0 14M10 3c-2.5 2-2.5 12 0 14" /></svg><span>Earth</span>
+        </button>
+        <button class="rail-view" data-view="2" title="Low-orbit swarm (2)">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M1.5 17a12 12 0 0 1 17 0" /><path d="M3 11.500a10 10 0 0 1 14 0" stroke-dasharray="1.5 2.5" /><circle cx="13.5" cy="7" r="1.3" /></svg><span>Low orbit</span>
+        </button>
+        <button class="rail-view" data-view="3" title="Geostationary ring (3)">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="2.5" /><ellipse cx="10" cy="10" rx="8.5" ry="4" /></svg><span>GEO ring</span>
+        </button>
+        <button class="rail-view" id="view-sky" title="Stand at the ground station and look up (4)">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 15.5h16M4 15.5a6 6 0 0 1 12 0" /><path d="M10 4.5v1.5M5 6.5l1 1M15 6.5l-1 1" /></svg><span>Sky</span>
+        </button>
+      </nav>
+
+      <!-- ============ left dock: one tool panel at a time ============ -->
+      <aside class="dock dock-left">
+        <!-- Objects -->
+        <section class="panel is-hidden" id="panel-objects">
+          <header class="panel-head"><h2>Objects</h2><button class="icon-btn" data-close-panel aria-label="Close panel">×</button></header>
+          <div class="panel-body">
+            <details class="sec" open>
+              <summary>Watchlist</summary>
+              <ol class="watch-list" id="watch-list"></ol>
+              <p class="note" id="watch-empty">Star an object in its inspector to keep it here.</p>
+            </details>
+            <details class="sec" open>
+              <summary>Type</summary>
+              <div class="chip-grid" id="category-chips"></div>
+            </details>
+            <details class="sec" open>
+              <summary>Orbit regime</summary>
+              <div class="chip-row" id="orbit-chips"></div>
+              <div class="field">
+                <div class="field-head"><span>Altitude band</span><output id="alt-label">any</output></div>
+                <div class="dual-range">
+                  <input type="range" id="alt-min" min="0" max="1000" value="0" aria-label="Minimum altitude" />
+                  <input type="range" id="alt-max" min="0" max="1000" value="1000" aria-label="Maximum altitude" />
+                </div>
+              </div>
+            </details>
+            <details class="sec" open>
+              <summary>Appearance</summary>
+              <p class="field-label">Colour by</p>
+              <div class="segmented" data-setting="colorMode">
+                <button data-value="category">Type</button><button data-value="orbit">Orbit</button><button data-value="altitude">Altitude</button>
+              </div>
+              <div class="legend is-hidden" id="altitude-legend">
+                <i></i>
+                <div><span>300 km</span><span>2,000</span><span>40,000 km</span></div>
+              </div>
+              <p class="field-label">Name labels</p>
+              <div class="segmented" data-setting="labels">
+                <button data-value="off">Off</button><button data-value="notable">Notable</button><button data-value="nearby">Nearby</button>
+              </div>
+              <div class="field"><div class="field-head"><span>Marker size</span><output id="size-label"></output></div>
+                <input type="range" data-setting="pointSize" min="0.6" max="2.2" step="0.1" aria-label="Marker size" /></div>
+              <div class="field"><div class="field-head"><span>Glow</span><output id="glow-label"></output></div>
+                <input type="range" data-setting="glow" min="0" max="1.4" step="0.05" aria-label="Glow strength" /></div>
+            </details>
+            <details class="sec" open>
+              <summary>Notable objects</summary>
+              <div class="quick" id="quick-list"></div>
+            </details>
+          </div>
+        </section>
+
+        <!-- Layers -->
+        <section class="panel is-hidden" id="panel-layers">
+          <header class="panel-head"><h2>Layers</h2><button class="icon-btn" data-close-panel aria-label="Close panel">×</button></header>
+          <div class="panel-body">
+            <details class="sec" open>
+              <summary>Selected object</summary>
+              <label class="row-toggle"><span>Orbit path</span><input type="checkbox" data-setting="orbitPath" /></label>
+              <label class="row-toggle"><span>Ground track</span><input type="checkbox" data-setting="groundTrack" /></label>
+              <label class="row-toggle"><span>Coverage footprint</span><input type="checkbox" data-setting="footprint" /></label>
+              <label class="row-toggle"><span>3D model</span><input type="checkbox" data-setting="model" /></label>
+              <label class="row-toggle"><span>Slowly circle the object</span><input type="checkbox" data-setting="autoOrbit" /></label>
+            </details>
+            <details class="sec" open>
+              <summary>Earth</summary>
+              <label class="row-toggle"><span>Slowly circle the Earth</span><input type="checkbox" data-setting="earthDrift" /></label>
+              <label class="row-toggle"><span>Ground station marker</span><input type="checkbox" data-setting="siteMarker" /></label>
+              <label class="row-toggle"><span>Clouds</span><input type="checkbox" data-setting="clouds" /></label>
+              <label class="row-toggle"><span>Atmosphere</span><input type="checkbox" data-setting="atmosphere" /></label>
+              <label class="row-toggle"><span>Coastlines and borders</span><input type="checkbox" data-setting="borders" /></label>
+              <label class="row-toggle"><span>Latitude / longitude grid</span><input type="checkbox" data-setting="graticule" /></label>
+              <label class="row-toggle"><span>Day / night line</span><input type="checkbox" data-setting="terminator" /></label>
+            </details>
+            <details class="sec" open>
+              <summary>Sky</summary>
+              <label class="row-toggle"><span>Stars and Milky Way</span><input type="checkbox" data-setting="stars" /></label>
+              <label class="row-toggle"><span>Constellations</span><input type="checkbox" data-setting="constellations" /></label>
+              <label class="row-toggle"><span>Planets</span><input type="checkbox" data-setting="planets" /></label>
+              <label class="row-toggle"><span>Names in the sky</span><input type="checkbox" data-setting="skyLabels" /></label>
+            </details>
+            <details class="sec" open>
+              <summary>Analysis</summary>
+              <label class="row-toggle"><span>Screening cells <kbd>G</kbd></span><input type="checkbox" id="layer-grid" /></label>
+              <p class="note" id="grid-note"></p>
+            </details>
+          </div>
+        </section>
+
+        <!-- Close-approach monitor -->
+        <section class="panel is-hidden" id="panel-conj">
+          <header class="panel-head">
+            <h2>Close-approach monitor</h2>
+            <button id="conj-toggle" class="switch" role="switch" aria-checked="false" aria-label="Screening on or off (C)" title="Screening on / off (C)"><i></i></button>
+            <button class="icon-btn" data-close-panel aria-label="Close panel">×</button>
+          </header>
+          <div class="tabs" id="conj-tabs" role="tablist">
+            <button role="tab" data-tab="now" class="is-on">Right now</button>
+            <button role="tab" data-tab="ahead">Coming hours</button>
+          </div>
+          <div class="panel-body is-hidden" id="ahead">
+            <p class="note">Predict which objects will pass close to each other. Pairs that fly together are left out.</p>
+            <p class="field-label">Look ahead</p>
+            <div class="segmented" id="ahead-hours">
+              <button data-value="1">1 hour</button><button data-value="6" class="is-on">6 hours</button><button data-value="24">24 hours</button>
+            </div>
+            <p class="field-label">Report passes closer than</p>
+            <div class="segmented" id="ahead-km">
+              <button data-value="1" class="is-on">1 km</button><button data-value="2">2 km</button><button data-value="5">5 km</button>
+            </div>
+            <button class="btn btn-primary wide" id="ahead-run">Scan</button>
+            <div class="ahead-bar is-hidden" id="ahead-bar"><i></i></div>
+            <p class="note" id="ahead-status"></p>
+            <div class="segmented is-hidden" id="ahead-sort">
+              <button data-value="miss" class="is-on">Closest first</button><button data-value="time">Soonest first</button>
+            </div>
+            <ol id="ahead-list"></ol>
+          </div>
+          <div class="panel-body" id="conj-now">
+            <div class="field first">
+              <div class="field-head"><span>Alert distance</span><output id="d-label">10 km</output></div>
+              <input type="range" id="d-slider" min="1" max="50" step="1" value="10" aria-label="Alert distance in km" />
+            </div>
+            <dl class="tiles">
+              <div><dt>Pairs inside</dt><dd id="conj-count">–</dd></div>
+              <div><dt>Closest</dt><dd id="conj-closest">–</dd></div>
+              <div><dt>Scan time</dt><dd id="conj-time">–</dd></div>
+            </dl>
+            <label class="row-toggle"><span>Hide docked and co-flying pairs</span><input type="checkbox" id="conj-hide-docked" checked /></label>
+            <p class="note" id="conj-off-note">Switch the monitor on to check every shown object against all the others about once a second.</p>
+            <ol id="pair-list" class="is-hidden"></ol>
+            <p class="note" id="conj-foot"></p>
+            <button class="link" id="conj-how">How the screening works</button>
+          </div>
+        </section>
+
+        <!-- Settings -->
+        <section class="panel is-hidden" id="panel-settings">
+          <header class="panel-head"><h2>Settings</h2><button class="icon-btn" data-close-panel aria-label="Close panel">×</button></header>
+          <div class="panel-body">
+            <details class="sec" open>
+              <summary>Rendering <span class="sum-note" id="fps-label"></span></summary>
+              <div class="segmented" data-setting="quality">
+                <button data-value="auto">Auto</button><button data-value="high">High</button><button data-value="balanced">Balanced</button><button data-value="fast">Fast</button>
+              </div>
+              <label class="row-toggle"><span>Frosted panels</span><input type="checkbox" data-setting="glass" /></label>
+              <label class="row-toggle"><span>Shrink and fade the time bar when not in use</span><input type="checkbox" data-setting="quietUi" /></label>
+            </details>
+            <details class="sec" open>
+              <summary>Ground station</summary>
+              <p class="note">Passes, range and look angles are worked out for this place.</p>
+              <label class="text-field"><span>Name</span><input type="text" data-setting="siteName" maxlength="40" spellcheck="false" /></label>
+              <div class="pair-fields">
+                <label class="text-field"><span>Latitude °</span><input type="number" data-setting="siteLat" min="-90" max="90" step="0.01" /></label>
+                <label class="text-field"><span>Longitude °</span><input type="number" data-setting="siteLon" min="-180" max="180" step="0.01" /></label>
+              </div>
+              <button class="btn wide" id="locate">Use my location</button>
+            </details>
+            <details class="sec" open>
+              <summary>Data</summary>
+              <p class="note" id="data-note"></p>
+              <button id="refresh" class="btn wide" title="One request to CelesTrak; keeps the saved data if it fails">Download current elements</button>
+            </details>
+            <button id="display-reset" class="btn wide">Reset all settings</button>
+          </div>
+        </section>
+      </aside>
+
+      <!-- ============ right dock: inspector / encounter ============ -->
+      <aside class="dock dock-right">
+        <section class="panel is-hidden" id="inspector" aria-live="polite">
+          <header class="insp-head">
+            <i class="dot" id="insp-dot"></i>
+            <div class="insp-title">
+              <h2 id="insp-name"></h2>
+              <p id="insp-sub"></p>
+            </div>
+            <button id="insp-star" class="icon-btn star" aria-pressed="false" aria-label="Add to the watchlist" title="Add to the watchlist">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.6l2.3 4.7 5.2.8-3.75 3.65.9 5.15L10 14.45 5.35 16.9l.9-5.15L2.5 8.1l5.2-.8z" /></svg>
+            </button>
+            <button id="insp-close" class="icon-btn" aria-label="Deselect (Esc)" title="Deselect (Esc)">×</button>
+          </header>
+          <div class="insp-hero">
+            <canvas id="insp-model"></canvas>
+            <img id="insp-photo" class="is-hidden" alt="" referrerpolicy="no-referrer" />
+            <span class="hero-tag" id="insp-kind"></span>
+            <span class="hero-tag right" id="insp-status"></span>
+            <div class="hero-switch is-hidden" id="hero-switch" role="group" aria-label="Picture">
+              <button data-hero="photo" class="is-on">Photo</button><button data-hero="model">3D</button>
+            </div>
+            <a class="hero-credit is-hidden" id="insp-credit" target="_blank" rel="noopener noreferrer"></a>
+            <button class="hero-ride" id="insp-ride" title="See what this object sees (V)">Ride along</button>
+          </div>
+          <div class="acts">
+            <button class="act" id="insp-lock" aria-pressed="true" title="Keep the camera on this object">Camera lock</button>
+            <label class="act" title="Orbit path"><input type="checkbox" data-setting="orbitPath" /><span>Orbit</span></label>
+            <label class="act" title="Path over the ground"><input type="checkbox" data-setting="groundTrack" /><span>Track</span></label>
+            <label class="act" title="Area that can see the object"><input type="checkbox" data-setting="footprint" /><span>Footprint</span></label>
+          </div>
+          <div class="tabs" id="insp-tabs" role="tablist">
+            <button role="tab" data-tab="live" class="is-on">Live</button>
+            <button role="tab" data-tab="orbit">Orbit</button>
+            <button role="tab" data-tab="passes">Passes</button>
+            <button role="tab" data-tab="record">Record</button>
+          </div>
+          <div class="insp-body">
+            <!-- Live -->
+            <div class="tab-body" data-tab-body="live">
+              <dl class="telemetry">
+                <div><dt>Altitude</dt><dd id="tm-alt">–</dd></div>
+                <div><dt>Speed</dt><dd id="tm-speed">–</dd></div>
+                <div><dt>Latitude</dt><dd id="tm-lat">–</dd></div>
+                <div><dt>Longitude</dt><dd id="tm-lon">–</dd></div>
+                <div><dt>Sunlight</dt><dd id="tm-sun">–</dd></div>
+                <div><dt>Over</dt><dd id="tm-over">–</dd></div>
+                <div><dt id="tm-range-label">Range</dt><dd id="tm-range">–</dd></div>
+                <div><dt>Azimuth / elevation</dt><dd id="tm-look">–</dd></div>
+              </dl>
+              <figure class="fig">
+                <figcaption><span>Ground track</span><span class="muted">one orbit back, two ahead</span></figcaption>
+                <canvas id="map-canvas" class="chart map"></canvas>
+              </figure>
+              <figure class="fig">
+                <figcaption><span>Altitude over the next orbit</span><span class="muted" id="alt-range"></span></figcaption>
+                <canvas id="alt-canvas" class="chart"></canvas>
+              </figure>
+            </div>
+            <!-- Orbit -->
+            <div class="tab-body is-hidden" data-tab-body="orbit">
+              <figure class="fig">
+                <figcaption><span>Orbit shape, to scale</span><span class="muted" id="shape-note"></span></figcaption>
+                <canvas id="shape-canvas" class="chart tall"></canvas>
+              </figure>
+              <dl class="kv">
+                <div><dt>Regime</dt><dd id="el-regime"></dd></div>
+                <div><dt>Period</dt><dd id="el-period"></dd></div>
+                <div><dt>Perigee altitude</dt><dd id="el-perigee"></dd></div>
+                <div><dt>Apogee altitude</dt><dd id="el-apogee"></dd></div>
+                <div><dt>Semi-major axis</dt><dd id="el-sma"></dd></div>
+                <div><dt>Eccentricity</dt><dd id="el-ecc"></dd></div>
+                <div><dt>Inclination</dt><dd id="el-inc"></dd></div>
+                <div><dt>Ascending node (RAAN)</dt><dd id="el-raan"></dd></div>
+                <div><dt>Argument of perigee</dt><dd id="el-argp"></dd></div>
+                <div><dt>Mean anomaly at epoch</dt><dd id="el-ma"></dd></div>
+                <div><dt>Revolutions per day</dt><dd id="el-mm"></dd></div>
+                <div><dt>Drag term (B*)</dt><dd id="el-bstar"></dd></div>
+              </dl>
+              <figure class="fig">
+                <figcaption><span>Speed over the next orbit</span><span class="muted" id="speed-range"></span></figcaption>
+                <canvas id="speed-canvas" class="chart"></canvas>
+              </figure>
+              <figure class="fig">
+                <figcaption><span>Sunlight over the next orbit</span><span class="muted" id="sun-note"></span></figcaption>
+                <canvas id="sun-canvas" class="chart strip"></canvas>
+              </figure>
+            </div>
+            <!-- Passes -->
+            <div class="tab-body is-hidden" data-tab-body="passes">
+              <p class="note" id="pass-site"></p>
+              <figure class="fig">
+                <figcaption><span id="polar-title">Path across the sky</span><span class="muted">centre = straight up</span></figcaption>
+                <canvas id="polar-canvas" class="chart square"></canvas>
+              </figure>
+              <ol id="pass-list"></ol>
+              <p class="note" id="pass-note"></p>
+            </div>
+            <!-- Record -->
+            <div class="tab-body is-hidden" data-tab-body="record">
+              <dl class="kv">
+                <div><dt>Purpose</dt><dd id="rc-purpose" class="plain"></dd></div>
+                <div><dt>Operator</dt><dd id="rc-operator" class="plain"></dd></div>
+                <div><dt>Owner</dt><dd id="rc-owner" class="plain"></dd></div>
+                <div><dt>Object type</dt><dd id="rc-type" class="plain"></dd></div>
+                <div><dt>Status</dt><dd id="rc-status" class="plain"></dd></div>
+                <div><dt>Launched</dt><dd id="rc-launch"></dd></div>
+                <div><dt>Launch site</dt><dd id="rc-site" class="plain"></dd></div>
+                <div><dt>Radar size</dt><dd id="rc-rcs"></dd></div>
+                <div><dt>NORAD catalogue number</dt><dd id="rc-norad"></dd></div>
+                <div><dt>International designator</dt><dd id="rc-intl"></dd></div>
+                <div><dt>Elements measured</dt><dd id="rc-epoch"></dd></div>
+                <div><dt>Source group</dt><dd id="rc-group" class="plain"></dd></div>
+              </dl>
+              <p class="note" id="rc-note"></p>
+              <div class="about is-hidden" id="rc-about">
+                <p id="rc-extract"></p>
+                <a id="rc-wiki" target="_blank" rel="noopener noreferrer">Read more on Wikipedia</a>
+              </div>
+              <details class="sec raw">
+                <summary>Orbital element record</summary>
+                <pre id="rc-raw"></pre>
+                <button class="btn wide" id="rc-copy">Copy record</button>
+              </details>
+              <button class="link" id="insp-trace">Follow this object through the screening</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel is-hidden" id="encounter" aria-live="polite">
+          <header class="panel-head">
+            <h2>Close approach</h2>
+            <span class="enc-kind" id="enc-kind"></span>
+            <button id="enc-close" class="icon-btn" aria-label="Close (Esc)" title="Close (Esc)">×</button>
+          </header>
+          <div class="panel-body">
+            <div class="enc-objects">
+              <div class="enc-row"><button id="enc-a" title="Put the camera on this object"><i class="dot a"></i><span></span></button><button class="link" id="enc-a-info">Details</button></div>
+              <div class="enc-row"><button id="enc-b" title="Put the camera on this object"><i class="dot b"></i><span></span></button><button class="link" id="enc-b-info">Details</button></div>
+              <button class="link" id="enc-both">Camera on both</button>
+            </div>
+            <div class="enc-hero">
+              <div><span>Range now</span><b id="enc-range">–</b></div>
+              <div><span id="enc-count-label">To closest point</span><b id="enc-countdown">–</b></div>
+            </div>
+            <dl class="kv">
+              <div><dt>Miss distance</dt><dd id="enc-miss"></dd></div>
+              <div><dt>Passing speed</dt><dd id="enc-speed"></dd></div>
+              <div><dt>Closest point at</dt><dd id="enc-tca"></dd></div>
+              <div><dt>Altitude</dt><dd id="enc-alt"></dd></div>
+              <div><dt>Over</dt><dd id="enc-over"></dd></div>
+            </dl>
+            <figure class="fig">
+              <figcaption><span>Range around the closest point</span><span class="muted" id="enc-span"></span></figcaption>
+              <canvas id="enc-canvas" class="chart"></canvas>
+              <input type="range" id="enc-scrub" min="0" max="1000" value="500" aria-label="Move time through the approach" />
+            </figure>
+            <div class="enc-actions">
+              <button class="btn btn-primary" id="enc-replay">Replay approach</button>
+              <button class="btn" id="enc-goto">Go to closest point</button>
+            </div>
+            <p class="note" id="enc-note"></p>
+          </div>
+        </section>
+      </aside>
+
+      <!-- ============ bottom: transport + status ============ -->
+      <footer class="timebar panel">
+        <div class="tl">
+          <span class="tl-end" id="tl-start">−12 h</span>
+          <div class="tl-track">
+            <i class="tl-now" id="tl-now" title="The real present"></i>
+            <input type="range" id="timeline" min="-720" max="720" step="1" value="0" aria-label="Drag to move through time" title="Drag to move through time" />
+          </div>
+          <span class="tl-end" id="tl-end">+12 h</span>
+        </div>
+        <div class="tb-row">
+          <div class="tb-left">
+            <button class="clock" id="clock-btn" title="Set the date and time">
+              <span id="clock-time"></span>
+              <span class="clock-meta"><span id="clock-date"></span><span>UTC <span id="clock-offset" class="offset"></span></span></span>
+            </button>
+            <input type="datetime-local" id="clock-input" class="is-hidden" step="1" aria-label="Simulation date and time, UTC" />
+          </div>
+          <div class="transport">
+            <button id="step-back" class="tb" title="Back 10 minutes ([)">−10m</button>
+            <button id="reverse" class="tb" title="Run time backwards (R)" aria-pressed="false" aria-label="Run time backwards">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M9 4.5v11l-6.5-5.5zM17 4.5v11l-6.5-5.5z" /></svg>
+            </button>
+            <button id="play" class="play" aria-label="Pause (Space)" title="Play / pause (Space)"></button>
+            <button id="step-fwd" class="tb" title="Forward 10 minutes (])">+10m</button>
+          </div>
+          <div class="tb-right">
+            <div class="segmented" id="speeds" role="group" aria-label="Simulation speed">
+              <button data-speed="1" class="is-on" title="Real time">1×</button>
+              <button data-speed="10" title="10 seconds every second">10×</button>
+              <button data-speed="100" title="About 1.7 minutes every second">100×</button>
+              <button data-speed="1000" title="About 17 minutes every second">1000×</button>
+            </div>
+            <button id="now" class="tb now" title="Back to the real current time (N)">Now</button>
+          </div>
+        </div>
+      </footer>
+
+      <div class="statusbar">
+        <span>Camera <b id="sb-cam">–</b></span>
+        <span>Below <b id="sb-sub">–</b></span>
+        <span class="grow"></span>
+        <span id="sb-screen-wrap" class="is-hidden">Screening <b id="sb-screen">–</b></span>
+        <span>Time rate <b id="sb-rate">1×</b></span>
+        <span><b id="sb-fps">–</b></span>
+        <button class="link" id="about-open">About and credits</button>
+      </div>
+    </div>
+
+    <!-- ============ How it works ============ -->
+    <div id="howto" class="overlay is-hidden">
+      <div class="panel doc">
+        <nav class="doc-nav" id="howto-nav">
+          <p class="doc-brand">How it works</p>
+          <a href="#hw-overview" class="is-on">Overview</a>
+          <a href="#hw-pipeline">From data to dots</a>
+          <a href="#hw-problem">The screening problem</a>
+          <a href="#hw-grid">The spatial hash</a>
+          <a href="#hw-function">The hash function</a>
+          <a href="#hw-trace">Live trace</a>
+          <a href="#hw-table">Live hash table</a>
+          <a href="#hw-ahead">Looking ahead</a>
+          <a href="#hw-proof">Benchmark</a>
+          <a href="#hw-more">Other hash tables</a>
+          <a href="#hw-limits">Limits</a>
+        </nav>
+        <div class="doc-main" id="howto-main">
+          <button class="icon-btn doc-close" id="howto-close" aria-label="Close">×</button>
+
+          <section id="hw-overview">
+            <h2>What you are looking at</h2>
+            <p>Every dot is a real object in orbit: an active satellite, a space station, or a fragment from a collision. Apsis places each one from published orbital data, moves it with the same physics model operators use, and — when the monitor is on — checks about once a second which objects are dangerously close to each other.</p>
+            <p>That last step is the hard one. This page explains how it is done fast enough to run live in a browser, and shows the real numbers from the session you have open.</p>
+            <div class="doc-facts">
+              <div><b id="hw-n">–</b><span>objects shown</span></div>
+              <div><b id="hw-brute">–</b><span>pairs a naive check must measure</span></div>
+              <div><b id="hw-checks">–</b><span>pairs Apsis measures</span></div>
+              <div><b id="hw-ms">–</b><span>to screen everything</span></div>
+            </div>
+          </section>
+
+          <section id="hw-pipeline">
+            <h2>From data to dots</h2>
+            <ol class="pipeline">
+              <li><b>Orbital elements</b><span>CelesTrak publishes six numbers per object that describe its orbit, plus a drag term and the time they were measured. They are saved with the app, so it runs offline.</span></li>
+              <li><b>SGP4 propagation</b><span>A background worker turns those numbers into an x, y, z position for any instant — for every object, three times a second — so the interface never stalls.</span></li>
+              <li><b>Screening</b><span>The same worker hashes every position into a grid and reports the pairs closer than the alert distance.</span></li>
+              <li><b>Drawing</b><span>All objects are one draw call. The graphics card glides each dot between two computed positions, which keeps motion smooth at 60 frames a second.</span></li>
+            </ol>
+          </section>
+
+          <section id="hw-problem">
+            <h2>The screening problem</h2>
+            <p>To find every pair closer than a distance <i>d</i>, the obvious method measures every pair. With <i>n</i> objects that is <code>n(n − 1) / 2</code> measurements: double the objects and the work quadruples.</p>
+            <div class="doc-bars" id="check-bars"></div>
+            <p>Almost all of that work is wasted. Two objects on opposite sides of the planet cannot be 10 km apart, and no measurement is needed to know it.</p>
+          </section>
+
+          <section id="hw-grid">
+            <h2>The spatial hash</h2>
+            <p>Cut space into cubes exactly <i>d</i> wide. If two objects are closer than <i>d</i>, they are less than one cube apart along every axis, so they sit in the same cube or in two touching cubes. Around any cube there are only 3 × 3 × 3 = <b>27</b> of those.</p>
+            <figure class="doc-figure">
+              <svg viewBox="0 0 284 86" aria-hidden="true">
+                <rect x="95" y="1" width="94" height="72" fill="rgba(127,227,255,.07)" stroke="#7fe3ff" stroke-width="1" stroke-dasharray="3 3" />
+                <path d="M1 1h282v72H1zM1 25h282M1 49h282M32.3 1v72M63.7 1v72M95 1v72M126.3 1v72M157.7 1v72M189 1v72M220.3 1v72M251.7 1v72" fill="none" stroke="rgba(150,185,230,.2)" stroke-width="1" />
+                <rect x="126.3" y="25" width="31.4" height="24" fill="rgba(127,227,255,.22)" stroke="#7fe3ff" stroke-width="1.4" />
+                <line x1="140" y1="38" x2="170" y2="30" stroke="#ff4d5e" stroke-width="1.4" />
+                <circle cx="140" cy="38" r="3.2" fill="#fff" /><circle cx="170" cy="30" r="3.2" fill="#ff4d5e" /><circle cx="110" cy="62" r="2.6" fill="#7fe3ff" />
+                <g fill="#5d6f86"><circle cx="16" cy="14" r="2.4" /><circle cx="48" cy="60" r="2.4" /><circle cx="74" cy="20" r="2.4" /><circle cx="22" cy="40" r="2.4" /><circle cx="208" cy="58" r="2.4" /><circle cx="238" cy="16" r="2.4" /><circle cx="266" cy="42" r="2.4" /><circle cx="228" cy="38" r="2.4" /></g>
+                <g font-size="9" font-family="Inter Variable, sans-serif" text-anchor="middle"><text x="48" y="84" fill="#5d6f86">never compared</text><text x="142" y="84" fill="#7fe3ff">the cubes that are checked</text><text x="236" y="84" fill="#5d6f86">never compared</text></g>
+              </svg>
+              <figcaption>Flat picture of a 3D idea: the white object is only measured against objects in the highlighted block.</figcaption>
+            </figure>
+            <p>So the method is: put every object into the cube it is in, then for each object look only inside its own cube and the 26 around it. The cubes are kept in a <b>hash table</b> — a <code>Map</code> whose key identifies a cube and whose value is the list of objects inside it — so finding a cube takes the same short time whether there are a hundred objects or a million.</p>
+            <label class="row-toggle doc-toggle"><span>Draw the occupied cubes on the globe (zooms in on the selected object)</span><input type="checkbox" id="grid-toggle" /></label>
+          </section>
+
+          <section id="hw-function">
+            <h2>The hash function</h2>
+            <p>A hash table needs one key per cube. Apsis builds it from the position in three small steps:</p>
+            <ol class="formula">
+              <li><code>ix = floor(x / d)</code><span>Which cube along x. The same for y and z.</span></li>
+              <li><code>ix += 65,536</code><span>Shift so the three numbers are never negative.</span></li>
+              <li><code>key = (ix · R + iy) · R + iz, &nbsp;R = 131,072</code><span>Pack them into one number, like three digits in base R. Different cubes always get different keys, and the result stays small enough to be an exact integer.</span></li>
+            </ol>
+            <p>A number is used rather than text such as <code>"3,-2,7"</code> because building and hashing a string for each of the 28 lookups per object is four to five times slower — measured by the benchmark script.</p>
+            <table class="doc-table">
+              <thead><tr><th></th><th>Measure every pair</th><th>Spatial hash</th></tr></thead>
+              <tbody>
+                <tr><th>Build</th><td>–</td><td>n inserts → O(n)</td></tr>
+                <tr><th>Query</th><td>n(n − 1)/2 → O(n²)</td><td>27 lookups per object + one check per candidate → O(n + k)</td></tr>
+                <tr><th>Worst case</th><td>O(n²)</td><td>O(n²) if everything lands in one cube</td></tr>
+                <tr><th>Memory</th><td>O(1)</td><td>O(n)</td></tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section id="hw-trace">
+            <h2>Live trace</h2>
+            <p>One real object followed through the hash, with the numbers from this instant. Select a different object on the globe to trace that one.</p>
+            <p class="note" id="trace-empty">Waiting for positions…</p>
+            <div id="trace" class="is-hidden">
+              <p class="trace-title">Tracing <b id="trace-name"></b></p>
+              <ol class="trace-steps">
+                <li><span>Position</span><code id="tr-pos"></code></li>
+                <li><span>Divide by d, round down</span><code id="tr-cell"></code></li>
+                <li><span>Pack into one key</span><code id="tr-key"></code></li>
+                <li><span>Look up its bucket</span><code id="tr-bucket"></code></li>
+                <li><span>Scan the 27 cubes</span><code id="tr-neigh"></code></li>
+                <li><span>Measure distances</span><code id="tr-checks"></code></li>
+              </ol>
+              <p class="trace-result" id="tr-result"></p>
+            </div>
+          </section>
+
+          <section id="hw-table">
+            <h2>Live hash table</h2>
+            <p>The table as it stands right now. A good hash spreads objects out so each bucket holds very few — that is what keeps every lookup short.</p>
+            <dl class="kv doc-kv">
+              <div><dt>Objects hashed</dt><dd id="st-objects">–</dd></div>
+              <div><dt>Buckets in use (occupied cubes)</dt><dd id="st-cells">–</dd></div>
+              <div><dt>Average objects per bucket</dt><dd id="st-avg">–</dd></div>
+              <div><dt>Fullest bucket</dt><dd id="st-max">–</dd></div>
+              <div><dt>Build + query time</dt><dd id="st-time">–</dd></div>
+              <div><dt>Work avoided</dt><dd id="st-speedup">–</dd></div>
+            </dl>
+            <p class="field-label">Objects per bucket</p>
+            <div class="doc-bars" id="histogram"></div>
+          </section>
+
+          <section id="hw-ahead">
+            <h2>Looking ahead</h2>
+            <p>The monitor's <b>Coming hours</b> tab predicts close passes up to a day ahead. Asking "who is close?" once a minute would miss nearly everything: two satellites closing at 15 km a second are within a kilometre of each other for a fraction of a second.</p>
+            <p>So the same hash is used with a wider net and a little geometry:</p>
+            <ol class="formula">
+              <li><code>cell = alert distance + fastest closing speed × 30 s</code><span>Every simulated minute, hash everything into cells about 490 km wide. Any pair that will pass close during that minute is no further apart than this at the sample, so the 27-cell search is guaranteed to offer it up.</span></li>
+              <li><code>t* = −(r · v) / |v|²</code><span>For each candidate pair, treat their relative motion as a straight line for those 60 seconds and solve for the moment of closest approach. Keep the pair only if that moment falls inside this minute and the straight-line miss is small.</span></li>
+              <li><code>refine with SGP4</code><span>The few survivors get an exact search for the true closest point.</span></li>
+            </ol>
+            <p>One hour for every object takes about four seconds: roughly 40 million candidate pairs examined instead of 11 billion pair-checks. The benchmark script confirms it finds every crossing pair that brute-force sampling finds.</p>
+          </section>
+
+          <section id="hw-proof">
+            <h2>Benchmark</h2>
+            <p>Both methods are run on the same positions at growing sizes. The benchmark times each one and confirms they return exactly the same list of pairs.</p>
+            <button id="bench-open" class="btn btn-primary">Run the benchmark</button>
+          </section>
+
+          <section id="hw-more">
+            <h2>Other hash tables in the app</h2>
+            <dl class="kv doc-kv plain-dd">
+              <div><dt><code>Map&lt;id, object&gt;</code></dt><dd>Search by catalogue number</dd></div>
+              <div><dt><code>Map&lt;name, objects&gt;</code></dt><dd>Search by exact name</dd></div>
+              <div><dt><code>Map&lt;prefix, ids&gt;</code></dt><dd>Suggestions as you type</dd></div>
+              <div><dt><code>Map&lt;type, Set&lt;id&gt;&gt;</code></dt><dd>Type and orbit filters, live counts</dd></div>
+              <div><dt><code>Map&lt;id, facts&gt;</code></dt><dd>Launch, owner and size for the inspector</dd></div>
+            </dl>
+          </section>
+
+          <section id="hw-limits">
+            <h2>Limits</h2>
+            <ul class="doc-list">
+              <li><b>Positions are predictions.</b> They come from a model, accurate to about a kilometre when the elements are fresh and worse as they age.</li>
+              <li><b>One instant at a time.</b> The monitor checks where everything is now. Real operators also search days ahead and compute a collision probability.</li>
+              <li><b>Many close pairs are intentional</b> — docked spacecraft, satellites flying in formation, neighbours in the geostationary ring.</li>
+              <li><b>Cube size equals the alert distance.</b> A very large distance puts many objects in each cube and the method drifts back towards measuring every pair.</li>
+            </ul>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ About and credits ============ -->
+    <div id="about" class="overlay is-hidden">
+      <div class="panel about-card">
+        <header class="panel-head"><h2>About Apsis</h2><button class="icon-btn" id="about-close" aria-label="Close">×</button></header>
+        <div class="about-body">
+          <p>Apsis shows every tracked object in Earth orbit and screens them for close approaches in real time. It began as a university algorithms project about hashing; the <button class="link" id="about-how">How it works</button> page explains the method.</p>
+          <p class="about-warn">For learning and curiosity only. Positions are predictions from public orbital data, good to roughly a kilometre. Do not use Apsis for operational decisions.</p>
+          <h3>Data</h3>
+          <dl class="kv plain-dd">
+            <div><dt>Orbital elements and catalogue</dt><dd><a href="https://celestrak.org" target="_blank" rel="noopener noreferrer">CelesTrak</a>, from U.S. Space Force tracking</dd></div>
+            <div><dt>Photos and descriptions</dt><dd><a href="https://www.wikipedia.org" target="_blank" rel="noopener noreferrer">Wikipedia</a>, CC BY-SA; each photo links to its page and licence</dd></div>
+            <div><dt>Earth imagery</dt><dd>NASA Blue Marble, Black Marble and cloud imagery, via three-globe</dd></div>
+            <div><dt>Coastlines and borders</dt><dd>Natural Earth, public domain, via world-atlas</dd></div>
+            <div><dt id="about-data-label">Data loaded</dt><dd id="about-data">–</dd></div>
+          </dl>
+          <h3>Built with</h3>
+          <dl class="kv plain-dd">
+            <div><dt>Orbit propagation</dt><dd>satellite.js (SGP4), MIT licence</dd></div>
+            <div><dt>3D rendering</dt><dd>three.js, MIT licence</dd></div>
+            <div><dt>Typefaces</dt><dd>Inter, Space Grotesk, JetBrains Mono, SIL Open Font Licence</dd></div>
+          </dl>
+          <h3>Your privacy</h3>
+          <p>Apsis has no accounts and no tracking. Your settings, watchlist and, if you share it, your location are kept only in this browser. Selecting an object asks Wikipedia for its article.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ Keyboard shortcuts ============ -->
+    <div id="keys" class="overlay is-hidden">
+      <div class="panel keys-card">
+        <header class="panel-head"><h2>Controls</h2><button class="btn" id="tour-start">Take the tour</button><button class="icon-btn" id="keys-close" aria-label="Close">×</button></header>
+        <dl class="keys">
+          <div><dt>Drag</dt><dd>Rotate around the Earth, or around the selected object</dd></div>
+          <div><dt>Scroll</dt><dd>Zoom</dd></div>
+          <div><dt>Right-drag</dt><dd>Pan</dd></div>
+          <div><dt>Click a dot</dt><dd>Inspect it and lock the camera to it</dd></div>
+          <div><dt><kbd>/</kbd></dt><dd>Search</dd></div>
+          <div><dt><kbd>Esc</kbd></dt><dd>Close or deselect</dd></div>
+          <div><dt><kbd>Space</kbd></dt><dd>Pause or play</dd></div>
+          <div><dt><kbd>R</kbd></dt><dd>Run time backwards</dd></div>
+          <div><dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Step 10 minutes</dd></div>
+          <div><dt><kbd>N</kbd></dt><dd>Back to now</dd></div>
+          <div><dt><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></dt><dd>Earth, low orbit, GEO ring</dd></div>
+          <div><dt><kbd>O</kbd> <kbd>L</kbd> <kbd>C</kbd> <kbd>,</kbd></dt><dd>Objects, layers, monitor, settings</dd></div>
+          <div><dt><kbd>G</kbd></dt><dd>Screening cells</dd></div>
+          <div><dt><kbd>T</kbd></dt><dd>Camera lock on the selected object</dd></div>
+          <div><dt><kbd>V</kbd></dt><dd>Ride along with the selected object</dd></div>
+          <div><dt><kbd>4</kbd></dt><dd>Sky view from the ground station</dd></div>
+          <div><dt><kbd>S</kbd></dt><dd>Add to or remove from the watchlist</dd></div>
+          <div><dt><kbd>P</kbd></dt><dd>Save a picture</dd></div>
+          <div><dt><kbd>F</kbd></dt><dd>Full screen</dd></div>
+          <div><dt><kbd>H</kbd></dt><dd>Hide or show the interface</dd></div>
+        </dl>
+      </div>
+    </div>
+
+    <!-- ============ Benchmark ============ -->
+    <div id="bench" class="overlay is-hidden">
+      <div class="panel bench-card">
+        <header class="panel-head">
+          <div>
+            <h2>Measure every pair vs spatial hash</h2>
+            <span class="muted small" id="bench-sub"></span>
+          </div>
+          <button class="icon-btn" id="bench-close" aria-label="Close">×</button>
+        </header>
+        <div class="bench-body">
+          <canvas id="bench-chart" width="560" height="300"></canvas>
+          <table id="bench-table">
+            <thead><tr><th>Objects</th><th>Every pair</th><th>Spatial hash</th><th>Speedup</th><th>Pairs</th><th>Identical</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <footer class="bench-foot">
+          <span class="muted small" id="bench-status"></span>
+          <div class="bench-actions">
+            <button id="bench-rerun" class="btn">Run again</button>
+            <button id="bench-export" class="btn btn-primary">Export CSV</button>
+          </div>
+        </footer>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,31 @@
+{
+  "name": "orbithash",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Real-time satellite conjunction screening with a 3D spatial hash grid (CSC 2710 hashing project)",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "fetch-data": "node scripts/fetch-data.mjs",
+    "build-borders": "node scripts/build-borders.mjs",
+    "bench": "node scripts/bench.mjs"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@fontsource-variable/space-grotesk": "^5.3.0",
+    "satellite.js": "^7.2.0",
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.187.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "world-atlas": "^2.0.2"
+  }
+}

@@ -1,0 +1,50 @@
+# Builds the site and publishes it to GitHub Pages.
+#
+#   push to main      → build and deploy what is in the repository
+#   every 8 hours     → first download fresh orbital data from CelesTrak, then build and deploy
+#   "Run workflow"    → same as the schedule (use it to refresh the data by hand)
+#
+# The refreshed data is NOT committed back: it lives only in the published site, so the
+# repository does not grow by 7 MB three times a day. If CelesTrak cannot be reached, the
+# snapshot stored in the repository is published instead.
+name: Build and deploy
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 */8 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Refresh orbital data (CelesTrak asks for at most one download every 2 hours)
+        if: github.event_name != 'push'
+        run: node scripts/fetch-data.mjs || echo "CelesTrak unreachable - publishing the stored snapshot"
+      - run: npm run build
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: deployment
+        uses: actions/deploy-pages@v4

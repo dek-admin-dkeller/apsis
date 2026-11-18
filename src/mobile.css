@@ -1,0 +1,313 @@
+/*
+ * Apsis on a phone or small tablet. Loaded after style.css, so these rules win by order.
+ *
+ *   1. touch devices at any width   bigger targets, no hover-only behaviour
+ *   2. narrow screens (≤ 760 px)    tool rail → bottom tab bar, docks → bottom sheets,
+ *                                   overlays → full-screen pages, compact top bar and time bar
+ *   3. short landscape phones       the two sheets sit side by side
+ *   4. elements added later         share / locate buttons, watchlist, look-ahead list
+ */
+
+@keyframes sheet-up { from { opacity: 0; transform: translateY(18px); } }
+
+/* ============================================================== 1. touch devices */
+
+@media (pointer: coarse) {
+  :root { --timebar: 98px; } /* the open time bar is taller with finger-sized controls */
+
+  * { -webkit-tap-highlight-color: transparent; }
+  button, a, label, summary, input { touch-action: manipulation; } /* no double-tap zoom delay */
+  .rail, .timebar, .tabs, .acts, .segmented, .chip { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+
+  /* at least ~40 px to press */
+  .btn { min-height: 40px; }
+  .tool { min-width: 36px; min-height: 36px; }
+  .icon-btn { min-width: 34px; min-height: 34px; }
+  .chip, .act, .segmented button { min-height: 38px; }
+  .tabs button { min-height: 40px; }
+  .row-toggle { min-height: 40px; }
+  .sec > summary { min-height: 34px; }
+  .quick button { min-height: 34px; padding: 0 12px; }
+  .hero-switch button { min-height: 28px; padding: 4px 10px; }
+  .enc-objects button { min-height: 40px; }
+  .link { min-height: 30px; }
+  .tb { min-height: 38px; }
+  #pair-list li { min-height: 44px; }
+  #pass-list li { padding-top: 9px; padding-bottom: 9px; }
+  #suggestions li { padding-top: 10px; padding-bottom: 10px; }
+  .text-field input { height: 38px; }
+  .doc-nav a { padding-top: 9px; padding-bottom: 9px; }
+
+  /* switches */
+  .row-toggle input { width: 40px; height: 22px; }
+  .row-toggle input::before { width: 16px; height: 16px; }
+  .row-toggle input:checked::before { transform: translateX(18px); }
+  .switch { width: 44px; height: 24px; }
+  .switch i { width: 18px; height: 18px; }
+  .switch[aria-checked='true'] i { transform: translateX(20px); }
+
+  /* sliders: a thumb a finger can find */
+  input[type='range'] { height: 28px; }
+  input[type='range']::-webkit-slider-thumb { width: 22px; height: 22px; margin-top: -9.5px; }
+  input[type='range']::-moz-range-thumb { width: 18px; height: 18px; }
+  .dual-range { height: 28px; }
+  /* the timeline keeps its bar-shaped thumb, just taller and wider */
+  .tl-track, .tl-track input[type='range'] { height: 24px; }
+  .tl-track input[type='range']::-webkit-slider-thumb { width: 8px; height: 24px; margin-top: -11.5px; border-radius: 3px; }
+  .tl-track input[type='range']::-moz-range-thumb { width: 8px; height: 24px; border-radius: 3px; }
+
+  /* The open time bar grows to fit the larger controls … */
+  :is(body:not(.quiet-ui) .timebar, .timebar.is-open) { height: auto; min-height: var(--timebar); }
+  /* … and the resting pill stays a pill. */
+  body.quiet-ui .timebar:not(.is-open) :is(.tb, #speeds button) { min-height: 0; }
+}
+
+@media (hover: none) {
+  /* Nothing can hover, so the name tooltip would only ever flash under a finger. */
+  #tooltip { display: none !important; }
+  /* A faded pill cannot be "pointed at" to bring it back: keep it readable. */
+  body.quiet-ui:not(.panel-open) .timebar { opacity: 0.7; }
+  body.quiet-ui:not(.panel-open) .timebar:is(:focus-within, .is-open) { opacity: 1; }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  /* First tap on the resting pill only opens the bar: its tiny buttons are not targets
+     until it has opened (timeControls.ts adds .is-open on pointerenter). */
+  body.quiet-ui .timebar:not(.is-open) > * { pointer-events: none; }
+}
+
+/* ============================================================== 2. narrow screens */
+
+@media (max-width: 760px) {
+  :root {
+    --top: 48px;
+    --rail: 0px; /* the rail no longer takes a column: it becomes the tab bar */
+    --status: calc(54px + env(safe-area-inset-bottom, 0px)); /* = height of the tab bar; the status line is hidden */
+    --timebar: 36px; /* the resting pill */
+    --gap: 8px;
+    --dock-bottom: var(--status); /* sheets sit directly on the tab bar */
+    --sheet: 58vh;
+  }
+  @supports (height: 1dvh) {
+    :root { --sheet: 58dvh; }
+  }
+
+  html, body { overscroll-behavior: none; } /* no pull-to-refresh while scrolling a sheet */
+
+  /* ---------- top bar: logo, search, two or three buttons ---------- */
+
+  .topbar { padding: 0 8px 0 10px; gap: 8px; }
+  .brand { gap: 7px; }
+  .brand-sub, .readouts, .search-key, #shot, #fullscreen, #keys-open { display: none; }
+  .search { flex: 1 1 auto; min-width: 0; }
+  #search { height: 34px; padding: 0 8px 0 30px; font-size: 16px; } /* 16 px stops iOS zooming in on focus */
+  /* Suggestions span the screen under the bar instead of hanging off the narrow field.
+     (Fixed inside the top bar, which is its containing block and is itself full width.) */
+  #suggestions { position: fixed; top: calc(var(--top) + 4px); left: 8px; right: 8px; max-height: 50vh; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+  .top-actions { gap: 2px; }
+  .top-actions .tool { width: 34px; height: 34px; }
+  /* "How it works" keeps its name for screen readers but shows as a compact "?" */
+  #howto-open { width: 34px; height: 34px; min-height: 0; margin-left: 2px; padding: 0; font-size: 0; }
+  #howto-open::before { content: '?'; font: 600 14px var(--font-display); }
+
+  /* ---------- tool rail → bottom tab bar ---------- */
+
+  .statusbar { display: none; }
+  .rail {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    height: var(--status);
+    padding: 0 2px env(safe-area-inset-bottom, 0px);
+    flex-direction: row;
+    align-items: stretch;
+    gap: 0;
+    border-right: 0;
+    border-top: 1px solid var(--line);
+    z-index: 4;
+  }
+  .rail-gap, .rail-label { display: none; }
+  .rail-btn, .rail-view { flex: 1 1 0; min-width: 0; justify-content: center; gap: 5px; padding: 0 1px; font-size: 9.5px; }
+  .rail-btn span, .rail-view span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rail-btn svg, .rail-view svg { width: 20px; height: 20px; flex: none; }
+  /* the "open" marker moves from the left edge to the top edge */
+  .rail-btn::before { left: 10px; right: 10px; top: 0; bottom: auto; width: auto; height: 2px; border-radius: 0 0 2px 2px; }
+  .rail-badge { top: 5px; left: calc(50% + 5px); }
+  .rail-label + .rail-view { border-left: 1px solid var(--line); } /* tools | camera views */
+
+  /* ---------- docks → bottom sheets ---------- */
+
+  #hud > .dock-left, #hud > .dock-right { top: auto; left: 0; right: 0; bottom: var(--dock-bottom); width: auto; }
+  #hud > .dock-right { z-index: 3; } /* inspector / close approach sits over a tool panel */
+  #hud > .dock > .panel {
+    max-height: min(var(--sheet), calc(100vh - var(--top) - var(--status) - 64px));
+    border-width: 1px 0 0;
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -12px 34px rgba(0, 0, 0, 0.55);
+    animation-name: sheet-up;
+    animation-duration: 200ms;
+  }
+  .dock > .panel > .panel-body, .insp-body { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+  .panel-head { min-height: 44px; padding: 6px 8px 6px 14px; }
+  .panel-body, .insp-body { padding: 12px 14px 16px; }
+
+  /* Monitor: the pair list no longer scrolls on its own — the whole sheet does. */
+  #panel-conj .panel-body > #pair-list { flex: none; min-height: 0; margin-right: 0; padding-right: 0; overflow: visible; }
+
+  /* ---------- inspector / close approach inside a sheet ---------- */
+
+  .insp-head { padding: 10px 8px 8px 14px; }
+  .insp-hero { height: 110px; }
+  .hero-tag { left: 10px; bottom: 8px; }
+  .hero-tag.right { top: 8px; }
+  .hero-switch { top: 8px; right: 8px; }
+  .acts { padding: 8px 14px 4px; }
+  .tabs { padding: 0 14px; }
+  .telemetry dd { font-size: 13.5px; }
+  .enc-hero b { font-size: 20px; }
+  .enc-actions { flex-wrap: wrap; }
+  .enc-actions .btn { flex: 1 1 140px; }
+  canvas.chart.square { max-width: 220px; }
+
+  /* ---------- time bar ---------- */
+
+  .timebar { max-width: calc(100vw - 2 * var(--gap)); z-index: 2; }
+  /* Open: timeline on top, then clock + Now, then transport + speeds. Fits 344 px. */
+  :is(body:not(.quiet-ui) .timebar, .timebar.is-open) { width: calc(100vw - 2 * var(--gap)); height: auto; min-height: 0; padding: 10px 12px; gap: 8px; }
+  :is(body:not(.quiet-ui) .timebar, .timebar.is-open) .tb-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'clock now' 'transport speeds';
+    gap: 8px 10px;
+  }
+  :is(body:not(.quiet-ui) .timebar, .timebar.is-open) .tb-left { grid-area: clock; }
+  :is(body:not(.quiet-ui) .timebar, .timebar.is-open) .tb-right { display: contents; } /* lets Now and the speeds sit on different lines */
+  :is(body:not(.quiet-ui) .timebar, .timebar.is-open) .now { grid-area: now; justify-self: end; }
+  :is(body:not(.quiet-ui) .timebar, .timebar.is-open) .transport { grid-area: transport; justify-self: start; }
+  :is(body:not(.quiet-ui) .timebar, .timebar.is-open) #speeds { grid-area: speeds; justify-self: end; }
+  :is(body:not(.quiet-ui) .timebar, .timebar.is-open) .play { margin-left: 0; }
+  #step-back, #step-fwd, .tb-label { display: none; }
+  .tl { gap: 8px; }
+  .tl-end { min-width: 0; font-size: 10px; }
+  .clock { padding: 0 4px; }
+  #clock-time { font-size: 18px; }
+  #clock-input { width: 100%; min-width: 0; height: 38px; font-size: 16px; }
+  /* With a sheet open the bottom is taken: the time bar moves up under the top bar. */
+  body.panel-open .timebar,
+  #hud:has(#inspector:not(.is-hidden)) .timebar,
+  #hud:has(#encounter:not(.is-hidden)) .timebar { top: calc(var(--top) + var(--gap)); bottom: auto; }
+
+  /* ---------- overlays → full-screen pages ---------- */
+
+  .overlay { padding: 0; place-items: stretch; background: var(--solid-strong); }
+  .overlay > .panel { width: 100%; height: 100%; max-height: none; border: 0; border-radius: 0; box-shadow: none; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+  .overlay > .panel > .panel-head { position: sticky; top: 0; z-index: 2; padding: 8px 10px 8px 16px; background: var(--solid-strong); }
+
+  .overlay > .doc { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); overflow: hidden; }
+  .doc-nav { display: none; }
+  .doc-main { padding: 18px 16px calc(36px + env(safe-area-inset-bottom, 0px)); font-size: 14px; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+  .doc-close { top: 6px; margin: -8px -6px 0 12px; }
+  .doc-main section { padding: 22px 0; }
+  .doc-main h2 { font-size: 18px; }
+  .doc-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .doc-facts b { font-size: 19px; }
+  .pipeline { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .pipeline li { padding: 1px 0 0 34px; }
+  .pipeline li::after { display: none; }
+  .doc-figure { padding: 10px 10px 9px; }
+  .formula code { font-size: 12px; }
+  .bar-row { grid-template-columns: 78px 1fr auto; gap: 8px; }
+  .bar-row .value { min-width: 50px; }
+  /* tables scroll sideways inside themselves rather than widening the page */
+  .doc-table, #bench-table { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .doc-table td { min-width: 132px; }
+  #bench-table { white-space: nowrap; }
+
+  .keys { padding: 6px 16px calc(16px + env(safe-area-inset-bottom, 0px)); }
+  .keys > div { grid-template-columns: 104px minmax(0, 1fr); }
+  .bench-body { padding: 12px 16px 4px; }
+  .bench-foot { flex-wrap: wrap; padding: 10px 16px calc(14px + env(safe-area-inset-bottom, 0px)); }
+
+  /* ---------- things drawn over the globe ---------- */
+
+  .sat-label { font-size: 10.5px; }
+  .sat-label.is-notable { font-size: 11px; }
+  #range-tag { font-size: 11.5px; padding: 2px 8px; }
+  #reticle { width: 56px; height: 56px; margin: -28px 0 0 -28px; }
+  #toast { max-width: calc(100vw - 24px); padding: 7px 14px; border-radius: 14px; white-space: normal; text-align: center; line-height: 1.35; }
+
+  /* ---------- loading screen: rocket in the middle, text underneath ---------- */
+
+  .launch { left: 50%; opacity: 0.9; }
+  .rocket, .pad { bottom: 36vh; }
+  .rocket { left: -30px; width: 60px; transform: translateY(calc(var(--p) * -38vh)); }
+  .smoke { bottom: 35vh; }
+  .plume { height: calc(var(--p) * 38vh + 12vh); }
+  .loading-inner { left: 24px; right: 24px; top: auto; bottom: calc(7vh + env(safe-area-inset-bottom, 0px)); width: auto; transform: none; }
+  .wordmark { gap: 11px; margin-bottom: 18px; }
+  .wordmark .logo { width: 32px; height: 32px; }
+  .wordmark span { font-size: 24px; }
+}
+
+/* Very narrow phones: the wordmark gives its room to the search field. */
+@media (max-width: 340px) {
+  .brand h1 { display: none; }
+}
+
+/* Short phones: a smaller picture leaves more of the sheet for data. */
+@media (max-width: 760px) and (max-height: 700px) {
+  .insp-hero { height: 84px; }
+}
+
+/* ============================================================== 3. short landscape phones */
+
+@media (max-width: 760px) and (orientation: landscape) {
+  :root { --status: calc(46px + env(safe-area-inset-bottom, 0px)); }
+  .rail-btn, .rail-view { flex-direction: row; gap: 6px; font-size: 10.5px; }
+  .rail-btn svg, .rail-view svg { width: 17px; height: 17px; }
+
+  /* Tool panel on the left half, inspector / close approach on the right half. */
+  #hud > .dock-left { right: 50%; }
+  #hud > .dock-right { left: 50%; }
+  #hud > .dock > .panel { max-height: calc(100vh - var(--top) - var(--status) - 8px); border-radius: 12px 12px 0 0; }
+  #hud > .dock-left > .panel { border-right-width: 1px; }
+  .insp-hero { height: 72px; }
+
+  /* No spare height for the time bar once a sheet is up. */
+  body.panel-open .timebar,
+  #hud:has(#inspector:not(.is-hidden)) .timebar,
+  #hud:has(#encounter:not(.is-hidden)) .timebar { display: none; }
+
+  .loading-inner { bottom: 5vh; }
+  .rocket, .pad { bottom: 44vh; }
+  .smoke { bottom: 43vh; }
+}
+
+/* ============================================================== 4. elements added later */
+
+/* Top-bar buttons: Share stays longer than Locate when the bar gets tight. */
+@media (max-width: 760px) {
+  #locate-top, #share { width: 34px; height: 34px; }
+}
+@media (max-width: 430px) {
+  #locate-top { display: none; }
+}
+@media (max-width: 360px) {
+  #share { display: none; }
+}
+
+/* Watchlist rows (Objects panel) and the look-ahead block (monitor panel). */
+@media (pointer: coarse) {
+  .watch-list li { min-height: 40px; }
+  .watch-list li button { min-height: 36px; min-width: 36px; }
+  #ahead-list li { min-height: 44px; }
+  #ahead .btn { min-height: 40px; }
+}
+@media (max-width: 760px) {
+  .watch-list { max-height: none; overflow: visible; } /* the sheet scrolls, not the list */
+  .watch-list li { min-width: 0; }
+  #ahead { min-width: 0; }
+  #ahead .segmented { width: 100%; }
+  #ahead .ahead-bar { height: 4px; }
+  #panel-conj .panel-body > #ahead-list, #ahead #ahead-list { flex: none; min-height: 0; max-height: none; margin-right: 0; padding-right: 0; overflow: visible; }
+}

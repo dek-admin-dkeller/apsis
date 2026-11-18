@@ -1,0 +1,71 @@
+/* First-person views (render/firstPerson.ts): the banner under the top bar and the compass
+   letters on the horizon. Colours and sizes come from the tokens in style.css. */
+
+.fp-banner {
+  position: fixed;
+  top: 56px; /* just under the 46 px top bar */
+  left: 50%;
+  z-index: 20;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 24px);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 7px 8px 7px 14px;
+  background: var(--solid, rgba(6, 10, 19, 0.96));
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius, 8px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  color: var(--text);
+  white-space: nowrap;
+}
+.fp-text { display: grid; gap: 1px; min-width: 0; }
+.fp-title { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.fp-hint { font-size: 11px; color: var(--muted); }
+.fp-readout {
+  min-width: 17ch;
+  padding-left: 14px;
+  border-left: 1px solid var(--line-strong);
+  font: 11.5px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--cyan);
+}
+.fp-readout:empty { display: none; }
+.fp-exit { flex: none; }
+
+/* The scene is something you grab and pull while a view is active. */
+body.first-person #scene { cursor: grab; }
+body.first-person #scene:active { cursor: grabbing; }
+
+/* Compass letters: each sits at 0,0 and is moved by a transform from the script; the
+   separate `translate` property centres it on its point, just above the horizon. */
+.fp-compass { position: fixed; inset: 0; z-index: 5; pointer-events: none; overflow: hidden; }
+.fp-compass span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  translate: -50% -100%;
+  padding-bottom: 9px;
+  font: 500 10.5px var(--font-mono);
+  color: var(--muted);
+  text-shadow: 0 1px 4px #000, 0 0 2px #000;
+  will-change: transform;
+}
+.fp-compass span::after { /* tick down to the horizon */
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 1px;
+  height: 6px;
+  background: currentColor;
+  opacity: 0.7;
+}
+.fp-compass span.is-main { font-size: 13px; font-weight: 600; color: var(--text); }
+
+@media (max-width: 760px) {
+  .fp-banner { top: 52px; gap: 8px; padding: 5px 6px 5px 10px; }
+  .fp-hint { display: none; }
+  .fp-readout { min-width: 0; padding-left: 8px; font-size: 10.5px; }
+  .fp-title { font-size: 12px; max-width: 42vw; }
+}
