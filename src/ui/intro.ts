@@ -41,6 +41,15 @@ export class LoadingScreen {
     $('loading').classList.add('is-done'); // … and the globe fades in behind it
   }
 
+  /**
+   * The tracker finished loading while the visitor was still on the home page: put this
+   * screen away at once, with no lift-off, so the live globe can show through that page.
+   */
+  skip(): void {
+    this.progress(1, 'Ready');
+    $('loading').classList.add('is-done');
+  }
+
   fail(message: string): void {
     this.status.textContent = message;
     this.status.style.color = 'var(--red)';

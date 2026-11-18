@@ -31,6 +31,7 @@ Other commands:
 ```bash
 npm run bench        # brute force vs spatial hash in Node — prints a table for the report
 npm run build        # type-check + production build into dist/
+npm run shots        # retake the home page's screenshots (needs Chrome and `npm run dev` running)
 ```
 
 The data snapshot and textures live in `public/`, so the app runs **offline** (only the

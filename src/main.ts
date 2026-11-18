@@ -479,21 +479,35 @@ for (const button of document.querySelectorAll<HTMLElement>('[data-close-panel]'
 // ---- phones: panels are bottom sheets ------------------------------------------------------
 
 const isPhone = () => Sheets.isPhone;
-let viewShift = -1;
-const sheets = new Sheets(() => (viewShift = -1)); // sheets can be dragged to any height
-window.addEventListener('resize', () => (viewShift = -1));
+let viewKey = ''; // the view offset last given to the camera (cleared to force it to be set again)
+let heroShift = 0; // 0 … 1: how far the globe is moved aside to sit beside the home page's headline
+const sheets = new Sheets(() => (viewKey = '')); // sheets can be dragged to any height
+window.addEventListener('resize', () => (viewKey = ''));
 /**
  * On a phone a sheet covers the lower part of the screen, so the centre of the 3D view is
  * moved up into the visible part — otherwise the selected object would sit behind the sheet.
  */
-function updateViewShift(): void {
+/**
+ * Where the globe sits on the screen. Normally in the middle; moved up on a phone while a
+ * bottom sheet is open; and, while the home page is up, moved to the right of its headline
+ * (above it on a narrow screen) so the live globe is that page's picture. The move to and
+ * from the home-page position is eased, so going into the tracker is one continuous shot.
+ */
+function updateViewShift(dt: number): void {
   const immersive = document.body.classList.contains('sky-immersive'); // every sheet is put away: the sky gets the whole screen
   const sheetOpen = isPhone() && !immersive && (inspector.isOpen || encPanel.isOpen || openPanelName !== null);
-  const shift = sheetOpen ? sheets.current : 0;
-  if (shift === viewShift) return;
-  viewShift = shift;
-  if (shift > 0) kit.camera.setViewOffset(window.innerWidth, window.innerHeight, 0, shift / 2, window.innerWidth, window.innerHeight);
-  else kit.camera.clearViewOffset();
+  const sheet = sheetOpen ? sheets.current : 0;
+  const target = landing.showing ? 1 : 0;
+  heroShift = Math.abs(target - heroShift) < 0.002 ? target : heroShift + (target - heroShift) * Math.min(1, dt * 2.6);
+  const width = window.innerWidth, height = window.innerHeight;
+  const narrow = width <= 860; // the home page stacks its picture over its words below this width
+  const dx = Math.round(heroShift * (narrow ? 0 : -0.21 * width)); // a negative offset moves the picture right
+  const dy = Math.round(heroShift * (narrow ? 0.17 * height : 0) + sheet / 2); // a positive one moves it up
+  const key = `${width},${height},${dx},${dy}`;
+  if (key === viewKey) return;
+  viewKey = key;
+  if (dx === 0 && dy === 0) kit.camera.clearViewOffset();
+  else kit.camera.setViewOffset(width, height, dx, dy, width, height);
 }
 
 // Phone-only buttons simply press the control they stand in for.
@@ -1653,7 +1667,7 @@ function step(now: number): void {
   overlay.update(globe.sunDirection, cameraDistance);
   refreshSelected();
   if (encPanel.isOpen) encFrame = encViz.update(clock.time, realSeconds); // before the camera follows it
-  updateViewShift();
+  updateViewShift(dt);
   // One of two things drives the camera: a first-person view, or the ordinary rig.
   if (fp.mode !== 'off') fp.update(dt, clock.time, selScene ? { position: selScene, velocity: selVelocity } : null);
   else rig.update(dt);
@@ -1680,10 +1694,11 @@ function step(now: number): void {
     const info: FrameInfo = { timeMs: clock.time, realSeconds, dt, uiHidden };
     for (const run of frameHooks) run(info);
   }
-  // Behind the home page nobody can see the globe: draw it only now and then (often enough to
-  // keep textures and shaders warm, so going in is instant) and leave the GPU to the page.
+  // The home page's opening screen shows the live globe through it. Once the visitor has
+  // scrolled past that, nobody can see the globe: draw it only now and then (often enough to
+  // keep textures and shaders warm) and leave the GPU to the page.
   frameCount++;
-  if (!landing.showing || frameCount % 15 === 0) kit.render();
+  if (!landing.showing || landing.heroInView || frameCount % 15 === 0) kit.render();
   if (wantShot) {
     wantShot = false;
     saveShot();
@@ -1804,8 +1819,20 @@ async function boot(): Promise<void> {
     // Everything is ready. If the welcome page is still up, wait there until the visitor comes in.
     landing.status(`${fmtInt(first.sats.length)} objects loaded and moving`);
     landing.setCount(first.sats.length);
-    await landing.entered;
-    await loading.finish();
+    const home = homeView();
+    // If the visitor is still on the home page, the tracker becomes that page's picture: the
+    // loading screen is put away quietly and the globe, held a little closer than the normal
+    // whole-Earth view, shows through the top of the page until they come in.
+    const fromHomePage = landing.showing;
+    if (fromHomePage) {
+      loading.skip();
+      kit.camera.position.copy(home).setLength(window.innerWidth <= 860 ? 25 : 17.5);
+      landing.goLive();
+      await landing.entered;
+    } else {
+      await loading.finish();
+      landing.goLive(); // so "About" later shows the globe behind the page too
+    }
 
     // Running normally: forget any earlier graphics resets so the reload guard starts fresh.
     setTimeout(() => {
@@ -1813,17 +1840,22 @@ async function boot(): Promise<void> {
         sessionStorage.removeItem('apsis.reloads');
       } catch { /* no storage */ }
     }, 20000);
-    const home = homeView();
     $('hud').classList.remove('hud-hidden');
     refreshLocationIfAllowed();
-    kit.camera.position.copy(home);
+    if (!fromHomePage) kit.camera.position.copy(home);
     if (applyLink()) {
       // Opened from a share link: go straight to what it describes.
       setTimeout(() => (watchdogArmed = true), 4000);
     } else {
-      // Intro: swoop in from deep space, then offer the tour to first-time visitors.
-      kit.camera.position.applyAxisAngle(UP, -1.1).setLength(390);
-      rig.flyToView(home, ORIGIN.clone(), 4.5);
+      // Intro, then the tour for first-time visitors. Straight from the loading screen it is a
+      // swoop in from deep space; from the home page the globe is already on screen, so the
+      // camera simply eases back from there to the whole-Earth view.
+      if (fromHomePage) {
+        rig.flyToView(kit.camera.position.clone().normalize().multiplyScalar(home.length()), ORIGIN.clone(), 2.8);
+      } else {
+        kit.camera.position.applyAxisAngle(UP, -1.1).setLength(390);
+        rig.flyToView(home, ORIGIN.clone(), 4.5);
+      }
       setTimeout(() => {
         watchdogArmed = true;
         if (!Tour.seen()) tour.start();

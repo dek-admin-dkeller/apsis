@@ -72,48 +72,88 @@
         </figure>
       </main>
 
-      <!-- The list itself is drawn by src/ui/landing.ts from src/ui/featureList.ts: edit it there. -->
-      <section class="ld-section" id="ld-features">
-        <h2>What it does</h2>
-        <p class="ld-intro">Apsis is a tracking console that runs in a browser tab. Nothing to install, no account, and it works on a phone.</p>
-        <div class="ld-features" id="ld-feature-list"></div>
-        <button class="ld-button" data-ld-enter>Open the tracker</button>
-      </section>
-
-      <section class="ld-section" id="ld-how">
-        <h2>How it works</h2>
-        <div class="ld-how">
-          <div class="ld-prose">
-            <h3>Where everything is</h3>
-            <p>The orbit of every tracked object is published as a short list of numbers. A standard model, SGP4, turns those numbers and a moment in time into a position. Apsis runs it for the whole catalogue several times a second, in the background, so the picture never waits for it.</p>
-            <h3>Finding what is close to what</h3>
-            <p>To find every pair of objects within 10 km of each other, the obvious way is to measure each object against every other one: <span data-ld-pairs>191 million</span> measurements, every second. Apsis does it another way. Space is cut into cubes 10 km wide and each object is filed under its cube in a hash table. Two objects closer than 10 km must be in the same cube or in cubes that touch, so each object is measured only against the few in the 27 cubes around it. That is a few hundred measurements instead of <span data-ld-pairs>191 million</span>, and the answer is exactly the same.</p>
-            <h3>Looking ahead</h3>
-            <p>Two objects crossing at 15 km a second are close for a fraction of a second, so looking once a minute would miss them. The forecast widens the cubes to catch anything that could get close before the next look, estimates each candidate's closest point with a straight line, and then checks the survivors with the full model.</p>
-            <h3>What it cannot tell you</h3>
-            <p>Public orbit data is good to about a kilometre. Apsis shows where to look and how the search is done. It does not say whether two objects will collide.</p>
-            <button class="ld-text-button" id="landing-how">Read the full walkthrough, with live numbers from the tracker</button>
+      <div class="ld-body">
+        <!-- Real screens from the tracker. The tabs and captions come from SHOTS in src/ui/featureList.ts;
+             the pictures are retaken with `npm run shots`. -->
+        <section class="ld-section" id="ld-features">
+          <div class="ld-head">
+            <h2>A tracking console in a browser tab</h2>
+            <p class="ld-intro">Nothing to install, no account. These are real screens from the tracker.</p>
           </div>
-          <table class="ld-sum">
-            <caption>The search, in numbers</caption>
-            <tr><th scope="row">Objects in the catalogue</th><td data-ld-count>19,572</td></tr>
-            <tr><th scope="row">Pairs, measuring each against every other</th><td data-ld-pairs-exact>191,521,806</td></tr>
-            <tr><th scope="row">Measurements the grid needs instead</th><td>a few hundred</td></tr>
-            <tr><th scope="row">Time for one full search, on a laptop</th><td>about 20 ms</td></tr>
-          </table>
-        </div>
-      </section>
+          <div class="ld-tabs" id="ld-tabs" role="tablist" aria-label="Screens"></div>
+          <figure class="ld-screen" id="ld-screen">
+            <img id="ld-shot" alt="" decoding="async" />
+            <figcaption id="ld-shot-text"></figcaption>
+          </figure>
+        </section>
 
-      <!-- Deliberately small and last: a side door, not part of the tool. -->
-      <section class="ld-section ld-games" id="ld-games">
-        <h2>Games</h2>
-        <p>A side project: small games played on the live catalogue. There is nothing here yet.</p>
-      </section>
+        <!-- The search, shown rather than described: a live drawing that runs the project's own hash table. -->
+        <section class="ld-section" id="ld-how">
+          <div class="ld-head">
+            <h2>How it finds what is close to what</h2>
+            <p class="ld-intro">The obvious way is to measure every object against every other one. The grid gets the same answer with a fraction of the work. Switch between them and watch the count.</p>
+          </div>
+          <div class="ld-demo">
+            <div class="ld-demo-stage">
+              <canvas id="ld-demo-canvas" aria-label="Dots drifting in a box. In one mode a line joins every pair; in the other a grid is drawn and lines join only neighbours."></canvas>
+            </div>
+            <div class="ld-demo-side">
+              <div class="ld-switch" id="ld-demo-mode" role="group" aria-label="Method">
+                <button data-mode="all">Measure every pair</button><button data-mode="grid" class="is-on">Use the grid</button>
+              </div>
+              <dl class="ld-count">
+                <div><dt>Objects</dt><dd id="ld-demo-n">0</dd></div>
+                <div><dt>Measurements this instant</dt><dd id="ld-demo-checks">0</dd></div>
+                <div><dt>Close pairs found</dt><dd id="ld-demo-pairs">0</dd></div>
+              </dl>
+              <p class="ld-demo-note">Space is cut into squares as wide as the alert distance, and each dot is filed under its square in a hash table. Two dots that close must be in the same square or in squares that touch, so each dot is measured only against those. The pairs found are the same either way.</p>
+            </div>
+          </div>
+          <div class="ld-scale">
+            <table class="ld-sum">
+              <caption>The same idea at full size</caption>
+              <tr><th scope="row">Objects in the catalogue</th><td data-ld-count>19,572</td></tr>
+              <tr><th scope="row">Measurements, every object against every other</th><td data-ld-pairs-exact>191,521,806</td></tr>
+              <tr><th scope="row">Measurements with the grid, in three dimensions</th><td>a few hundred</td></tr>
+            </table>
+            <div class="ld-prose">
+              <p>Positions come from public orbit data and a standard model, SGP4, run for the whole catalogue several times a second in the background. To look hours ahead, the same grid is used with wider cells and each candidate is then checked with the full model.</p>
+              <p>Public orbit data is good to about a kilometre. Apsis shows where to look and how the search is done. It does not say whether two objects will collide.</p>
+              <button class="ld-text-button" id="landing-how">Read the full walkthrough, with live numbers from the tracker</button>
+            </div>
+          </div>
+        </section>
 
-      <footer class="ld-foot">
-        <p><dfn>apsis</dfn>, noun. Either of the two points on an orbit that lie nearest to and farthest from the body being orbited.</p>
-        <p>Orbital data from CelesTrak, imagery from NASA. Nothing to install and no account.</p>
-      </footer>
+        <!-- Drawn by src/ui/landing.ts from the tracker's own 3D models once it has loaded. -->
+        <section class="ld-section" id="ld-craft">
+          <div class="ld-head">
+            <h2>Twenty-one kinds of spacecraft</h2>
+            <p class="ld-intro">Every object is drawn as one of these models. They are built in code from reference photos, so nothing has to be downloaded to show them.</p>
+          </div>
+          <div class="ld-plate" id="ld-plate"></div>
+        </section>
+
+        <!-- The list itself is drawn by src/ui/landing.ts from src/ui/featureList.ts: edit it there. -->
+        <section class="ld-section" id="ld-all">
+          <div class="ld-head">
+            <h2>Everything it does</h2>
+            <p class="ld-intro">Choose a name to read about it.</p>
+          </div>
+          <div class="ld-index" id="ld-feature-list"></div>
+          <button class="ld-button" data-ld-enter>Open the tracker</button>
+        </section>
+
+        <!-- Deliberately small and last: a side door, not part of the tool. -->
+        <section class="ld-games" id="ld-games">
+          <h2>Games</h2>
+          <p>A side project: small games played on the live catalogue. There is nothing here yet.</p>
+        </section>
+
+        <footer class="ld-foot">
+          <p><dfn>apsis</dfn>, noun. Either of the two points on an orbit that lie nearest to and farthest from the body being orbited.</p>
+          <p>Orbital data from CelesTrak, imagery from NASA. Nothing to install and no account.</p>
+        </footer>
+      </div>
     </div>
 
     <!-- Loading screen -->

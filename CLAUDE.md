@@ -33,6 +33,8 @@ npm run dev          # Vite dev server on http://localhost:5173
 npm run build        # tsc --noEmit && vite build → dist/   (must pass with zero TS errors)
 npm run bench        # brute force vs hash, look-ahead completeness; exits 1 on any mismatch
 npm run fetch-data   # textures + CelesTrak elements + SATCAT facts into public/ (2 h / 24 h guards)
+npm run fetch-radio  # SatNOGS radio records into public/data/radio.json (6 h guard; also run by CI)
+npm run shots        # retake the home page's product pictures (needs Chrome and the dev server running)
 npm run build-borders  # regenerate public/data/borders.bin from the world-atlas package
 ```
 
@@ -144,17 +146,30 @@ public/                     data/ (satellites.json, satcat.json, borders.bin), t
 
 ## UI structure (desktop)
 
-Home page first (`#landing`, `src/ui/landing.ts`): static markup painted before any script,
-the tracker loading behind it; `boot()` waits on `landing.entered` before the loading
-screen's lift-off. An inline script in `index.html` skips it on arrival for share links (any
-`#hash` — which is why the page's own navigation uses buttons, never `#anchor` links) and when
-`Settings.landing` is off. It is a scrolling page: opening screen, "What it does", "How it
-works" (a summary plus a button that opens the full walkthrough `#howto` above the page), a
-deliberately quiet "Games" row, footer. "About" in the top bar (`#landing-open`, the round
-**i** on phones) brings it back with `landing.open()`; while it is showing, keyboard
-shortcuts are off and the globe is drawn only every 15th frame. There is no "How it works"
-button in the tracker any more: the walkthrough opens from the home page, the monitor panel
-and the About sheet.
+Home page first (`#landing`, `src/ui/landing.ts`, `landing.css`): static markup painted before
+any script, with the tracker loading behind it. It is built to SHOW the tracker, not describe
+it (the owner found a text-only page bland):
+- **Opening screen:** once the tracker has loaded, `boot()` calls `loading.skip()` and
+  `landing.goLive()`; the page's backdrop fades (`is-live`) and the LIVE globe shows through,
+  held closer than the home view and moved beside the headline by `updateViewShift()`
+  (`heroShift`). Until then, and without WebGL, the orbit drawing stands in. While the page is
+  up `body.home-open` hides the tracker's controls, shortcuts are off, and the globe is drawn
+  every frame only while the opening screen is in view.
+- **Showcase:** real screens in `public/shots/*.webp`, listed in `SHOTS` (`featureList.ts`).
+  Retake them with `npm run shots` (`scripts/shots.mjs`: headless Chrome driven over the
+  DevTools protocol against the running dev server) whenever the interface changes visibly.
+- **How it works:** `src/ui/hashDemo.ts`, a 2D canvas that files dots in the real
+  `SpatialHash` and draws either every pair or only the neighbours the table offers.
+- **Spacecraft plate:** `modelThumbnail()` for every `ModelKind`, drawn in idle moments once
+  the tracker is live and the plate is near the screen.
+- **Index:** `FEATURES` (`featureList.ts`) as rows of names with one line of text each.
+- A deliberately quiet "Games" row, then the footer.
+Navigation inside the page uses buttons, never `#anchor` links: any `#hash` in the address
+means "share link" (an inline script in `index.html` then skips the page on arrival, as it
+does when `Settings.landing` is off). "About" in the top bar (`#landing-open`, the round **i**
+on phones) brings the page back with `landing.open()`. There is no "How it works" button in
+the tracker: the walkthrough (`#howto`, drawn above the page) opens from the home page, the
+monitor panel and the About sheet.
 
 **Keeping the feature list current (a standing rule from the owner):** every user-visible
 feature has an entry in `src/ui/featureList.ts`, and the home page's "What it does" section

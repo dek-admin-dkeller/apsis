@@ -1,26 +1,33 @@
 /*
- * The welcome page (markup in index.html, behaviour in landing.ts).
+ * The home page (markup in index.html, behaviour in landing.ts).
  *
- * One idea carries it: the drawing is the logo taken apart — an orbit, the body it goes
- * round, and a satellite — with the two APSIDES marked, which is where the name comes from.
- * The satellite keeps real time: it sweeps equal areas in equal times (Kepler's second law),
- * so it whips round the near point and lingers at the far one.
+ * It shows the tracker rather than describing it. The opening screen has the live globe
+ * itself behind the headline: the tracker is already running underneath, and once it is
+ * ready (`is-live`) this page's backdrop fades and the real thing shows through. Below that:
+ * real screens, a live drawing of the search, the tracker's own 3D models, and the full list
+ * of features as a compact index.
+ *
+ * Until the globe is ready, and on a machine that cannot draw it, the opening screen shows
+ * an orbit drawing instead — the logo taken apart, with the two APSIDES marked, which is
+ * where the name comes from. Its satellite keeps real time: equal areas in equal times.
  */
 
 html #landing {
   --ld-ink: #e8f1fb;
   --ld-soft: #9aa8bd;
-  --ld-faint: rgba(232, 241, 251, 0.16);
+  --ld-faint: rgba(232, 241, 251, 0.14);
+  --ld-line: rgba(232, 241, 251, 0.28);
   --ld-accent: #7fe3ff;
+  --ld-warm: #ffb454;
+  --ld-night: #05080f;
+  --ld-pad: clamp(20px, 5vw, 72px);
   position: fixed;
   inset: 0;
   z-index: 200;
   visibility: visible; /* index.html hides it until this stylesheet has arrived */
   display: block;
-  padding: 0 clamp(20px, 5vw, 72px) clamp(18px, 3vw, 38px);
-  overflow: hidden auto; /* scrolls down on a short screen; never sideways */
+  overflow: hidden auto; /* scrolls down; never sideways */
   overscroll-behavior: contain;
-  background: radial-gradient(58% 64% at 74% 46%, #0c1627 0%, #05080f 72%);
   color: var(--ld-ink);
   font-family: var(--font-ui);
   transition: opacity 420ms ease;
@@ -29,7 +36,10 @@ html.no-landing #landing { display: none; }
 #landing.is-leaving { opacity: 0; pointer-events: none; }
 #landing.is-away { display: none; } /* put away once the visitor is in the tracker; "About" brings it back */
 
-/* The bar stays at the top while the page scrolls, so the way into the tracker is always there. */
+/* While the page is up, the tracker's own controls stay out of the picture behind it. */
+body.home-open :is(#hud, #tooltip, #reticle, #range-tag) { opacity: 0 !important; pointer-events: none !important; }
+
+/* ---- the bar at the top: stays put while the page scrolls ---- */
 .ld-top {
   position: sticky;
   top: 0;
@@ -37,45 +47,20 @@ html.no-landing #landing { display: none; }
   display: flex;
   align-items: center;
   gap: clamp(14px, 3vw, 40px);
-  margin: 0 calc(-1 * clamp(20px, 5vw, 72px));
-  padding: 14px clamp(20px, 5vw, 72px);
-  background: rgba(5, 8, 15, 0.82);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border-bottom: 1px solid transparent;
+  padding: 14px var(--ld-pad);
+  background: var(--ld-night);
+  transition: background 900ms ease;
 }
+#landing.is-live .ld-top { background: rgba(5, 8, 15, 0.66); backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2); }
+.ld-mark { display: inline-flex; align-items: center; gap: 10px; font: 600 17px var(--font-display); letter-spacing: 0.02em; }
+.ld-mark .logo { width: 26px; height: 26px; }
 .ld-nav { display: flex; align-items: center; gap: clamp(10px, 2vw, 28px); margin-left: auto; }
 .ld-nav button { padding: 6px 2px; border: 0; background: none; color: var(--ld-soft); font: 14px var(--font-ui); cursor: pointer; transition: color 140ms ease; }
 .ld-nav button:hover { color: var(--ld-ink); }
-.ld-nav button:focus-visible, .ld-text-button:focus-visible { outline: 2px solid var(--ld-accent); outline-offset: 3px; border-radius: 3px; }
+#landing button:focus-visible { outline: 2px solid var(--ld-accent); outline-offset: 3px; border-radius: 4px; }
 /* The games link is there for whoever looks for it; it does not compete with the tool. */
-.ld-nav .ld-quiet { font-size: 12.5px; opacity: 0.62; }
-.ld-button.ld-small { height: 38px; padding: 0 16px; border-radius: 8px; font-size: 13.5px; }
-.ld-mark { display: inline-flex; align-items: center; gap: 10px; font: 600 17px var(--font-display); letter-spacing: 0.02em; }
-.ld-mark .logo { width: 26px; height: 26px; }
+.ld-nav .ld-quiet { font-size: 12.5px; opacity: 0.6; }
 
-.ld-main {
-  display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
-  align-items: center;
-  gap: clamp(24px, 4vw, 72px);
-  min-height: calc(100vh - 150px); /* the opening screen is the headline and the drawing, nothing else */
-  min-height: calc(100svh - 150px);
-  padding: clamp(16px, 4vh, 48px) 0;
-  /* The tilted drawing's corners must not add to the page's size either. `clip` rather than
-     `hidden`: it trims without letting this row shrink below its content on a short screen. */
-  overflow: clip;
-  overflow-clip-margin: 12px;
-}
-.ld-copy h1 {
-  margin: 0;
-  max-width: 13ch;
-  font: 600 clamp(32px, min(4.7vw, 9vh), 70px) / 1.03 var(--font-display); /* also shrinks on a short window, so the page fits without scrolling */
-  letter-spacing: -0.025em;
-  text-wrap: balance;
-}
-.ld-lede { margin: clamp(16px, 2.4vh, 26px) 0 0; max-width: 44ch; font-size: clamp(15px, 1.25vw, 17.5px); line-height: 1.6; color: var(--ld-soft); }
-.ld-go { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 18px; margin-top: clamp(22px, 3.6vh, 38px); }
 .ld-button {
   height: 50px;
   padding: 0 26px;
@@ -89,11 +74,60 @@ html.no-landing #landing { display: none; }
 }
 .ld-button:hover { background: var(--ld-accent); }
 .ld-button:active { transform: scale(0.98); }
-.ld-button:focus-visible { outline: 2px solid var(--ld-accent); outline-offset: 3px; }
-.ld-status { margin: 0; font-size: 13.5px; color: var(--ld-soft); font-variant-numeric: tabular-nums; }
+.ld-button.ld-small { height: 38px; padding: 0 16px; border-radius: 8px; font-size: 13.5px; }
 
-/* ---- the orbit ---- */
-.ld-orbit { position: relative; justify-self: end; width: min(100%, 700px, 78vh); aspect-ratio: 5 / 4; margin: 0; }
+/* ---- the opening screen ---- */
+.ld-main {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  align-items: center;
+  gap: clamp(24px, 4vw, 72px);
+  min-height: calc(100vh - 66px);
+  min-height: calc(100svh - 66px);
+  padding: clamp(16px, 4vh, 48px) var(--ld-pad) clamp(40px, 9vh, 96px);
+  /* The tilted drawing's corners must not add to the page's size. `clip` rather than `hidden`:
+     it trims without letting this block shrink below its content on a short screen. */
+  overflow: clip;
+  overflow-clip-margin: 12px;
+}
+/* The backdrop that stands in until the tracker is ready, then fades to let the globe through. */
+.ld-main::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background: radial-gradient(58% 64% at 74% 46%, #0c1627 0%, var(--ld-night) 72%);
+  transition: opacity 1400ms ease;
+}
+#landing.is-live .ld-main::before { opacity: 0; }
+/* Over the live globe: dark behind the words, clear over the planet, and a soft floor that
+   runs into the solid page below. */
+.ld-main::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(0deg, var(--ld-night) 0%, rgba(5, 8, 15, 0) 26%),
+    linear-gradient(90deg, rgba(5, 8, 15, 0.94) 0%, rgba(5, 8, 15, 0.78) 30%, rgba(5, 8, 15, 0) 60%);
+  pointer-events: none;
+}
+.ld-copy h1 {
+  margin: 0;
+  max-width: 12.5ch;
+  font: 600 clamp(34px, min(5vw, 9.4vh), 78px) / 1 var(--font-display);
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+.ld-lede { margin: clamp(16px, 2.6vh, 28px) 0 0; max-width: 42ch; font-size: clamp(15px, 1.25vw, 18px); line-height: 1.6; color: #b3bfd1; }
+.ld-go { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 18px; margin-top: clamp(22px, 3.6vh, 38px); }
+.ld-status { margin: 0; font-size: 13.5px; color: var(--ld-soft); font-variant-numeric: tabular-nums; }
+#landing.is-live .ld-status::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: #5ee0a0; box-shadow: 0 0 0 3px rgba(94, 224, 160, 0.16); vertical-align: 1px; }
+
+/* ---- the orbit drawing (the stand-in) ---- */
+.ld-orbit { position: relative; justify-self: end; width: min(100%, 700px, 78vh); aspect-ratio: 5 / 4; margin: 0; transition: opacity 900ms ease; }
+#landing.is-live .ld-orbit { opacity: 0; }
 .ld-turn { position: absolute; inset: 0; transform: rotate(-13deg); }
 .ld-turn svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .ld-turn ellipse { fill: none; stroke: rgba(232, 241, 251, 0.34); stroke-width: 1.2; vector-effect: non-scaling-stroke; }
@@ -116,6 +150,7 @@ html.no-landing #landing { display: none; }
    round. */
 .ld-clip { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 .ld-sat { position: absolute; inset: 0; animation: ld-kepler 18s linear infinite; will-change: transform; pointer-events: none; }
+#landing.is-live .ld-sat { animation-play-state: paused; }
 .ld-sat i { position: absolute; left: -6px; top: -6px; width: 12px; height: 12px; border-radius: 50%; background: var(--ld-accent); box-shadow: 0 0 0 6px rgba(127, 227, 255, 0.13); }
 .ld-tag { position: absolute; top: 50%; font-size: 13px; line-height: 1.35; color: var(--ld-ink); white-space: nowrap; }
 .ld-tag small { display: block; font-size: 12px; color: var(--ld-soft); }
@@ -177,36 +212,83 @@ html.no-landing #landing { display: none; }
   100.00% { transform: translate(4.00%, 50.00%); }
 }
 
-/* ---- the sections below the opening screen ---- */
-.ld-section { padding: clamp(44px, 9vh, 104px) 0; border-top: 1px solid var(--ld-faint); scroll-margin-top: 64px; }
-.ld-section h2 { margin: 0; font: 600 clamp(26px, 2.8vw, 40px) / 1.08 var(--font-display); letter-spacing: -0.02em; }
-.ld-intro { margin: 12px 0 0; max-width: 58ch; font-size: clamp(15px, 1.2vw, 17px); line-height: 1.6; color: var(--ld-soft); }
+/* ---- everything below the opening screen sits on solid ground ---- */
+.ld-body { position: relative; background: var(--ld-night); padding: 0 var(--ld-pad) clamp(18px, 3vw, 38px); }
+.ld-section { padding: clamp(56px, 11vh, 128px) 0; border-top: 1px solid var(--ld-faint); scroll-margin-top: 64px; }
+.ld-body > .ld-section:first-child { border-top: 0; }
+.ld-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: end; gap: 14px clamp(28px, 5vw, 80px); }
+.ld-section h2 { margin: 0; max-width: 16ch; font: 600 clamp(28px, 3.4vw, 50px) / 1.04 var(--font-display); letter-spacing: -0.025em; text-wrap: balance; }
+.ld-intro { margin: 0; max-width: 46ch; font-size: clamp(15px, 1.15vw, 17px); line-height: 1.6; color: var(--ld-soft); }
 
-/* What it does: a set list in columns, like the contents page of a manual — not a wall of cards. */
-.ld-features { columns: 3 270px; column-gap: clamp(28px, 4.5vw, 72px); margin: clamp(26px, 4vh, 44px) 0 clamp(8px, 2vh, 20px); }
-.ld-group { break-inside: avoid; margin: 0 0 34px; }
-.ld-group h3 { margin: 0; padding-bottom: 9px; border-bottom: 1px solid rgba(232, 241, 251, 0.3); font: 600 15.5px var(--font-display); letter-spacing: 0.005em; }
-.ld-group dl { margin: 0; }
-.ld-group dt { margin-top: 13px; font-size: 14px; font-weight: 600; color: var(--ld-ink); }
-.ld-group dd { margin: 3px 0 0; font: 13.5px/1.55 var(--font-ui); color: var(--ld-soft); } /* (the tracker sets every <dd> in its monospace face; not here) */
-.ld-fresh { margin-left: 7px; font-size: 11px; font-weight: 500; color: var(--ld-accent); }
+/* ---- real screens ---- */
+.ld-tabs { display: flex; flex-wrap: wrap; gap: 4px clamp(14px, 2.4vw, 34px); margin-top: clamp(26px, 5vh, 52px); border-bottom: 1px solid var(--ld-faint); }
+.ld-tabs button { position: relative; padding: 0 0 13px; border: 0; background: none; color: var(--ld-soft); font: 500 15px var(--font-ui); cursor: pointer; transition: color 140ms ease; }
+.ld-tabs button:hover { color: var(--ld-ink); }
+.ld-tabs button.is-on { color: var(--ld-ink); }
+.ld-tabs button.is-on::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--ld-accent); }
+.ld-screen { margin: clamp(18px, 3vh, 30px) 0 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.ld-screen img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid rgba(232, 241, 251, 0.16);
+  background: #070b14;
+  box-shadow: 0 40px 90px -30px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(0, 0, 0, 0.6);
+  transition: opacity 220ms ease;
+}
+.ld-screen.is-changing img { opacity: 0.25; }
+.ld-screen figcaption { max-width: 62ch; font-size: 15px; line-height: 1.6; color: var(--ld-soft); }
+/* A phone screen is tall: shown at phone width with its words beside it. */
+.ld-screen.is-phone { grid-template-columns: auto minmax(0, 34ch); justify-content: center; align-items: center; gap: clamp(24px, 5vw, 72px); }
+.ld-screen.is-phone img { width: min(300px, 62vw); aspect-ratio: 390 / 844; border-radius: 34px; border-width: 6px; border-color: #1b2332; }
 
-/* How it works: the explanation, with the figures that make the point set beside it. */
-.ld-how { display: grid; grid-template-columns: minmax(0, 62ch) minmax(240px, 1fr); gap: clamp(28px, 6vw, 96px); align-items: start; margin-top: clamp(20px, 3vh, 34px); }
-.ld-prose h3 { margin: 26px 0 0; font: 600 16px var(--font-display); }
-.ld-prose h3:first-child { margin-top: 0; }
-.ld-prose p { margin: 8px 0 0; font-size: 15px; line-height: 1.65; color: var(--ld-soft); }
-.ld-prose p span { color: var(--ld-ink); font-variant-numeric: tabular-nums; }
-.ld-text-button { margin-top: 26px; padding: 0 0 2px; border: 0; border-bottom: 1px solid currentColor; background: none; color: var(--ld-accent); font: 500 15px var(--font-ui); text-align: left; cursor: pointer; }
+/* ---- the live drawing of the search ---- */
+.ld-demo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(250px, 320px); gap: clamp(22px, 4vw, 56px); align-items: start; margin-top: clamp(26px, 5vh, 52px); }
+.ld-demo-stage { border: 1px solid rgba(232, 241, 251, 0.16); border-radius: 12px; background: #070b14; overflow: hidden; }
+.ld-demo-stage canvas { display: block; width: 100%; aspect-ratio: 40 / 22; }
+.ld-switch { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--ld-line); border-radius: 9px; overflow: hidden; }
+.ld-switch button { height: 42px; padding: 0 8px; border: 0; background: none; color: var(--ld-soft); font: 500 13.5px var(--font-ui); cursor: pointer; transition: background 140ms ease, color 140ms ease; }
+.ld-switch button + button { border-left: 1px solid var(--ld-line); }
+.ld-switch button.is-on { background: var(--ld-ink); color: #05080f; }
+.ld-count { margin: 22px 0 0; }
+.ld-count > div { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--ld-faint); }
+.ld-count dt { font-size: 14px; color: var(--ld-soft); }
+.ld-count dd { margin: 0; font: 500 22px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ld-ink); }
+.ld-count > div:nth-child(2) dd { color: var(--ld-accent); }
+.ld-count > div:nth-child(3) dd { color: var(--ld-warm); }
+.ld-demo-note { margin: 18px 0 0; font-size: 14px; line-height: 1.6; color: var(--ld-soft); }
+.ld-scale { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(28px, 6vw, 96px); align-items: start; margin-top: clamp(40px, 7vh, 76px); }
+.ld-sum { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+.ld-sum caption { padding-bottom: 10px; text-align: left; font: 600 16px var(--font-display); color: var(--ld-ink); border-bottom: 1px solid var(--ld-line); }
+.ld-sum th { padding: 14px 16px 14px 0; text-align: left; font-weight: 400; line-height: 1.4; color: var(--ld-soft); border-bottom: 1px solid var(--ld-faint); }
+.ld-sum td { padding: 14px 0; text-align: right; font: 500 18px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ld-ink); white-space: nowrap; border-bottom: 1px solid var(--ld-faint); }
+.ld-prose p { margin: 0 0 14px; font-size: 15px; line-height: 1.65; color: var(--ld-soft); }
+.ld-text-button { margin-top: 6px; padding: 0 0 2px; border: 0; border-bottom: 1px solid currentColor; background: none; color: var(--ld-accent); font: 500 15px var(--font-ui); text-align: left; cursor: pointer; }
 .ld-text-button:hover { color: var(--ld-ink); }
-.ld-sum { width: 100%; border-collapse: collapse; font-size: 14px; }
-.ld-sum caption { padding-bottom: 10px; text-align: left; font: 600 15.5px var(--font-display); color: var(--ld-ink); border-bottom: 1px solid rgba(232, 241, 251, 0.3); }
-.ld-sum th { padding: 13px 16px 13px 0; text-align: left; font-weight: 400; line-height: 1.4; color: var(--ld-soft); border-bottom: 1px solid var(--ld-faint); }
-.ld-sum td { padding: 13px 0; text-align: right; font: 500 17px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ld-ink); white-space: nowrap; border-bottom: 1px solid var(--ld-faint); }
 
-/* Games: small, last, and quiet. */
-.ld-games { padding: clamp(26px, 5vh, 48px) 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 22px; }
-.ld-games h2 { font-size: 17px; letter-spacing: 0; color: var(--ld-soft); }
+/* ---- the plate of spacecraft: laid out like a page from a field guide ---- */
+.ld-plate { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: clamp(18px, 2.6vw, 34px) clamp(12px, 2vw, 26px); margin-top: clamp(26px, 5vh, 52px); min-height: 150px; }
+.ld-plate figure { margin: 0; animation: ld-rise 500ms ease both; }
+.ld-plate img { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; }
+.ld-plate figcaption { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--ld-faint); font-size: 12.5px; line-height: 1.35; color: var(--ld-soft); }
+@keyframes ld-rise { from { opacity: 0; transform: translateY(8px); } }
+
+/* ---- everything it does: a compact index ---- */
+.ld-index { margin: clamp(22px, 4vh, 44px) 0 clamp(30px, 5vh, 52px); border-top: 1px solid var(--ld-line); }
+.ld-row { display: grid; grid-template-columns: minmax(150px, 3fr) minmax(0, 9fr); gap: 8px clamp(20px, 4vw, 64px); padding: 22px 0 20px; border-bottom: 1px solid var(--ld-faint); }
+.ld-row h3 { margin: 3px 0 0; font: 600 16px var(--font-display); }
+.ld-names { display: flex; flex-wrap: wrap; gap: 2px clamp(14px, 1.8vw, 26px); }
+.ld-names button { padding: 4px 0; border: 0; border-bottom: 1px solid transparent; background: none; color: var(--ld-ink); font: 500 15px var(--font-ui); cursor: pointer; transition: color 120ms ease, border-color 120ms ease; }
+.ld-names:hover button:not(.is-on), .ld-names:focus-within button:not(.is-on) { color: var(--ld-soft); }
+.ld-names button.is-on { color: var(--ld-accent); border-bottom-color: currentColor; }
+.ld-line { margin: 10px 0 0; min-height: 3.1em; max-width: 78ch; font-size: 14.5px; line-height: 1.55; color: var(--ld-soft); }
+.ld-fresh { margin-left: 6px; font-size: 11px; font-weight: 500; color: var(--ld-warm); }
+
+/* ---- games: small, last, and quiet ---- */
+.ld-games { padding: clamp(26px, 5vh, 44px) 0; border-top: 1px solid var(--ld-faint); display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 22px; scroll-margin-top: 64px; }
+.ld-games h2 { margin: 0; font: 600 17px var(--font-display); color: var(--ld-soft); }
 .ld-games p { margin: 0; font-size: 13.5px; color: var(--ld-soft); opacity: 0.8; }
 
 .ld-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 40px; padding-top: 14px; border-top: 1px solid var(--ld-faint); font-size: 12.5px; line-height: 1.55; color: var(--ld-soft); }
@@ -217,22 +299,30 @@ html.no-landing #landing { display: none; }
   .ld-top { flex-wrap: wrap; gap: 6px 14px; padding-top: 10px; padding-bottom: 10px; }
   .ld-nav { order: 3; width: 100%; margin-left: 0; gap: 18px; }
   .ld-nav button { padding: 4px 0; font-size: 13px; }
-  .ld-button.ld-small { margin-left: auto; width: auto; height: 36px; }
-  .ld-how { grid-template-columns: 1fr; }
-  .ld-features { columns: 1; }
-  .ld-section .ld-button { width: 100%; }
-  .ld-main { grid-template-columns: 1fr; align-content: center; gap: 8px; padding: 4px 0 14px; }
+  .ld-button.ld-small { margin-left: auto; height: 36px; }
+  /* The globe sits in the upper half, the words below it. */
+  .ld-main { grid-template-columns: 1fr; align-content: end; gap: 8px; min-height: calc(100svh - 92px); padding-top: 4px; padding-bottom: 34px; }
+  .ld-main::after { background: linear-gradient(0deg, var(--ld-night) 0%, rgba(5, 8, 15, 0.9) 34%, rgba(5, 8, 15, 0) 62%); }
   .ld-orbit { order: -1; justify-self: center; width: min(90%, 400px, 40vh); margin: 2px 0 16px; }
   .ld-copy h1 { max-width: 14ch; font-size: clamp(32px, 9.4vw, 46px); }
   .ld-go { flex-direction: column; align-items: stretch; gap: 10px; }
-  .ld-button { width: 100%; height: 52px; }
+  .ld-go .ld-button, .ld-section > .ld-button { width: 100%; height: 52px; }
   .ld-status { text-align: center; }
   .ld-tag { font-size: 11.5px; }
   .ld-tag small { font-size: 10.5px; }
   .ld-sat i { left: -5px; top: -5px; width: 10px; height: 10px; }
+  .ld-head, .ld-demo, .ld-scale { grid-template-columns: 1fr; }
+  .ld-tabs { gap: 2px 18px; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+  .ld-tabs::-webkit-scrollbar { display: none; }
+  .ld-tabs button { flex: none; font-size: 14px; }
+  .ld-screen img { border-radius: 8px; }
+  .ld-screen.is-phone { grid-template-columns: 1fr; justify-items: center; }
+  .ld-row { grid-template-columns: 1fr; }
+  .ld-plate { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .ld-sat { animation: none; transform: translate(85.97%, 21.32%); }
-  html #landing { transition: none; }
+  html #landing, .ld-main::before, .ld-orbit, .ld-screen img { transition: none; }
+  .ld-plate figure { animation: none; }
 }

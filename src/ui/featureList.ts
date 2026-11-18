@@ -17,12 +17,31 @@ export interface Feature {
 
 export interface FeatureGroup {
   title: string;
+  /** One sentence for the whole group, shown until the visitor points at one of its features. */
+  summary: string;
   items: Feature[];
 }
+
+/** The pictures in the home page's showcase: real screens, retaken with `npm run shots` (scripts/shots.mjs). */
+export interface Shot {
+  file: string; // public/shots/<file>.webp — the names are set in scripts/shots.mjs
+  tab: string;
+  text: string;
+  phone?: boolean; // a tall phone screen rather than a wide desktop one
+}
+
+export const SHOTS: Shot[] = [
+  { file: 'sky', tab: 'The whole sky', text: 'Every tracked object at once, coloured by what it is, on a globe you can turn, zoom and run forwards or backwards in time.' },
+  { file: 'object', tab: 'One object', text: 'Select anything to follow it: live readings, a 3D model beside a real photo, its path over the ground, and when its radio was last heard.' },
+  { file: 'approach', tab: 'Close approaches', text: 'Two objects passing within kilometres of each other, each in its cell of the grid that makes the search fast.' },
+  { file: 'ground', tab: 'Down to the ground', text: 'Zoom in and the surface sharpens from NASA imagery, with everything overhead still moving above it.' },
+  { file: 'phone', tab: 'On a phone', text: 'The same tracker in your hand. Hold it up and it shows what is overhead.', phone: true },
+];
 
 export const FEATURES: FeatureGroup[] = [
   {
     title: 'See everything in orbit',
+    summary: 'The whole catalogue on a live globe, down to the ground beneath it.',
     items: [
       { name: 'A live globe', text: 'Every tracked satellite, rocket stage and fragment, placed from public tracking data and moving in real time.' },
       { name: 'Sharp ground', text: 'Zoom in and the ground under you is redrawn from detailed NASA imagery, by day and by night.' },
@@ -34,6 +53,7 @@ export const FEATURES: FeatureGroup[] = [
   },
   {
     title: 'Follow one object',
+    summary: 'Pick anything and stay with it: where it is, what it is, and what it can see.',
     items: [
       { name: 'Inspector', text: 'Live height, speed and position, the path over the ground, the shape of the orbit, and its record: owner, launch date, size.' },
       { name: '3D models and photos', text: 'Twenty-one kinds of spacecraft modelled in 3D, beside a real photo where one exists.' },
@@ -45,6 +65,7 @@ export const FEATURES: FeatureGroup[] = [
   },
   {
     title: 'Watch for close approaches',
+    summary: 'Which objects are near each other now, and which will be in the coming hours.',
     items: [
       { name: 'Monitor', text: 'Every object is checked against every other about once a second. Pairs are sorted into those crossing paths and those that simply fly together.' },
       { name: 'Close-approach view', text: 'Both objects in 3D, their flight paths, the distance between them as it changes, and a slow-motion replay.' },
@@ -54,6 +75,7 @@ export const FEATURES: FeatureGroup[] = [
   },
   {
     title: 'Explore',
+    summary: 'Whole constellations, what was launched lately, your own satellite, and ways to show others.',
     items: [
       { name: 'Constellations', text: 'All of GPS, Starlink or Iridium at once, with a live map of how much of the ground each can see.' },
       { name: 'Launches, trains and re-entries', text: 'The newest objects in orbit, freshly launched batches still flying in a line, and the lowest orbits that will come down next.' },
@@ -64,6 +86,7 @@ export const FEATURES: FeatureGroup[] = [
   },
   {
     title: 'On a phone',
+    summary: 'The same tracker, made for a small screen and for pointing at the sky.',
     items: [
       { name: 'Hold it up to the sky', text: 'The sky button fills the screen with what is overhead in the direction the phone is pointing.' },
       { name: 'Built around the globe', text: 'Few controls on screen, and panels you can drag out of the way.' },

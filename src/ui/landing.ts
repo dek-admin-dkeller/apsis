@@ -1,25 +1,30 @@
 /**
  * The home page: what a visitor sees first, and where the tracker is explained.
  *
- * It carries the opening screen (headline, the orbit drawing, "Open the tracker"), the list
- * of everything the tracker can do (drawn from featureList.ts, so there is one place to keep
- * it current), a summary of how the search works with a way into the full walkthrough, and a
- * small corner for games.
+ * It is built to SHOW the tracker rather than describe it:
+ *   - the opening screen has the live globe itself behind the headline (the tracker is already
+ *     running underneath; once it is ready the page's backdrop fades and the real thing shows
+ *     through). Until then, and on a machine that cannot draw it, an orbit drawing stands in;
+ *   - a showcase of real screens (SHOTS in featureList.ts; retaken with `npm run shots`);
+ *   - a live drawing of the search that runs the project's own hash table (hashDemo.ts);
+ *   - a plate of the tracker's 3D models, drawn by the same code that draws them in orbit;
+ *   - the complete list of features (FEATURES in featureList.ts — the one place to keep it
+ *     current), as a compact index;
+ *   - a small corner for games.
  *
- * The tracker starts loading behind it straight away: the page is an opaque layer on top,
- * static markup in index.html so it is painted before any script has run. "Open the
- * tracker" puts the page away and shows whatever is underneath — the tracker if it has
- * finished loading, otherwise the launch screen with its progress. "About" in the tracker's
- * top bar brings the page back.
- *
- * On arrival it is skipped for share links (the visitor asked for something specific) and
- * when the "Welcome page" setting is off — index.html decides that before the first paint by
- * putting the class `no-landing` on <html>.
+ * The page is an opaque layer over the tracker, static markup in index.html so it is painted
+ * before any script has run. "Open the tracker" puts it away; "About" in the tracker's top
+ * bar brings it back. On arrival it is skipped for share links and when the "Welcome page"
+ * setting is off — index.html decides that before the first paint by putting the class
+ * `no-landing` on <html>.
  */
 
 import './landing.css';
+import { KIND_LABEL, type ModelKind } from '../data/describe.ts';
+import { modelThumbnail } from '../render/satModels.ts';
 import { $, fmtInt } from './dom.ts';
-import { FEATURES } from './featureList.ts';
+import { FEATURES, SHOTS, type Shot } from './featureList.ts';
+import { HashDemo } from './hashDemo.ts';
 
 export interface LandingHost {
   /** Open the full walkthrough (it is drawn over this page). */
@@ -33,12 +38,31 @@ export class Landing {
   private visible: boolean;
   private firstEntry: (() => void) | null = null;
   private host: LandingHost | null = null;
+  private readonly demo: HashDemo;
+  private plateWanted = false; // the plate of models has scrolled near
+  private plateDrawn = false;
+  private live = false;
 
   constructor() {
     this.visible = !document.documentElement.classList.contains('no-landing');
     this.entered = this.visible ? new Promise((resolve) => (this.firstEntry = resolve)) : Promise.resolve();
     if (!this.visible) this.root.classList.add('is-away');
-    this.drawFeatures();
+    document.body.classList.toggle('home-open', this.visible);
+
+    this.drawShowcase();
+    this.drawIndex();
+    this.demo = new HashDemo($<HTMLCanvasElement>('ld-demo-canvas'), {
+      objects: $('ld-demo-n'), checks: $('ld-demo-checks'), pairs: $('ld-demo-pairs'), mode: $('ld-demo-mode'),
+    });
+    this.demo.setAllowed(this.visible);
+    // The models are drawn by the tracker's own renderer, so only once it has loaded — and only
+    // if the visitor scrolls that far.
+    new IntersectionObserver((entries, observer) => {
+      if (!entries[0].isIntersecting) return;
+      observer.disconnect();
+      this.plateWanted = true;
+      this.drawPlate();
+    }, { rootMargin: '400px' }).observe($('ld-plate'));
 
     for (const button of this.root.querySelectorAll<HTMLElement>('[data-ld-enter]')) button.addEventListener('click', () => this.enter());
     for (const link of this.root.querySelectorAll<HTMLElement>('[data-ld-jump]')) {
@@ -56,37 +80,145 @@ export class Landing {
     this.host = host;
   }
 
-  /** "What it does": one titled list per group, set in columns. */
-  private drawFeatures(): void {
+  // ---- the showcase: one large real screen at a time ----------------------------------------
+
+  private drawShowcase(): void {
+    const tabs = $('ld-tabs'), image = $<HTMLImageElement>('ld-shot'), text = $('ld-shot-text'), screen = $('ld-screen');
+    const show = (shot: Shot, button: HTMLElement) => {
+      for (const other of tabs.children) {
+        other.classList.toggle('is-on', other === button);
+        other.setAttribute('aria-selected', String(other === button));
+      }
+      screen.classList.toggle('is-phone', !!shot.phone);
+      screen.classList.add('is-changing');
+      const next = new Image();
+      next.onload = next.onerror = () => {
+        image.src = next.src;
+        image.alt = `Screen from the tracker: ${shot.tab.toLowerCase()}`;
+        text.textContent = shot.text;
+        screen.classList.remove('is-changing');
+      };
+      next.src = `./shots/${shot.file}.webp`;
+    };
+    SHOTS.forEach((shot, k) => {
+      const button = document.createElement('button');
+      button.textContent = shot.tab;
+      button.setAttribute('role', 'tab');
+      button.addEventListener('click', () => show(shot, button));
+      // Fetch a picture when its tab is pointed at, so the click shows it at once.
+      button.addEventListener('pointerenter', () => (new Image().src = `./shots/${shot.file}.webp`), { once: true });
+      tabs.append(button);
+      if (k === 0) {
+        // The first picture is only fetched when the showcase comes near the screen.
+        new IntersectionObserver((entries, observer) => {
+          if (!entries[0].isIntersecting) return;
+          observer.disconnect();
+          show(shot, button);
+        }, { rootMargin: '600px' }).observe(screen);
+        button.classList.add('is-on');
+        text.textContent = shot.text;
+      }
+    });
+  }
+
+  // ---- the plate of spacecraft ------------------------------------------------------------
+
+  /** One picture per kind of model, rendered by the tracker's own code in idle moments. */
+  private drawPlate(): void {
+    if (this.plateDrawn || !this.plateWanted || !this.live) return;
+    this.plateDrawn = true;
+    const plate = $('ld-plate');
+    const kinds = Object.keys(KIND_LABEL) as ModelKind[];
+    const idle = (work: () => void) => ('requestIdleCallback' in window ? window.requestIdleCallback(work, { timeout: 1500 }) : setTimeout(work, 60));
+    const next = () => {
+      const kind = kinds.shift();
+      if (!kind) return;
+      const url = modelThumbnail(kind);
+      if (url) {
+        const figure = document.createElement('figure');
+        const image = Object.assign(document.createElement('img'), { src: url, alt: '' });
+        const caption = Object.assign(document.createElement('figcaption'), { textContent: KIND_LABEL[kind] });
+        figure.append(image, caption);
+        plate.append(figure);
+      }
+      idle(next);
+    };
+    idle(next);
+  }
+
+  // ---- everything it does: a compact index ---------------------------------------------------
+
+  /**
+   * Each group is a row: its name, the names of its features, and one line of text that
+   * shows whichever feature is being pointed at (or the group's own summary). The whole list
+   * stays on the page without becoming a wall of paragraphs.
+   */
+  private drawIndex(): void {
     const list = $('ld-feature-list');
     for (const group of FEATURES) {
-      const block = document.createElement('div');
-      block.className = 'ld-group';
-      const title = document.createElement('h3');
-      title.textContent = group.title;
-      const items = document.createElement('dl');
+      const row = document.createElement('div');
+      row.className = 'ld-row';
+      const title = Object.assign(document.createElement('h3'), { textContent: group.title });
+      const names = document.createElement('div');
+      names.className = 'ld-names';
+      const line = Object.assign(document.createElement('p'), { className: 'ld-line', textContent: group.summary });
+      let pinned: HTMLElement | null = null; // a tapped name keeps its text until another is tapped
       for (const feature of group.items) {
-        const name = document.createElement('dt');
+        const name = document.createElement('button');
         name.textContent = feature.name;
         if (feature.fresh) name.append(Object.assign(document.createElement('span'), { className: 'ld-fresh', textContent: 'new' }));
-        const text = document.createElement('dd');
-        text.textContent = feature.text;
-        items.append(name, text);
+        const point = () => {
+          line.textContent = feature.text;
+          for (const other of names.children) other.classList.toggle('is-on', other === name);
+        };
+        name.addEventListener('pointerenter', point);
+        name.addEventListener('focus', point);
+        name.addEventListener('click', () => {
+          pinned = name;
+          point();
+        });
+        names.append(name);
       }
-      block.append(title, items);
-      list.append(block);
+      names.addEventListener('pointerleave', () => {
+        if (pinned) return pinned.dispatchEvent(new Event('focus'));
+        line.textContent = group.summary;
+        for (const other of names.children) other.classList.remove('is-on');
+      });
+      const body = document.createElement('div');
+      body.append(names, line);
+      row.append(title, body);
+      list.append(row);
     }
   }
 
-  /** Is the page in front of the tracker? (Keyboard shortcuts and drawing wait while it is.) */
+  // ---- showing, hiding, and what the tracker tells the page ------------------------------------
+
+  /** Is the page in front of the tracker? (Keyboard shortcuts wait while it is.) */
   get showing(): boolean {
     return this.visible;
+  }
+
+  /** Is the opening screen — the part the live globe shows through — on screen? */
+  get heroInView(): boolean {
+    return this.visible && this.root.scrollTop < window.innerHeight * 0.95;
+  }
+
+  /**
+   * The tracker underneath has loaded and is drawing: let it show through the opening screen,
+   * and draw the things that need its renderer.
+   */
+  goLive(): void {
+    this.live = true;
+    this.root.classList.add('is-live');
+    this.drawPlate();
   }
 
   /** Put the page away and show the tracker. */
   enter(): void {
     if (!this.visible) return;
     this.visible = false;
+    this.demo.setAllowed(false);
+    document.body.classList.remove('home-open');
     this.root.classList.add('is-leaving');
     setTimeout(() => {
       if (this.visible) return; // brought straight back
@@ -101,7 +233,9 @@ export class Landing {
   open(): void {
     if (this.visible) return;
     this.visible = true;
+    this.demo.setAllowed(true);
     document.documentElement.classList.remove('no-landing');
+    document.body.classList.add('home-open');
     this.root.classList.remove('is-away', 'is-leaving');
     this.root.scrollTop = 0;
     for (const button of this.root.querySelectorAll<HTMLElement>('[data-ld-enter]')) button.textContent = 'Back to the tracker';
@@ -112,11 +246,10 @@ export class Landing {
     $('landing-status').textContent = text;
   }
 
-  /** Put the real size of the catalogue into the "how it works" figures. */
+  /** Put the real size of the catalogue into the figures. */
   setCount(objects: number): void {
     const pairs = (objects * (objects - 1)) / 2;
     for (const el of this.root.querySelectorAll('[data-ld-count]')) el.textContent = fmtInt(objects);
     for (const el of this.root.querySelectorAll('[data-ld-pairs-exact]')) el.textContent = fmtInt(pairs);
-    for (const el of this.root.querySelectorAll('[data-ld-pairs]')) el.textContent = `${fmtInt(pairs / 1e6)} million`;
   }
 }
