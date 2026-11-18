@@ -57,7 +57,7 @@ status line sit along the bottom.
 | Sky view (`4`) | the **Sky** button at the foot of the rail: stand at the ground station and watch objects cross overhead |
 | Your location | Apsis asks once whether it may show where you are; the crosshair button in the top bar does the same at any time. Only after a yes does the browser's own permission prompt appear. You are then a green dot, and passes and the sky view use that spot |
 | Watchlist (`S`) | star an object in the inspector; it stays in the Objects panel and keeps its name tag on the globe |
-| Screening cells in a close approach (`G`) | with a close approach open, the cells drawing shows that pair: one object's cell in cyan with the block of 27 cells its search covers, the other's in amber, and both lit red while the two are inside the alert distance |
+| Screening cells in a close approach (`G`) | with a close approach open, the cells drawing is about that pair: the grid of occupied cells dimmed around them, one object's cell in cyan with an outline of the 27 cells its search covers, the other's in amber, both lit red while the two are inside the alert distance. The camera keeps both objects in view as they fly apart, and their flight paths are drawn as long arcs |
 | Share | the link button in the top bar copies an address that reopens the same object, close approach, time or camera position |
 | Tour | offered on the first visit and always available from the controls sheet (`?`) |
 | Autopilot (`A`) | a hands-free cinematic tour of the view; any key or click stops it |
@@ -69,7 +69,7 @@ status line sit along the bottom.
 | Hover card | point at any dot for a small card: a photo or a 3D picture of it, what it is, who runs it, its height and speed now |
 | People in space | who is aboard the ISS and Tiangong right now, in those stations' Record tab |
 | Contact timeline | Watchlist → **Contact timeline**: when each of several ground stations can see each starred object over the next 24 hours |
-| Point your phone | in the Sky view on a phone, **Use phone motion** aims the view wherever the phone points |
+| Point your phone | on a phone, the round sky button asks where you are (and, on an iPhone, for the motion sensors), then fills the screen with the sky: hold the phone up and it shows what is overhead in that direction. A faint cross in the corner closes it |
 | Design a satellite | Objects panel: choose an orbit, launch your own object into the live catalogue, and check what it will pass close to in the next 24 hours |
 | Time | the bar at the bottom: drag the timeline to move up to 12 hours either way, pause (`Space`), 1× – 1000×, run backwards (`R`), step 10 minutes (`[` `]`), **Now** (`N`), or click the clock to type a date |
 | Hover | pointing at an object shows a small card: picture, what it is, who runs it, height and speed |
@@ -77,7 +77,7 @@ status line sit along the bottom.
 | Settings (`,`) | kilometres or miles, UTC or local time, the hover card and the welcome page on or off, rendering quality, ground-station location, download current elements |
 | Welcome page | the first thing a visitor sees, while the tracker loads behind it; skipped for share links and when switched off in Settings |
 | How it works | the button in the top bar: a walkthrough of the screening algorithm with a live trace, live hash-table statistics, the look-ahead method and the benchmark |
-| Phones | below 760 px the layout becomes a map-style app: a floating search field with view chips under it, round buttons on the right edge, a floating four-tool tab bar, and rounded sheets you can drag to any height or flick open and shut. It can be added to the home screen and then runs full screen like an app |
+| Phones | below 760 px the layout is built around the globe: a search field, two round buttons (sky view, and a menu with the views, time and speed, location and share), a short four-tool tab bar, and sheets that rest on the tab bar and can be dragged to any height or tucked away. There is no time bar on a phone; a small chip appears only while time is not running live. It can be added to the home screen and then runs full screen like an app |
 | Other keys | `P` save a picture, `F` full screen, `H` hide the interface, `?` all controls, `Esc` close / deselect |
 
 ## How the spatial hash works
