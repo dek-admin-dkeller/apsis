@@ -174,7 +174,9 @@ export class EncounterViz {
         const state = stateAt(rec, t);
         if (!state) continue;
         positions.push(state.position.x - this.origin.x, state.position.y - this.origin.y, state.position.z - this.origin.z);
-        const level = 0.16 + 1.12 * Math.pow(Math.max(0, 1 - Math.abs(t - this.tcaMs) / core), 1.6);
+        // Bright through the approach itself, and still plainly visible before and after:
+        // these are the two orbits, and a line too faint to see reads as "the orbit is gone".
+        const level = 0.55 + 0.75 * Math.pow(Math.max(0, 1 - Math.abs(t - this.tcaMs) / core), 1.6);
         colors.push(color.r * level, color.g * level, color.b * level);
       }
       if (positions.length < 6) return; // fewer than two usable points: keep whatever was drawn
