@@ -12,6 +12,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 
 export const KM = 0.001; // kilometres → scene units
@@ -70,6 +71,28 @@ export function createScene(canvas: HTMLCanvasElement): SceneKit {
   // Post-processing: render (MSAA, HDR) → bloom → tone/colour output.
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
+  // Safety net. The bloom pass blurs the picture at many sizes, so ONE invalid pixel (a NaN
+  // from some shader on some graphics driver) would spread until the whole screen is black.
+  // This pass replaces any non-finite or absurd pixel with black before bloom ever sees it:
+  // the worst case becomes a single dark dot instead of a blank screen.
+  composer.addPass(new ShaderPass({
+    uniforms: { tDiffuse: { value: null } },
+    vertexShader: /* glsl */ `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform sampler2D tDiffuse;
+      varying vec2 vUv;
+      void main() {
+        vec4 c = texture2D(tDiffuse, vUv);
+        // every comparison with NaN is false, so a NaN fails this test; so does infinity
+        bool sane = c.r > -1.0 && c.g > -1.0 && c.b > -1.0 && c.r < 1.0e4 && c.g < 1.0e4 && c.b < 1.0e4;
+        gl_FragColor = sane ? vec4(max(c.rgb, 0.0), 1.0) : vec4(0.0, 0.0, 0.0, 1.0);
+      }`,
+  }));
   const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.62, 0.55, 0.9);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());

@@ -60,6 +60,7 @@ import { initSearch } from './ui/search.ts';
 import { SettingsStore, type Settings } from './ui/settings.ts';
 import { ShareDialog } from './ui/share.ts';
 import { Sheets } from './ui/sheet.ts';
+import { thumbnail } from './ui/thumb.ts';
 import { TimeControls, type SimClock } from './ui/timeControls.ts';
 import { Tour } from './ui/tour.ts';
 import { Watchlist } from './ui/watchlist.ts';
@@ -109,7 +110,55 @@ let lastTraceAt = -Infinity;
 // ---------------------------------------------------------------- modules
 
 const canvas = $<HTMLCanvasElement>('scene');
+if (!document.createElement('canvas').getContext('webgl2')) {
+  // No 3D graphics here at all: say so instead of sitting on the loading screen for ever.
+  $('loading-status').textContent = 'This browser or device cannot show 3D graphics (WebGL 2 is switched off or unsupported).';
+  $('loading-status').style.color = 'var(--red)';
+  throw new Error('WebGL 2 is not available');
+}
 const kit = createScene(canvas);
+
+// ---- when something goes wrong ------------------------------------------------------------
+// The graphics card can take the 3D context away (driver reset, memory pressure, the laptop
+// switching GPUs). Left alone that is a permanently black canvas, so: say what happened and
+// reload once the browser gives the context back (at most twice in a row, to avoid a loop).
+let lastProblem = '';
+canvas.addEventListener('webglcontextlost', (event) => {
+  event.preventDefault();
+  lastProblem = 'graphics context lost';
+  showProblem('The graphics were reset by the browser. Reloading…', false);
+  setTimeout(() => showProblem('The graphics were reset by the browser and did not come back.', true), 5000);
+});
+canvas.addEventListener('webglcontextrestored', () => {
+  let reloads = 0;
+  try {
+    reloads = Number(sessionStorage.getItem('apsis.reloads') ?? '0');
+    sessionStorage.setItem('apsis.reloads', String(reloads + 1));
+  } catch { /* no storage: reload anyway, once */ }
+  if (reloads < 2) location.reload();
+  else showProblem('The graphics keep resetting on this device. Try Settings → Rendering → Fast after reloading.', true);
+});
+window.addEventListener('error', (event) => (lastProblem = event.message));
+window.addEventListener('unhandledrejection', (event) => (lastProblem = String(event.reason)));
+
+/** A plain message over the view, optionally with a Reload button. */
+function showProblem(text: string, withReload: boolean): void {
+  let box = document.getElementById('problem');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'problem';
+    box.setAttribute('role', 'alert');
+    document.body.append(box);
+  }
+  box.replaceChildren(text);
+  if (withReload) {
+    const reload = document.createElement('button');
+    reload.className = 'btn btn-primary';
+    reload.textContent = 'Reload';
+    reload.addEventListener('click', () => location.reload());
+    box.append(reload);
+  }
+}
 const sim = new SimClient();
 const loading = new LoadingScreen();
 let texturesDone = 0;
@@ -411,7 +460,7 @@ document.addEventListener('pointerdown', (event) => {
   // a tap anywhere else closes the views menu
   if (!viewsMenu.classList.contains('is-hidden') && !(event.target as HTMLElement).closest('#m-views, #m-views-open')) setViewsMenu(false);
 });
-const fitLabelsToScreen = () => (labels.nearby = Sheets.isPhone ? 10 : 36); // a phone screen fits fewer name tags
+const fitLabelsToScreen = () => (labels.nearby = Sheets.isPhone ? 14 : 70); // a phone screen fits fewer name tags
 fitLabelsToScreen();
 window.addEventListener('resize', fitLabelsToScreen);
 /** A short tick on phones that support it (Android), so a tap that selects something can be felt. */
@@ -673,6 +722,16 @@ function preset(which: number): void {
     const south = up.clone().negate().addScaledVector(spot, spot.y).normalize(); // "down the map", tangent to the surface
     const target = spot.clone().multiplyScalar(7.05);
     rig.flyToView(target.clone().addScaledVector(south, -3.0).addScaledVector(spot, 0.35), target);
+  } else if (which === 5) {
+    // Earth in front, the Moon beyond it: stand on the far side of the Earth from the Moon,
+    // stepped a little off the line so the Moon clears the Earth's edge. On a tall phone
+    // screen the Moon is placed above the Earth; on a wide screen, beside it.
+    const moon = sky.bodies[0].direction.clone();
+    const tall = window.innerHeight > window.innerWidth;
+    const axis = tall ? new THREE.Vector3().crossVectors(moon, up).normalize() : up;
+    const from = moon.clone().negate().applyAxisAngle(axis, tall ? -0.3 : 0.36);
+    rig.flyToView(from.multiplyScalar(30), ORIGIN.clone(), 2.4);
+    toast('The Moon is drawn four times its real size so it is easy to find.', 4500);
   } else {
     // High above the north pole: the geostationary belt shows up as a clean ring.
     rig.flyToView(sun.setY(0).normalize().multiplyScalar(74).add(up.multiplyScalar(66)), ORIGIN.clone(), 2.2);
@@ -870,20 +929,42 @@ canvas.addEventListener('pointerup', (event) => {
   if (index >= 0 && index !== selected?.index) select(catalog.sats[index]);
 });
 
+let hoverIndex = -1; // object the hover card is currently showing
+
+/** Hover card: a picture, the name, what it is, who runs it, and where it is right now. */
 function updateHover(): void {
   if (!pointer.dirty || !catalog) return;
   pointer.dirty = false;
   const index = cloud.pick(pointer.x, pointer.y);
   canvas.style.cursor = index >= 0 ? 'pointer' : '';
   tooltip.classList.toggle('is-hidden', index < 0);
-  if (index >= 0) {
-    const sat = catalog.sats[index];
-    const kind = document.createElement('span');
-    kind.textContent = `${sat.category}, ${fmtInt(sat.meanAltKm)} km`;
-    tooltip.replaceChildren(sat.name, kind);
-    tooltip.style.left = `${pointer.x}px`;
-    tooltip.style.top = `${pointer.y}px`;
+  if (index < 0) {
+    hoverIndex = -1;
+    return;
   }
+  const sat = catalog.sats[index];
+  if (index !== hoverIndex) {
+    // a different object: rebuild the card (the picture loads itself: photo if there is one, else the 3D model)
+    hoverIndex = index;
+    const profile = describe(sat);
+    const line = (className: string, text: string) => Object.assign(document.createElement('span'), { className, textContent: text });
+    const text = document.createElement('div');
+    text.className = 'tip-text';
+    text.append(line('tip-name', sat.name), line('tip-what', profile.purpose), line('tip-live', ''));
+    if (profile.operator) text.append(line('tip-op', profile.operator));
+    tooltip.replaceChildren(thumbnail(sat), text);
+  }
+  // live line: height and speed now (speed from the vis-viva equation for its orbit)
+  const here = { x: 0, y: 0, z: 0 };
+  if (sim.getPosition(index, here)) {
+    const r = Math.hypot(here.x, here.y, here.z);
+    const speed = Math.sqrt(Math.max(0, 398600.4418 * (2 / r - 1 / (EARTH_RADIUS_KM + sat.meanAltKm))));
+    tooltip.querySelector('.tip-live')!.textContent = `${fmtInt(r - EARTH_RADIUS_KM)} km up, ${fmt(speed, 2)} km/s`;
+  }
+  // beside the pointer, flipped to the left near the right edge so it never leaves the screen
+  tooltip.classList.toggle('is-left', pointer.x > window.innerWidth - 340);
+  tooltip.style.left = `${pointer.x}px`;
+  tooltip.style.top = `${Math.min(Math.max(pointer.y, 70), window.innerHeight - 70)}px`;
 }
 
 // ---------------------------------------------------------------- top-bar tools + keyboard
@@ -964,7 +1045,16 @@ function applyLink(): boolean {
 // ---- about, tour ---------------------------------------------------------------------------
 
 const aboutOverlay = $('about');
-const setAbout = (open: boolean) => aboutOverlay.classList.toggle('is-hidden', !open);
+const setAbout = (open: boolean) => {
+  aboutOverlay.classList.toggle('is-hidden', !open);
+  if (!open) return;
+  // What a friend can read out if something looks wrong on their machine.
+  const gl = kit.renderer.getContext();
+  const info = gl.getExtension('WEBGL_debug_renderer_info');
+  const gpu = info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : 'graphics card not reported';
+  $('about-diag').textContent = `${gpu}; ${kit.quality} quality at ${fmt(kit.pixelRatio, 2)}× pixels, ${$('sb-fps').textContent}`
+    + (lastProblem ? `; last problem: ${lastProblem.slice(0, 120)}` : '; no problems recorded');
+};
 $('about-open').addEventListener('click', () => setAbout(true));
 $('about-close').addEventListener('click', () => setAbout(false));
 aboutOverlay.addEventListener('pointerdown', (event) => {
@@ -992,6 +1082,16 @@ const tour = new Tour({
   locate: () => locate(),
   openHowTo: () => howto.open(),
 });
+tour.onStop = () => {
+  // Finished or skipped: leave the visitor at the familiar whole-Earth view, not wherever the
+  // tour last took them (possibly a close-up over the unlit night side).
+  if (fp.mode !== 'off') fp.exit();
+  closeEncounter(true);
+  if (selected) select(null);
+  if (conjunctionOn) setConjunction(false);
+  openPanel(null);
+  preset(1);
+};
 $('tour-start').addEventListener('click', () => {
   setKeys(false);
   tour.start();
@@ -1097,6 +1197,7 @@ window.addEventListener('keydown', (event) => {
     case '2': preset(2); break;
     case '3': preset(3); break;
     case '4': skyView(); break;
+    case '5': preset(5); break;
     case 'v': rideAlong(); break;
     case 's': if (selected) watch.toggle(selected); break;
     case 'o': togglePanel('objects'); break;
@@ -1308,7 +1409,20 @@ let uiHidden = false; // interface hidden (H key, autopilot): skip work that onl
 let lastFrame = performance.now();
 let realSeconds = 0;
 
+/** One frame. Wrapped so that an unexpected error in any module cannot stop the loop and freeze the picture. */
+let frameErrors = 0;
 function frame(now: number): void {
+  try {
+    step(now);
+  } catch (error) {
+    lastProblem = error instanceof Error ? error.message : String(error);
+    console.error(error);
+    if (++frameErrors === 30) showProblem('Something went wrong while drawing. Reloading usually fixes it.', true);
+  }
+  requestAnimationFrame(frame);
+}
+
+function step(now: number): void {
   const elapsed = (now - lastFrame) / 1000;
   const dt = Math.min(elapsed, 0.1); // animation step, capped so a hiccup never makes the camera jump
   lastFrame = now;
@@ -1360,7 +1474,6 @@ function frame(now: number): void {
     saveShot();
   }
   watchFrameRate(now);
-  requestAnimationFrame(frame);
 }
 
 // ---------------------------------------------------------------- start
@@ -1386,6 +1499,12 @@ async function boot(): Promise<void> {
     prewarmModels(kit.renderer, kit.scene, kit.camera);
     await loading.finish();
 
+    // Running normally: forget any earlier graphics resets so the reload guard starts fresh.
+    setTimeout(() => {
+      try {
+        sessionStorage.removeItem('apsis.reloads');
+      } catch { /* no storage */ }
+    }, 20000);
     const home = homeView();
     $('hud').classList.remove('hud-hidden');
     refreshLocationIfAllowed();

@@ -192,8 +192,9 @@ const earthFragment = /* glsl */ `
       lights = vec3(1.0, 0.75, 0.4) * land * step(0.62, noise(unit * 90.0)) * 0.75;
     }
     float lightsOn = 1.0 - smoothstep(-0.14, 0.03, sun);
-    vec3 night = dayColor * vec3(0.010, 0.012, 0.018);
-    night = mix(night, vec3(0.020, 0.025, 0.040), cloud * 0.6);
+    // Faint moonlit tone, so a close-up over an unlit ocean is dim rather than a black screen.
+    vec3 night = dayColor * vec3(0.030, 0.038, 0.060) + vec3(0.0022, 0.0030, 0.0055);
+    night = mix(night, vec3(0.034, 0.042, 0.066), cloud * 0.6);
 
     vec3 color = mix(night, lit, day) + lights * lightsOn * (1.0 - cloud * 0.75);
 

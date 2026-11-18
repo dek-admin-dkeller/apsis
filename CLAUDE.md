@@ -155,6 +155,17 @@ cached per article), NOAA SWPC (aurora grid, Kp), a public people-in-space list
 (`src/data/crew.ts`), nothing else. No analytics, no accounts. Location is used only after
 an in-app yes plus the browser's own prompt, and stays in `localStorage`.
 
+## Robustness (added after a "black screen on a friend's laptop" report that could not be reproduced)
+
+- `scene.ts` runs a tiny guard pass before bloom that turns any NaN / infinite pixel black, so
+  one bad pixel from any shader can no longer blank the whole frame through the bloom blur.
+- `main.ts` handles `webglcontextlost` / `webglcontextrestored` (message, then one reload),
+  refuses to start without WebGL 2 with a plain message, and wraps each frame in try/catch so
+  an exception cannot freeze the picture.
+- When the tour ends or is skipped the app returns to the whole-Earth view.
+- About → "This device" shows the graphics card, quality level, frame rate and the last
+  recorded problem — ask a user to read that out when they report something odd.
+
 ## Performance notes
 
 - 3D models are built once per kind and cloned (`buildModel` cache); `prewarmModels()` builds

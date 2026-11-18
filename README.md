@@ -69,7 +69,8 @@ status line sit along the bottom.
 | Point your phone | in the Sky view on a phone, **Use phone motion** aims the view wherever the phone points |
 | Design a satellite | Objects panel: choose an orbit, launch your own object into the live catalogue, and check what it will pass close to in the next 24 hours |
 | Time | the bar at the bottom: drag the timeline to move up to 12 hours either way, pause (`Space`), 1× – 1000×, run backwards (`R`), step 10 minutes (`[` `]`), **Now** (`N`), or click the clock to type a date |
-| Views | `1` `2` `3`, or the three buttons at the foot of the tool rail. Left alone, a whole-Earth view drifts slowly around the planet (Layers → Earth to switch off) |
+| Hover | pointing at an object shows a small card: picture, what it is, who runs it, height and speed |
+| Views | `1` `2` `3`, `5` (Earth with the Moon beyond it), or the buttons at the foot of the tool rail. Left alone, a whole-Earth view drifts slowly around the planet (Layers → Earth to switch off) |
 | Settings (`,`) | rendering quality, ground-station location, download current elements |
 | How it works | the button in the top bar: a walkthrough of the screening algorithm with a live trace, live hash-table statistics, the look-ahead method and the benchmark |
 | Phones | below 760 px the layout becomes a map-style app: a floating search field with view chips under it, round buttons on the right edge, a floating four-tool tab bar, and rounded sheets you can drag to any height or flick open and shut. It can be added to the home screen and then runs full screen like an app |

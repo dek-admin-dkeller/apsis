@@ -19,7 +19,7 @@ export type LabelMode = 'off' | 'notable' | 'nearby';
 
 const FAMOUS = /^(ISS \(ZARYA\)|CSS \(TIANHE\)|HST|LANDSAT [89]|GOES 1[6-9]|TERRASAR-X|TANDEM-X|NOAA 2[01]|SUOMI NPP|SENTINEL-[1236][A-D]?|SENTINEL-6.*|TDRS 1[0-3]|METEOSAT-1[012].*|HIMAWARI-[89]|TERRA|AQUA|AURA|CXO|XMM-NEWTON|SWIFT|TESS|NUSTAR|IXPE|ICESAT-2|SWOT|PACE|JASON-3|GPM-CORE|SMAP|CALIPSO|CLOUDSAT|GRACE-FO [12]|CRYOSAT 2|METOP-[BC]|ELEKTRO-L 4|FENGYUN 4[AB]|GEO-KOMPSAT-2A|INSAT-3DS|CREW DRAGON.*|SOYUZ-MS.*|PROGRESS-MS.*|CYGNUS.*|TIANZHOU.*|SHENZHOU.*)$/;
 const MAJOR = /^(ISS \(ZARYA\)|CSS \(TIANHE\)|HST)$/; // the handful named even in the whole-Earth view
-const POOL = 64;
+const POOL = 96;
 
 export class Labels {
   mode: LabelMode = 'nearby';
@@ -82,8 +82,8 @@ export class Labels {
     const named = this.mode === 'notable' || distance < 16 ? [...this.pinned, ...this.major, ...this.famous] : [...this.pinned, ...this.major];
     this.chosen = [...new Set(named)].filter((i) => this.cloud.visible[i]);
     if (this.mode !== 'nearby' || distance > 10.5) return;
-    const closeness = Math.min(1, Math.max(0, (10.5 - distance) / 3)); // 0 at 10,500 km → 1 by 7,500 km
-    const count = Math.round(4 + (this.nearby - 4) * closeness);
+    const closeness = Math.min(1, Math.max(0, (10.5 - distance) / 3.4)); // 0 at 10,500 km → 1 by about 7,100 km
+    const count = Math.round(4 + (this.nearby - 4) * closeness * closeness); // slowly at first, then quickly
     const nearest: { index: number; d2: number }[] = [];
     const p = { x: 0, y: 0, z: 0 };
     for (let i = 0; i < this.sim.count; i++) {
@@ -127,7 +127,7 @@ export class Labels {
       const y = (0.5 - (m[1] * p.x + m[5] * p.y + m[9] * p.z + m[13]) / w * 0.5) * height;
       if (x < 0 || x > width || y < 60 || y > height) continue;
       if (avoid && Math.hypot(x - avoid.x, y - avoid.y) < avoid.r) continue;
-      if (placed.some((q) => Math.abs(q.x - x) < 110 && Math.abs(q.y - y) < 15)) continue; // would overlap another label
+      if (placed.some((q) => Math.abs(q.x - x) < 96 && Math.abs(q.y - y) < 14)) continue; // would overlap another label
       placed.push({ x, y });
       const el = this.elements[used++];
       const sat = this.catalog.sats[index];

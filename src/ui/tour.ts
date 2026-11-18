@@ -170,6 +170,9 @@ export class Tour {
   }
 
   /** End the tour (finished or skipped), remember that it was seen, and tidy up. */
+  /** Called after the tour has ended (finished or skipped). */
+  onStop: (() => void) | null = null;
+
   stop(): void {
     if (!this.running) return;
     this.steps[this.index].leave?.();
@@ -183,6 +186,7 @@ export class Tour {
     } catch { /* storage unavailable */ }
     this.actions.openPanel(null);
     this.panel = undefined;
+    this.onStop?.();
   }
 
   // ---------------------------------------------------------------- app state the tour sets up

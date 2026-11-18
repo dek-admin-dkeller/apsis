@@ -112,6 +112,7 @@
         <button role="menuitem" data-proxy="[data-view='1']">Whole Earth</button>
         <button role="menuitem" data-proxy="[data-view='2']">Low orbit</button>
         <button role="menuitem" data-proxy="[data-view='3']">GEO ring</button>
+        <button role="menuitem" data-proxy="[data-view='5']">Earth and Moon</button>
         <button role="menuitem" data-proxy="#view-sky">Sky from my location</button>
         <button role="menuitem" data-proxy="#autopilot">Autopilot tour</button>
       </div>
@@ -141,6 +142,9 @@
         </button>
         <button class="rail-view" data-view="3" title="Geostationary ring (3)">
           <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="2.5" /><ellipse cx="10" cy="10" rx="8.5" ry="4" /></svg><span>GEO ring</span>
+        </button>
+        <button class="rail-view" data-view="5" title="Earth with the Moon beyond it (5)">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15.5 12.8A6.5 6.5 0 0 1 7.2 4.5a6.5 6.5 0 1 0 8.3 8.3z" /></svg><span>Moon</span>
         </button>
         <button class="rail-view" id="view-sky" title="Stand at the ground station and look up (4)">
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 15.5h16M4 15.5a6 6 0 0 1 12 0" /><path d="M10 4.5v1.5M5 6.5l1 1M15 6.5l-1 1" /></svg><span>Sky</span>
@@ -759,6 +763,7 @@
             <div><dt>Operator logos</dt><dd>Loaded from each operator's Wikipedia article; they are trademarks of their owners, shown only to identify who runs an object</dd></div>
             <div><dt>Coastlines and borders</dt><dd>Natural Earth, public domain, via world-atlas</dd></div>
             <div><dt id="about-data-label">Data loaded</dt><dd id="about-data">–</dd></div>
+            <div><dt>This device</dt><dd id="about-diag">–</dd></div>
           </dl>
           <h3>Built with</h3>
           <dl class="kv plain-dd">
@@ -795,6 +800,7 @@
           <div><dt><kbd>T</kbd></dt><dd>Camera lock on the selected object</dd></div>
           <div><dt><kbd>V</kbd></dt><dd>Ride along with the selected object</dd></div>
           <div><dt><kbd>4</kbd></dt><dd>Sky view from the ground station</dd></div>
+          <div><dt><kbd>5</kbd></dt><dd>Earth with the Moon beyond it</dd></div>
           <div><dt><kbd>S</kbd></dt><dd>Add to or remove from the watchlist</dd></div>
           <div><dt><kbd>P</kbd></dt><dd>Save a picture</dd></div>
           <div><dt><kbd>A</kbd></dt><dd>Autopilot tour</dd></div>
