@@ -17,7 +17,7 @@ import './mobile.css';
 import * as THREE from 'three';
 import { mountLaunch } from './ui/launch.ts';
 import { eciToGeodetic, gstime, type SatRec } from 'satellite.js';
-import { buildCatalog, loadLive, loadSnapshot, type Catalog } from './data/catalog.ts';
+import { buildCatalog, loadLive, loadSnapshot, searchCatalog, type Catalog } from './data/catalog.ts';
 import { describe } from './data/describe.ts';
 import { makeSatrec, rangeKm, stateAt, wrapLon, type Observer, type Vec3 } from './data/ephemeris.ts';
 import { loadRegions } from './data/regions.ts';
@@ -50,13 +50,22 @@ import { renderCrew, renderCrewSummary } from './ui/crew.ts';
 import { CUSTOM_NORAD_ID, Designer } from './ui/designer.ts';
 import { renderFeed } from './ui/feed.ts';
 import { $, fmt, fmtInt, fmtKm, fmtKmS, fmtRange, setClockZone, setUnits } from './ui/dom.ts';
-import { EncounterPanel, type EncounterFocus } from './ui/encounterPanel.ts';
+import { EncounterPanel, type Encounter, type EncounterFocus } from './ui/encounterPanel.ts';
 import { Filters } from './ui/filters.ts';
 import { HashTrace } from './ui/hashTrace.ts';
 import { HowTo } from './ui/howto.ts';
 import { alertDistance, clockStamp, Inspector } from './ui/inspector.ts';
 import { LoadingScreen } from './ui/intro.ts';
 import { Landing } from './ui/landing.ts';
+import type { App, FrameInfo } from './ui/app.ts';
+import { installChanges } from './features/changes.ts';
+import { installCommand } from './features/command.ts';
+import { installGrowth } from './features/growth.ts';
+import { installLaunches } from './features/launches.ts';
+import { installRadio } from './features/radio.ts';
+import { installReport } from './features/report.ts';
+import { installTonight } from './features/tonight.ts';
+import { installWeather } from './features/weather.ts';
 import { Labels } from './ui/labels.ts';
 import { Monitor } from './ui/monitor.ts';
 import { initSearch } from './ui/search.ts';
@@ -110,6 +119,14 @@ let screenPending = false;
 let screenDirty = false; // something changed → screen again right away
 let lastScreenAt = -Infinity;
 let lastStats: ScreenStats | null = null;
+
+// Listeners registered by the feature modules (src/features/, through the App interface).
+const frameHooks: ((frame: FrameInfo) => void)[] = [];
+const selectHooks: ((sat: Satellite | null) => void)[] = [];
+const catalogHooks: ((next: Catalog, previous: Catalog | null) => void)[] = [];
+const factsHooks: ((facts: Map<number, CatalogFacts>) => void)[] = [];
+const settingsHooks: ((settings: Settings, changed: keyof Settings | null) => void)[] = [];
+const encounterHooks: ((encounter: Encounter | null) => void)[] = [];
 let lastPairs: { a: Uint32Array; b: Uint32Array } | null = null; // the monitor's latest list, closest first
 let lastTraceAt = -Infinity;
 
@@ -310,6 +327,7 @@ function applySettings(s: Settings, changed: keyof Settings | null): void {
   }
   // Blurring the globe behind every panel costs GPU time each frame; skip it in Fast quality.
   document.body.classList.toggle('no-glass', !s.glass || kit.quality === 'fast');
+  for (const run of settingsHooks) run(s, changed);
 }
 /** The key under the colour picker: a gradient with tick labels, or a list of swatches. */
 function renderLegend(mode: Settings['colorMode']): void {
@@ -538,6 +556,7 @@ function select(sat: Satellite | null): void {
     $('reticle').classList.add('is-hidden');
     rig.follow = false;
     rig.release();
+    for (const run of selectHooks) run(null);
     return;
   }
   model.setKind(describe(sat).kind);
@@ -552,6 +571,7 @@ function select(sat: Satellite | null): void {
   if (sat.name === 'ISS (ZARYA)') renderCrew($('rc-crew'), 'ISS');
   else if (sat.name === 'CSS (TIANHE)') renderCrew($('rc-crew'), 'Tiangong');
   rig.flyToFocus(() => selScene, FOCUS_DISTANCE);
+  for (const run of selectHooks) run(sat);
 }
 
 /** Camera lock: on = the object stays in the centre and the camera turns around it. */
@@ -623,6 +643,7 @@ function openEncounter(aIndex: number, bIndex: number): void {
   // for a slow-motion or frozen look at the closest point.)
   encFrame = encViz.update(clock.time, realSeconds);
   focusEncounter('both', 1.4);
+  for (const run of encounterHooks) run(encounter);
 }
 
 /**
@@ -650,6 +671,7 @@ function focusEncounter(which: EncounterFocus, duration = 1.1): void {
 function closeEncounter(keepCamera = false): void {
   if (!encPanel.isOpen) return;
   encPanel.close();
+  for (const run of encounterHooks) run(null);
   encViz.hide();
   for (const m of encModels) m.setKind(null);
   encFrame = null;
@@ -795,6 +817,7 @@ const NOTABLE: [string, (c: Catalog) => Satellite | undefined][] = [
 function applyCatalog(next: Catalog): void {
   closeEncounter(true);
   if (selected) select(null);
+  const previous = catalog;
   catalog = next;
   screenSeq++; // ignore screening results that belong to the previous catalogue
   screenPending = false;
@@ -820,6 +843,7 @@ function applyCatalog(next: Catalog): void {
     button.addEventListener('click', () => select(sat));
     return [button];
   }));
+  for (const run of catalogHooks) run(next, previous);
 }
 
 /** Rebuild the catalogue from the downloaded data plus the user's own satellite, if there is one. */
@@ -1564,12 +1588,103 @@ function step(now: number): void {
   if (!uiHidden) updateStatus(realSeconds);
   requestScreening(realSeconds);
   timeControls.render();
+  if (frameHooks.length > 0) {
+    const info: FrameInfo = { timeMs: clock.time, realSeconds, dt, uiHidden };
+    for (const run of frameHooks) run(info);
+  }
   kit.render();
   if (wantShot) {
     wantShot = false;
     saveShot();
   }
   watchFrameRate(now);
+}
+
+// ---------------------------------------------------------------- feature modules
+//
+// Everything in src/features/ plugs in here, through the App interface (src/ui/app.ts). This
+// object is the only thing those modules know about the rest of the program.
+
+const app: App = {
+  catalog: () => catalog,
+  facts: () => facts,
+  selected: () => selected,
+  encounter: () => encPanel.encounter,
+  alertKm: () => screeningDistance,
+
+  time: () => clock.time,
+  speed: () => (clock.paused ? 0 : clock.speed),
+  jumpTo: (timeMs) => jumpTo(timeMs),
+  jumpToNow: () => jumpToNow(),
+  setSpeed: (multiplier) => {
+    clock.speed = multiplier;
+    clock.paused = false;
+    timeControls.sync();
+  },
+
+  observer: () => observer,
+  settings: () => store.settings,
+  setSetting: (name, value) => store.set(name, value as string | number | boolean),
+
+  select: (sat) => select(sat),
+  search: (query, limit) => (catalog ? searchCatalog(catalog, query, limit) : []),
+  flyToGround: (latDeg, lonDeg, altitudeKm = 2500) => {
+    if (fp.mode !== 'off') fp.exit();
+    closeEncounter(true);
+    if (selected) select(null);
+    // The place in the Earth's own frame (see "Coordinate frames" in CLAUDE.md), then wherever
+    // the Earth's rotation has carried it by now.
+    const lat = THREE.MathUtils.degToRad(latDeg), lon = THREE.MathUtils.degToRad(lonDeg);
+    const overhead = new THREE.Vector3(Math.cos(lat) * Math.cos(lon), Math.sin(lat), -Math.cos(lat) * Math.sin(lon))
+      .multiplyScalar(6.371 + Math.max(150, altitudeKm) * KM);
+    rig.follow = false;
+    rig.flyToView(globe.earth.localToWorld(overhead), ORIGIN.clone(), 2);
+  },
+  view: (which) => {
+    if (which === 'home') return goHome();
+    closeEncounter(true);
+    if (selected) select(null);
+    preset(which === 'earth' ? 1 : which === 'leo' ? 2 : which === 'geo' ? 3 : 5);
+  },
+  openPanel: (name) => openPanel(name),
+  toggle: (what, on) => {
+    const flip = (isOn: boolean, set: () => void) => {
+      if (on === undefined || on !== isOn) set();
+    };
+    if (what === 'monitor') flip(conjunctionOn, () => setConjunction(!conjunctionOn));
+    else if (what === 'cells') flip(gridOn, () => setGrid(!gridOn));
+    else if (what === 'autopilot') flip(cinema.isPlaying, toggleAutopilot);
+    else if (what === 'sky') flip(fp.mode === 'ground', skyView);
+    else if (what === 'ride') flip(fp.mode === 'satellite', rideAlong);
+    else if (what === 'fullscreen') flip(!!document.fullscreenElement, toggleFullscreen);
+    else if (what === 'howto') flip(howto.isOpen, () => (howto.isOpen ? howto.close() : howto.open()));
+    else if (what === 'keys') flip(!keysOverlay.classList.contains('is-hidden'), () => setKeys(keysOverlay.classList.contains('is-hidden')));
+    else if (what === 'share') shareDialog.open(shareUrl(), !!selected || encPanel.isOpen);
+  },
+  toast: (text) => toast(text),
+  setFilter: (key, keep) => filters.setExtra(key, keep),
+
+  position: (index, out) => sim.getPosition(index, out),
+  earth: globe.earth,
+  eciGroup: kit.eciGroup,
+  camera: kit.camera,
+
+  onFrame: (run) => void frameHooks.push(run),
+  onSelect: (run) => void selectHooks.push(run),
+  onCatalog: (run) => void catalogHooks.push(run),
+  onFacts: (run) => void factsHooks.push(run),
+  onSettings: (run) => void settingsHooks.push(run),
+  onEncounter: (run) => void encounterHooks.push(run),
+};
+
+// One line per module. A module that throws while setting itself up is reported and skipped:
+// an optional extra must never stop the tracker from starting.
+for (const install of [installRadio, installChanges, installWeather, installLaunches, installTonight, installReport, installGrowth, installCommand]) {
+  try {
+    install(app);
+  } catch (error) {
+    console.error('A feature module failed to start', error);
+  }
 }
 
 // ---------------------------------------------------------------- start
@@ -1580,6 +1695,7 @@ async function boot(): Promise<void> {
   void loadFacts().then((loaded) => {
     facts = loaded;
     updateDataNote();
+    for (const run of factsHooks) run(loaded);
   });
   try {
     loading.progress(0.1, 'Reading orbital elements');

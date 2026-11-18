@@ -260,6 +260,19 @@
               <summary>Notable objects</summary>
               <div class="quick" id="quick-list"></div>
             </details>
+            <!-- The empty elements with ids ending in -body below are filled in by the modules in src/features/. -->
+            <details class="sec">
+              <summary>Visible tonight</summary>
+              <div id="tonight-body"></div>
+            </details>
+            <details class="sec">
+              <summary>Upcoming launches</summary>
+              <div id="launches-body"></div>
+            </details>
+            <details class="sec">
+              <summary>Orbit changes</summary>
+              <div id="changes-body"></div>
+            </details>
             <details class="sec">
               <summary>Newest in orbit</summary>
               <ol class="watch-list" id="feed-new"></ol>
@@ -277,7 +290,12 @@
             <details class="sec">
               <summary>Lowest orbits</summary>
               <p class="note">Lowest point of each orbit. Below about 300 km the thin air drags objects down within weeks.</p>
+              <div id="weather-body"></div>
               <ol class="watch-list" id="feed-low"></ol>
+            </details>
+            <details class="sec">
+              <summary>Growth by year</summary>
+              <div id="growth-body"></div>
             </details>
             <details class="sec" id="designer">
               <summary>Design a satellite</summary>
@@ -482,6 +500,8 @@
                 <div><dt id="tm-range-label">Range</dt><dd id="tm-range">–</dd></div>
                 <div><dt>Azimuth / elevation</dt><dd id="tm-look">–</dd></div>
               </dl>
+              <div id="insp-fresh"></div>
+              <div id="insp-heard"></div>
               <figure class="fig">
                 <figcaption><span>Ground track</span><span class="muted">one orbit back, two ahead</span></figcaption>
                 <canvas id="map-canvas" class="chart map"></canvas>
@@ -529,6 +549,7 @@
               </figure>
               <ol id="pass-list"></ol>
               <p class="note" id="pass-note"></p>
+              <div id="insp-radio"></div>
             </div>
             <!-- Record -->
             <div class="tab-body is-hidden" data-tab-body="record">
@@ -594,6 +615,7 @@
               <button class="btn btn-primary" id="enc-replay">Replay approach</button>
               <button class="btn" id="enc-goto">Go to closest point</button>
             </div>
+            <div id="enc-export"></div>
             <p class="note" id="enc-note"></p>
           </div>
         </section>

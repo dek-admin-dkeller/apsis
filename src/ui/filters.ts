@@ -26,6 +26,7 @@ function sliderToKm(v: number): number {
 export class Filters {
   private catalog: Catalog | null = null;
   private visible: Uint8Array = new Uint8Array(0);
+  private readonly extra = new Map<string, (sat: Satellite) => boolean>(); // tests added by feature modules
   private readonly categoryOn = new Map<Category, boolean>(CATEGORIES.map((c) => [c, true]));
   private readonly orbitOn = new Map<OrbitClass, boolean>(ORBIT_CLASSES.map((o) => [o, true]));
   private altMin = -Infinity;
@@ -119,7 +120,19 @@ export class Filters {
   }
 
   private passesOrbitAndAltitude(sat: Satellite): boolean {
-    return this.orbitOn.get(sat.orbitClass)! && sat.meanAltKm >= this.altMin && sat.meanAltKm <= this.altMax;
+    if (!(this.orbitOn.get(sat.orbitClass)! && sat.meanAltKm >= this.altMin && sat.meanAltKm <= this.altMax)) return false;
+    for (const keep of this.extra.values()) if (!keep(sat)) return false;
+    return true;
+  }
+
+  /**
+   * An extra test from a feature module (the growth-by-year slider, say): objects must pass
+   * every registered test as well as the orbit and altitude filters. null removes a test.
+   */
+  setExtra(key: string, keep: ((sat: Satellite) => boolean) | null): void {
+    if (keep) this.extra.set(key, keep);
+    else this.extra.delete(key);
+    this.reapply();
   }
 
   /** Recompute visibility for the given object indices (default: all), then refresh the counts. */
