@@ -50,6 +50,11 @@ export class CameraRig {
     return this.flight !== null;
   }
 
+  /** Where the current flight will end (null when not flying), so the ground imagery there can load before the camera arrives. */
+  get destination(): { pos: THREE.Vector3; target: THREE.Vector3 } | null {
+    return this.flight ? this.flight.end() : null;
+  }
+
   /** Fly to a fixed viewpoint (used by the intro and the 1 / 2 / 3 presets). */
   flyToView(pos: THREE.Vector3, target: THREE.Vector3, duration = 1.8): void {
     this.idle = 0;

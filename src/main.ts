@@ -1462,7 +1462,7 @@ function step(now: number): void {
   updateSkyLabels();
   site.update(realSeconds);
   aurora.update(realSeconds, globe.sunDirection);
-  tiles.update(kit.camera, globe.sunDirection, realSeconds, dt);
+  tiles.update(kit.camera, globe.sunDirection, realSeconds, dt, () => rig.destination);
   constView.update(clock.time, realSeconds, constMembers.length, (i, out) => sim.getPosition(constMembers[i], out));
   if (!uiHidden) constPanel.frame(realSeconds);
   if (!uiHidden) watch.frame(realSeconds);
@@ -1502,6 +1502,7 @@ async function boot(): Promise<void> {
     // Build the 3D models and compile their shaders now, behind the loading screen, so the
     // first click on a satellite (and every autopilot scene change) does not stutter.
     prewarmModels(kit.renderer, kit.scene, kit.camera);
+    tiles.prewarm(kit.renderer, kit.scene, kit.camera);
     await loading.finish();
 
     // Running normally: forget any earlier graphics resets so the reload guard starts fresh.

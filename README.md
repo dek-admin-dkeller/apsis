@@ -265,6 +265,9 @@ reporting the same pass twice.
   in brighter moonlight than is realistic (otherwise there would be nothing to see), with the
   city lights smoothed into a glow on top. Offline, or with the setting off, the globe's own
   picture is used. About → "This device" says how many detailed tiles are on screen.
+  A coarser layer is loaded first and the sharp one fades in over it, the edges of the detailed
+  area fade into the globe, and tiles are fetched ahead of a moving camera, so the loading is
+  rarely seen.
 - **Name tags appear as you zoom.** The whole-Earth view names only the ISS, Tiangong, Hubble
   and your watchlist; closer in, well-known spacecraft and then the nearest objects are named
   (Layers → Name tags: Off / Well-known / As you zoom).

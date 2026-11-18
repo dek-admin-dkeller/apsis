@@ -180,6 +180,14 @@ an in-app yes plus the browser's own prompt, and stays in `localStorage`.
   ground, and the globe's city-lights texture (the same uniform objects, borrowed from the
   Earth material) is added through a 16-tap cubic B-spline, because its real detail is ~20 km
   and plain linear filtering shows as squares.
+- Loading is hidden three ways (see the header of `tiles.ts`): a BACKDROP layer two zoom
+  levels coarser under the sharp layer (arrives first, reaches further); both layers fade out
+  towards the rim of what they cover (`uEdge`, centred on `uCentre`), so no chunk edge shows
+  in tilted views; and tiles are fetched AHEAD — for `rig.destination` during a camera flight,
+  or along the direction of travel while following a satellite. Old tiles stay until the new
+  view is complete. At high ground speed (fast time while following) the sharp zoom is lowered.
+  Pictures are fetched with `fetch` + `createImageBitmap` (decoded off the main thread) and
+  stale downloads are aborted. `tiles.prewarm()` compiles the shader behind the loading screen.
 - `tiles.status` feeds About → "This device" (off / service not reachable / N tiles shown).
 - Tile cache is a `Map<"z/x/y", Tile>` with least-recently-used eviction (200 tiles), at most
   8 downloads in flight, and a 30 s back-off if the service cannot be reached.
