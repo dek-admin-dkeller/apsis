@@ -1,0 +1,11 @@
+/* The two export buttons under the close-approach panel's actions — see features/report.ts.
+   (The report itself is a separate document with its own styles: features/reportPage.ts.) */
+
+/* Laid out like the row of action buttons above it (.enc-actions in style.css), a little closer. */
+.enc-export { display: flex; gap: 6px; margin-top: 6px; }
+.enc-export .btn { flex: 1; min-width: 0; padding: 0 8px; }
+
+@media (max-width: 760px) {
+  .enc-export { flex-wrap: wrap; }
+  .enc-export .btn { flex: 1 1 140px; }
+}
