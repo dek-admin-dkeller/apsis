@@ -13,8 +13,54 @@ import type { Satellite } from './types.ts';
 export interface WikiSummary {
   title: string;
   extract: string;
+  /** The article's lead picture, when it is a photograph (or anything with a solid background). */
   imageUrl: string | null;
+  /** The article's lead picture, when it is a logo instead (see-through background). */
+  logoUrl: string | null;
+  /** That logo is mostly dark artwork (a black wordmark, say). */
+  logoDark: boolean;
   pageUrl: string;
+}
+
+/**
+ * Photo or logo? An article's lead image is sometimes the programme's logo rather than a
+ * picture of the spacecraft (Starlink's is). A logo has a see-through background, so: load
+ * the image and call it a logo if a fair share of its pixels are transparent. While the
+ * pixels are in hand, measure how dark the artwork is. Returns null if the pixels cannot be
+ * read, in which case the image is treated as a photo.
+ */
+function classify(url: string): Promise<{ logo: boolean; dark: boolean } | null> {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.crossOrigin = 'anonymous'; // Wikimedia allows it; needed to read the pixels
+    image.referrerPolicy = 'no-referrer';
+    image.onerror = () => resolve(null);
+    image.onload = () => {
+      try {
+        const w = 48, h = Math.max(1, Math.round((48 * image.naturalHeight) / Math.max(1, image.naturalWidth)));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+        ctx.drawImage(image, 0, 0, w, h);
+        const px = ctx.getImageData(0, 0, w, h).data;
+        let light = 0, weight = 0, clear = 0;
+        for (let i = 0; i < px.length; i += 4) {
+          const a = px[i + 3] / 255;
+          if (a < 0.1) clear++;
+          light += (a * (0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2])) / 255;
+          weight += a;
+        }
+        // A photograph fills its frame; artwork on a see-through background does not. (Corners alone
+        // are not enough: the Starlink mark runs into two of them.)
+        const logo = clear / (px.length / 4) > 0.12;
+        resolve({ logo, dark: weight > 0 && light / weight < 0.3 });
+      } catch {
+        resolve(null);
+      }
+    };
+    image.src = url;
+  });
 }
 
 /** Name pattern → article title. First match wins, so specific entries come first. */
@@ -188,10 +234,14 @@ async function load(title: string): Promise<WikiSummary | null> {
       content_urls?: { desktop?: { page?: string } };
     };
     if (page.type !== 'standard') return null;
+    const picture = page.thumbnail?.source ?? null;
+    const kind = picture ? await classify(picture) : null;
     return {
       title: page.title ?? title,
       extract: page.extract ?? '',
-      imageUrl: page.thumbnail?.source ?? null,
+      imageUrl: kind?.logo ? null : picture,
+      logoUrl: kind?.logo ? picture : null,
+      logoDark: !!kind?.logo && kind.dark,
       pageUrl: page.content_urls?.desktop?.page ?? `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}`,
     };
   } catch {

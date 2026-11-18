@@ -74,16 +74,17 @@ export class Labels {
 
   /** Decide which objects deserve a label right now. */
   private pick(cameraEci: THREE.Vector3): void {
-    // Names arrive as you zoom in, so the wide view stays clean:
-    //   far out (whole Earth)   only the watchlist and the three or four everyone knows
-    //   closer than ~16,000 km  the well-known spacecraft too
-    //   closer than ~10,000 km  the objects nearest the camera, more of them the closer you get
+    // Names arrive as you zoom in, so the wide view stays clean — but they start arriving early:
+    //   default view (~23,000 km out)  only the watchlist and the three or four everyone knows
+    //   a notch closer (< 21,000 km)   the well-known spacecraft too
+    //   closer still (< 19,000 km)     the objects nearest the camera — a few at first, steadily
+    //                                  more with every bit of zoom, the full number by ~8,000 km
     const distance = this.kit.camera.position.length(); // scene units from the Earth's centre
-    const named = this.mode === 'notable' || distance < 16 ? [...this.pinned, ...this.major, ...this.famous] : [...this.pinned, ...this.major];
+    const named = this.mode === 'notable' || distance < 21 ? [...this.pinned, ...this.major, ...this.famous] : [...this.pinned, ...this.major];
     this.chosen = [...new Set(named)].filter((i) => this.cloud.visible[i]);
-    if (this.mode !== 'nearby' || distance > 10.5) return;
-    const closeness = Math.min(1, Math.max(0, (10.5 - distance) / 3.4)); // 0 at 10,500 km → 1 by about 7,100 km
-    const count = Math.round(4 + (this.nearby - 4) * closeness * closeness); // slowly at first, then quickly
+    if (this.mode !== 'nearby' || distance > 19) return;
+    const closeness = Math.min(1, Math.max(0, (19 - distance) / 11)); // 0 at 19,000 km → 1 at 8,000 km
+    const count = Math.round(6 + (this.nearby - 6) * Math.pow(closeness, 1.25));
     const nearest: { index: number; d2: number }[] = [];
     const p = { x: 0, y: 0, z: 0 };
     for (let i = 0; i < this.sim.count; i++) {
