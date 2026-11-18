@@ -817,3 +817,41 @@
   .rail { height: 42px; bottom: calc(5px + var(--safe-bottom)); }
   #inspector > .insp-hero { height: 84px; }
 }
+
+/* ============================================================== 8. one surface
+ * An open sheet and the tab bar are joined: the sheet sits directly on the bar, they share
+ * one outline (rounded at the top of the sheet and at the foot of the bar) and one glass,
+ * so it reads as a single panel with the four tools along its bottom edge rather than two
+ * boxes stacked with a gap. Dragged all the way down, the sheet tucks away to its grip and
+ * what is left is the tab bar. With no sheet open the bar is the small floating pill again.
+ */
+
+@media (max-width: 760px) {
+  /* The sheet rests on the bar: no gap, no bottom corners, no bottom border. */
+  #hud:has(.dock > .panel:not(.is-hidden)) > .dock { bottom: calc(6px + var(--safe-bottom) + 48px); }
+  #hud > .dock > .panel {
+    min-height: 22px; /* tucked away = just the grip (COLLAPSED in src/ui/sheet.ts) */
+    border-bottom: 0;
+    border-radius: 24px 24px 0 0;
+    box-shadow: none;
+  }
+
+  /* Tucked away, the header's words would be cut in half: only the grip stays. */
+  :root.sheet-tucked .dock > .panel > :is(.panel-head, .insp-head) { background: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  :root.sheet-tucked .dock > .panel > :is(.panel-head, .insp-head) > * { visibility: hidden; }
+  :root.sheet-tucked .dock > .panel > :is(.panel-head, .insp-head)::before { top: 9px; }
+
+  /* … and the bar grows to the sheet's width and takes over the bottom corners. */
+  .rail { transition: border-radius 220ms ease, left 220ms ease, right 220ms ease; }
+  #hud:has(.dock > .panel:not(.is-hidden)) .rail {
+    left: 6px;
+    right: 6px;
+    max-width: none;
+    bottom: calc(6px + var(--safe-bottom));
+    border-top-color: rgba(255, 255, 255, 0.06); /* a hairline between content and tools, not a second box */
+    border-radius: 0 0 24px 24px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  }
+  /* The buttons keep their place under the pill's width, so they do not jump apart. */
+  #hud:has(.dock > .panel:not(.is-hidden)) .rail { padding-left: max(4px, calc((100% - 322px) / 2)); padding-right: max(4px, calc((100% - 322px) / 2)); }
+}

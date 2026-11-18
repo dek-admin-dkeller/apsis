@@ -1,14 +1,15 @@
 /**
- * Phones: the tool panels and the inspector are bottom sheets. This makes them draggable —
- * grab a sheet by its header and slide it to any height, from just the header (so the
- * globe and the 3D model have the whole screen) up to nearly full screen.
+ * Phones: the tool panels and the inspector are bottom sheets resting on the tab bar. This
+ * makes them draggable — grab a sheet by its header and slide it to any height, from tucked
+ * away (only its grip shows above the tab bar, so the globe and the 3D model have the whole
+ * screen) up to nearly full screen. A tap on the grip brings it back.
  *
  * The height lives in the CSS variable --sheet (src/mobile.css reads it), so there is
  * nothing to re-lay-out here: dragging just changes one number.
  */
 
 const PHONE_MAX_WIDTH = 760;
-const COLLAPSED = 58; // px: the header alone
+const COLLAPSED = 22; // px: tucked away — only the grip shows, sitting on the tab bar (matches min-height in mobile.css)
 const DEFAULT_SHARE = 0.54; // of the screen height (matches --sheet in mobile.css)
 
 export class Sheets {
@@ -35,7 +36,7 @@ export class Sheets {
   }
 
   private get tallest(): number {
-    return Math.max(COLLAPSED, window.innerHeight - 56 - 62 - 10); // below the search field, above the tab bar (matches --top and --status in mobile.css)
+    return Math.max(COLLAPSED, window.innerHeight - 56 - 54 - 10); // below the search field, above the tab bar the sheet rests on (see mobile.css)
   }
 
   /** A sheet that is being opened always starts at its normal height, whatever the last one was dragged to. */
@@ -43,6 +44,7 @@ export class Sheets {
     if (this.height === null) return;
     this.height = null;
     document.documentElement.style.removeProperty('--sheet');
+    document.documentElement.classList.remove('sheet-tucked');
     this.onResize();
   }
 
@@ -56,6 +58,8 @@ export class Sheets {
   private set(px: number): void {
     this.height = Math.round(Math.min(this.tallest, Math.max(COLLAPSED, px)));
     document.documentElement.style.setProperty('--sheet', `${this.height}px`);
+    // Tucked away: mobile.css hides the header's text so only the grip is left above the tab bar.
+    document.documentElement.classList.toggle('sheet-tucked', this.height <= COLLAPSED + 6);
     this.onResize();
   }
 

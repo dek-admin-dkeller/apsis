@@ -164,7 +164,10 @@ sheets draggable by their header (`src/ui/sheet.ts` sets `--sheet`). `main.ts` s
 camera's view offset up while a sheet is open. Section 7 of `mobile.css` is the current
 phone look (short, narrow tab bar; smaller round buttons); in the object sheet `#inspector`
 itself is the scroller there — the name and the tabs are `position: sticky`, the photo and
-switches scroll away. `sheet.ts`'s `tallest` must match `--top` and `--status`.
+switches scroll away. Section 8 joins an open sheet to the tab bar (the sheet rests on the
+bar, one outline, one glass); dragged fully down the sheet is "tucked" (22 px: only its grip,
+class `sheet-tucked` on `<html>`), leaving the tab bar. `sheet.ts`'s `COLLAPSED` and
+`tallest` must match the `min-height` and offsets in `mobile.css`.
 
 ## Browser storage keys
 
