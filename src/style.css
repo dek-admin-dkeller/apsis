@@ -1298,7 +1298,10 @@ body.quiet-ui .timebar[data-direction='back']:not(.is-open) #speeds button.is-on
 #home:hover { opacity: 0.8; }
 #home:active { opacity: 0.6; }
 
-/* ---------- operator logos (loaded from Wikipedia): a small white chip so dark logos stay readable ---------- */
+/* ---------- operator logos (loaded from Wikipedia) ----------
+   Shown as they are, with no backing chip. Dark artwork (a black wordmark) is drawn in white
+   instead so it shows against space; everything else gets a faint light edge. */
 
-.sat-label .op { flex: none; width: 22px; height: 13px; padding: 1px 2px; border-radius: 3px; background: rgba(255, 255, 255, 0.92); object-fit: contain; }
-.op-logo { flex: none; width: 44px; height: 28px; padding: 3px 4px; border-radius: 6px; background: rgba(255, 255, 255, 0.94); object-fit: contain; }
+.sat-label .op { flex: none; height: 12px; width: auto; max-width: 38px; object-fit: contain; filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.55)); }
+.op-logo { flex: none; height: 24px; width: auto; max-width: 64px; object-fit: contain; filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.55)); }
+:is(.sat-label .op, .op-logo).is-dark { filter: brightness(0) invert(1); opacity: 0.92; }

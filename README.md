@@ -253,8 +253,12 @@ reporting the same pass twice.
   is optional; without it those rows show a dash.
 - **Aurora, geomagnetic activity and station crews** are fetched live when used (NOAA Space
   Weather Prediction Center and a public crew list); offline, those features stay empty.
+- **Name tags appear as you zoom.** The whole-Earth view names only the ISS, Tiangong, Hubble
+  and your watchlist; closer in, well-known spacecraft and then the nearest objects are named
+  (Layers → Name tags: Off / Well-known / As you zoom).
 - **Operator logos** beside names are loaded from each operator's Wikipedia article, not
-  stored here; they are trademarks of their owners, shown only to identify the operator.
+  stored here, and only when the article's picture really is a logo (transparent
+  background); they are trademarks of their owners, shown only to identify the operator.
 - **The Moon is drawn four times its true size** so it can be found; its position is real.
 - **Photos and descriptions** come from Wikipedia, fetched when an object is selected. An
   object is matched to the article for its programme (a Starlink satellite shows the

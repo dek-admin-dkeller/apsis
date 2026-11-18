@@ -154,9 +154,10 @@ export class Inspector {
     const logo = $<HTMLImageElement>('insp-oplogo');
     logo.classList.add('is-hidden');
     const logoFor = sat;
-    void operatorLogoAsync(profile.operator).then((url) => {
-      if (!url || this.sat !== logoFor) return;
-      logo.src = url;
+    void operatorLogoAsync(profile.operator).then((mark) => {
+      if (!mark || this.sat !== logoFor) return;
+      logo.src = mark.url;
+      logo.classList.toggle('is-dark', mark.dark);
       logo.title = profile.operator ?? '';
       logo.classList.remove('is-hidden');
     });

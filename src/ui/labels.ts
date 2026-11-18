@@ -18,14 +18,16 @@ import { operatorLogo } from '../data/operators.ts';
 export type LabelMode = 'off' | 'notable' | 'nearby';
 
 const FAMOUS = /^(ISS \(ZARYA\)|CSS \(TIANHE\)|HST|LANDSAT [89]|GOES 1[6-9]|TERRASAR-X|TANDEM-X|NOAA 2[01]|SUOMI NPP|SENTINEL-[1236][A-D]?|SENTINEL-6.*|TDRS 1[0-3]|METEOSAT-1[012].*|HIMAWARI-[89]|TERRA|AQUA|AURA|CXO|XMM-NEWTON|SWIFT|TESS|NUSTAR|IXPE|ICESAT-2|SWOT|PACE|JASON-3|GPM-CORE|SMAP|CALIPSO|CLOUDSAT|GRACE-FO [12]|CRYOSAT 2|METOP-[BC]|ELEKTRO-L 4|FENGYUN 4[AB]|GEO-KOMPSAT-2A|INSAT-3DS|CREW DRAGON.*|SOYUZ-MS.*|PROGRESS-MS.*|CYGNUS.*|TIANZHOU.*|SHENZHOU.*)$/;
+const MAJOR = /^(ISS \(ZARYA\)|CSS \(TIANHE\)|HST)$/; // the handful named even in the whole-Earth view
 const POOL = 64;
 
 export class Labels {
   mode: LabelMode = 'nearby';
-  /** How many of the nearest objects get a name tag (fewer on a phone, where they crowd the screen). */
+  /** The most nearby objects that get a name tag when fully zoomed in (fewer on a phone). */
   nearby = 36;
   private readonly operators = new Map<number, string | null>(); // object index → operator (worked out once)
   private readonly elements: HTMLDivElement[] = [];
+  private major: number[] = [];
   private famous: number[] = [];
   private pinned: number[] = []; // watchlist: always labelled
   private chosen: number[] = []; // object indices currently labelled, most important first
@@ -58,6 +60,7 @@ export class Labels {
   setCatalog(catalog: Catalog): void {
     this.catalog = catalog;
     this.operators.clear();
+    this.major = catalog.sats.filter((sat) => MAJOR.test(sat.name)).map((sat) => sat.index);
     this.famous = catalog.sats.filter((sat) => FAMOUS.test(sat.name)).map((sat) => sat.index);
     this.chosen = [];
     this.lastPick = -Infinity;
@@ -71,21 +74,28 @@ export class Labels {
 
   /** Decide which objects deserve a label right now. */
   private pick(cameraEci: THREE.Vector3): void {
-    this.chosen = [...new Set([...this.pinned, ...this.famous])].filter((i) => this.cloud.visible[i]);
-    // Only label the crowd once the camera is within ~4,000 km of the surface.
-    if (this.mode !== 'nearby' || this.kit.camera.position.length() > 24) return; // out to the whole-Earth view
+    // Names arrive as you zoom in, so the wide view stays clean:
+    //   far out (whole Earth)   only the watchlist and the three or four everyone knows
+    //   closer than ~16,000 km  the well-known spacecraft too
+    //   closer than ~10,000 km  the objects nearest the camera, more of them the closer you get
+    const distance = this.kit.camera.position.length(); // scene units from the Earth's centre
+    const named = this.mode === 'notable' || distance < 16 ? [...this.pinned, ...this.major, ...this.famous] : [...this.pinned, ...this.major];
+    this.chosen = [...new Set(named)].filter((i) => this.cloud.visible[i]);
+    if (this.mode !== 'nearby' || distance > 10.5) return;
+    const closeness = Math.min(1, Math.max(0, (10.5 - distance) / 3)); // 0 at 10,500 km → 1 by 7,500 km
+    const count = Math.round(4 + (this.nearby - 4) * closeness);
     const nearest: { index: number; d2: number }[] = [];
     const p = { x: 0, y: 0, z: 0 };
     for (let i = 0; i < this.sim.count; i++) {
       if (!this.cloud.visible[i] || !this.sim.getPosition(i, p)) continue;
       const d2 = (p.x - cameraEci.x) ** 2 + (p.y - cameraEci.y) ** 2 + (p.z - cameraEci.z) ** 2;
-      if (nearest.length === this.nearby && d2 >= nearest[this.nearby - 1].d2) continue;
+      if (nearest.length === count && d2 >= nearest[count - 1].d2) continue;
       if (behindEarth(cameraEci, p)) continue;
       // insertion into a short sorted list — cheaper than sorting 20,000 distances
       let at = nearest.length;
       while (at > 0 && nearest[at - 1].d2 > d2) at--;
       nearest.splice(at, 0, { index: i, d2 });
-      if (nearest.length > this.nearby) nearest.pop();
+      if (nearest.length > count) nearest.pop();
     }
     for (const n of nearest) if (!this.chosen.includes(n.index)) this.chosen.push(n.index);
   }
@@ -126,13 +136,15 @@ export class Labels {
       if (text.textContent !== sat.name) text.textContent = sat.name;
       let operator = this.operators.get(index);
       if (operator === undefined) this.operators.set(index, (operator = describe(sat).operator));
-      const url = operatorLogo(operator) ?? '';
+      const mark = operatorLogo(operator);
+      const url = mark?.url ?? '';
       if (logo.dataset.url !== url) {
         logo.dataset.url = url;
         logo.style.display = url ? '' : 'none';
+        logo.classList.toggle('is-dark', !!mark?.dark);
         if (url) logo.src = url;
       }
-      el.classList.toggle('is-notable', this.famous.includes(index) || this.pinned.includes(index));
+      el.classList.toggle('is-notable', this.major.includes(index) || this.famous.includes(index) || this.pinned.includes(index));
       el.style.display = '';
       el.style.transform = `translate(${x.toFixed(1)}px, ${(y - 7).toFixed(1)}px)`;
     }

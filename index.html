@@ -184,7 +184,7 @@
               <div class="legend is-hidden" id="color-legend"></div>
               <p class="field-label">Name labels</p>
               <div class="segmented" data-setting="labels">
-                <button data-value="off">Off</button><button data-value="notable">Notable</button><button data-value="nearby">Nearby</button>
+                <button data-value="off">Off</button><button data-value="notable" title="Only well-known spacecraft">Well-known</button><button data-value="nearby" title="More names appear as you zoom in">As you zoom</button>
               </div>
               <div class="field"><div class="field-head"><span>Marker size</span><output id="size-label"></output></div>
                 <input type="range" data-setting="pointSize" min="0.6" max="2.2" step="0.1" aria-label="Marker size" /></div>
@@ -232,6 +232,13 @@
               <label class="row-toggle"><span>Coverage footprint</span><input type="checkbox" data-setting="footprint" /></label>
               <label class="row-toggle"><span>3D model</span><input type="checkbox" data-setting="model" /></label>
               <label class="row-toggle"><span>Slowly circle the object</span><input type="checkbox" data-setting="autoOrbit" /></label>
+            </details>
+            <details class="sec" open>
+              <summary>Name tags</summary>
+              <div class="segmented" data-setting="labels">
+                <button data-value="off">Off</button><button data-value="notable">Well-known</button><button data-value="nearby">As you zoom</button>
+              </div>
+              <p class="note">A few famous spacecraft are always named. Zoom in and more names and operator logos appear.</p>
             </details>
             <details class="sec" open>
               <summary>Earth</summary>
