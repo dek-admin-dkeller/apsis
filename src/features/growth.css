@@ -1,0 +1,40 @@
+/* "Growth by year" — a section of the Objects panel (features/growth.ts). */
+
+.growth { display: grid; gap: 0; min-width: 0; }
+
+/* the year, large, with the number of objects on show beside it */
+.growth-readout { display: flex; align-items: flex-end; gap: 12px; margin-top: 10px; }
+.growth-year { flex: none; font: 600 34px/1 var(--font-display); letter-spacing: -0.02em; color: var(--text); font-variant-numeric: tabular-nums; transition: color var(--fast); }
+.growth-count { min-width: 0; padding-bottom: 2px; font-size: 11.5px; line-height: 1.35; color: var(--muted); }
+.growth-count b { font: 600 13px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text); }
+/* amber is the app's colour for "switched on": a year is in force and things are hidden */
+.growth.is-active .growth-year, .growth.is-active .growth-count b { color: var(--amber); }
+
+.growth-chart { margin-top: 10px; border: 1px solid var(--line); border-radius: var(--radius-s); background: var(--inset); }
+.growth-chart canvas { display: block; width: 100%; height: 104px; cursor: ew-resize; touch-action: pan-y; /* a sideways drag picks a year, an up-down one still scrolls the panel */ }
+
+.growth-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; font-size: 11px; color: var(--muted); }
+.growth-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.growth-legend i { width: 8px; height: 8px; border-radius: 2px; background: currentColor; }
+
+.growth-slider { margin-top: 8px; }
+/* two lines always, so the buttons below do not jump while Play changes the sentence's length */
+.growth .growth-detail { margin-top: 4px; min-height: 2.9em; font-variant-numeric: tabular-nums; }
+
+.growth-actions { display: flex; gap: 6px; margin-top: 10px; }
+.growth-actions .btn { flex: 1; min-width: 0; }
+.growth-play[aria-pressed='true'] { background: rgba(255, 180, 84, 0.15); border-color: var(--amber); color: var(--amber); }
+.growth.is-active .growth-all { border-color: var(--amber); color: var(--amber); }
+.growth.is-active .growth-all:hover { background: rgba(255, 180, 84, 0.15); }
+
+.growth .growth-state { margin-top: 10px; padding: 7px 9px; border-left: 2px solid var(--amber); border-radius: 0 var(--radius-s) var(--radius-s) 0; background: rgba(255, 180, 84, 0.08); color: var(--text); }
+.growth .growth-honest { margin-top: 10px; }
+
+/* the section's heading says so when a year is in force, so a folded section cannot hide it */
+.growth-badge { color: var(--amber); }
+.sec.growth-on > summary { color: var(--text); }
+
+/* touch: a taller chart to aim at */
+@media (pointer: coarse) {
+  .growth-chart canvas { height: 120px; }
+}

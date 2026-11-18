@@ -1617,8 +1617,10 @@ const app: App = {
   jumpTo: (timeMs) => jumpTo(timeMs),
   jumpToNow: () => jumpToNow(),
   setSpeed: (multiplier) => {
-    clock.speed = multiplier;
-    clock.paused = false;
+    // 0 is how speed() reports a paused clock, so it means "pause" here too: the running speed
+    // is kept, and Space or the play button resumes at it (a speed of 0 would leave the clock stuck).
+    if (multiplier !== 0) clock.speed = multiplier;
+    clock.paused = multiplier === 0;
     timeControls.sync();
   },
 
