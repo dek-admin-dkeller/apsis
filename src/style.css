@@ -286,6 +286,13 @@ body.ui-hidden #hud > *, body.ui-hidden .dock > * { pointer-events: none; }
 
 /* ---------- status bar ---------- */
 
+/* ---- the bars step back while the globe turns by itself ----
+   Left alone in a whole-Earth view the globe starts its slow drift; main.ts then puts `ui-rest`
+   on <body> and the bars around the picture dim a little. (A phone dims its controls much
+   further: mobile.css section 11.) Moving the pointer brings them back at once. */
+.topbar, .rail, .statusbar { transition: opacity 0.25s ease; }
+body.ui-rest .topbar, body.ui-rest .rail, body.ui-rest .statusbar { opacity: 0.62; transition: opacity 2.6s ease; }
+
 .statusbar {
   position: absolute;
   left: 0;

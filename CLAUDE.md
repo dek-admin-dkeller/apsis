@@ -267,11 +267,13 @@ bar. There is NO time bar on a phone: `mobile.css` section 10 hides `.timebar` u
 has `m-time-open`, which follows the bar's own `is-open` class (menu → "Time and speed", the
 tour, tap elsewhere to close); `#m-time-chip` appears only while time is not live.
 
-Phone idle fade: while the globe drifts by itself (`rig.drifting`) and nothing has been
-touched for 4 s, `updatePhoneRest()` in `main.ts` puts `m-rest` on `<body>` and `mobile.css`
-section 11 dims the search pill, round buttons and tab bar to 0.28 (the owner asked for it
-fainter than half). Any `pointerdown` removes it at once. Never while a sheet, the menu, the
-time controls or the tour is open.
+Idle fade: while the globe drifts by itself (`rig.drifting`) and nothing has been touched,
+pressed or moved for 4 s, `updateRest()` in `main.ts` puts `ui-rest` on `<body>`. On a computer
+the top bar, rail and status line dim slightly (0.62, `style.css`; the owner asked for it to be
+subtle there); on a phone the search pill, round buttons and tab bar dim to 0.28 (`mobile.css`
+section 11; the owner asked for it fainter than half). Any `pointerdown`, `pointermove`, wheel
+or key removes it at once. Never while a panel, a menu, an overlay, the command bar, the time
+controls or the tour is open.
 
 Phone menu (`#m-views`, `mobile.css` section 12): the four views side by side as icons, then
 five actions as an icon list. It was nine equal lines of text.

@@ -1694,29 +1694,29 @@ function watchFrameRate(now: number): void {
   }
 }
 
-// ---- phone: the controls step back while the globe turns by itself ----
-// Left alone in a whole-Earth view the globe starts its slow drift (cameraRig). A phone then
-// dims its search pill, round buttons and tab bar (`m-rest` on <body>, mobile.css section 11)
-// so the picture has the screen to itself. Any touch, on the globe or on a control, brings
-// them straight back; nothing is ever switched off, a dimmed button still works.
+// ---- the interface steps back while the globe turns by itself ----
+// Left alone in a whole-Earth view the globe starts its slow drift (cameraRig). The bars around
+// the picture then dim (`ui-rest` on <body>): a little on a computer (style.css), nearly away
+// on a phone, where the screen is small (mobile.css section 11). Any touch, key or movement
+// of the pointer brings them straight back; nothing is switched off, a dimmed button still works.
 let lastTouchMs = performance.now();
 let resting = false;
 const noteTouch = () => {
   lastTouchMs = performance.now();
   if (resting) setResting(false); // at once, not a frame later: the tap that wakes the controls may be on one of them
 };
-window.addEventListener('pointerdown', noteTouch, { capture: true, passive: true });
-window.addEventListener('keydown', noteTouch, { capture: true });
+for (const kind of ['pointerdown', 'pointermove', 'wheel', 'keydown']) window.addEventListener(kind, noteTouch, { capture: true, passive: true });
 function setResting(on: boolean): void {
   resting = on;
-  document.body.classList.toggle('m-rest', on);
+  document.body.classList.toggle('ui-rest', on);
 }
-function updatePhoneRest(now: number): void {
+function updateRest(now: number): void {
   const rest =
-    rig.drifting && now - lastTouchMs > 4000 && isPhone() && fp.mode === 'off' && !landing.showing && !tour.isRunning &&
-    openPanelName === null && !inspector.isOpen && !encPanel.isOpen && // a sheet is being read
+    rig.drifting && now - lastTouchMs > 4000 && fp.mode === 'off' && !landing.showing && !tour.isRunning &&
+    openPanelName === null && !inspector.isOpen && !encPanel.isOpen && // something is being read
     viewsMenu.classList.contains('is-hidden') && !timeBar.classList.contains('is-open') &&
-    document.activeElement?.id !== 'search';
+    document.activeElement?.id !== 'search' &&
+    !document.querySelector('.overlay:not(.is-hidden), .tool-menu:not(.is-hidden), .cmd:not(.is-hidden)'); // a page, a menu or the command bar is open
   if (rest !== resting) setResting(rest);
 }
 
@@ -1766,7 +1766,7 @@ function step(now: number): void {
   // One of two things drives the camera: a first-person view, or the ordinary rig.
   if (fp.mode !== 'off') fp.update(dt, clock.time, selScene ? { position: selScene, velocity: selVelocity } : null);
   else rig.update(dt);
-  updatePhoneRest(now);
+  updateRest(now);
   kit.camera.updateMatrixWorld();
   updateSelection(realSeconds);
   updateEncounter(realSeconds, dt);
