@@ -7,9 +7,13 @@
  * real screens, a live drawing of the search, the tracker's own 3D models, and the full list
  * of features as a compact index.
  *
- * Until the globe is ready, and on a machine that cannot draw it, the opening screen shows
- * an orbit drawing instead — the logo taken apart, with the two APSIDES marked, which is
- * where the name comes from. Its satellite keeps real time: equal areas in equal times.
+ * Until the globe is ready, and on a machine that cannot draw it, the opening screen is the
+ * headline on a plain dark backdrop: nothing moves there while the tracker is loading, because
+ * anything that did would stutter. (An orbit drawing used to stand in; it now explains the
+ * name in a small section by the footer.)
+ *
+ * The bar at the top is NOT inside the part that scrolls (`.ld-scroll`), so no scrolling —
+ * including the elastic bounce past the top on a trackpad or a phone — can move it.
  */
 
 html #landing {
@@ -25,9 +29,9 @@ html #landing {
   inset: 0;
   z-index: 200;
   visibility: visible; /* index.html hides it until this stylesheet has arrived */
-  display: block;
-  overflow: hidden auto; /* scrolls down; never sideways */
-  overscroll-behavior: contain;
+  display: flex; /* the bar, then the part that scrolls */
+  flex-direction: column;
+  overflow: hidden;
   color: var(--ld-ink);
   font-family: var(--font-ui);
   transition: opacity 420ms ease;
@@ -39,19 +43,31 @@ html.no-landing #landing { display: none; }
 /* While the page is up, the tracker's own controls stay out of the picture behind it. */
 body.home-open :is(#hud, #tooltip, #reticle, #range-tag) { opacity: 0 !important; pointer-events: none !important; }
 
-/* ---- the bar at the top: stays put while the page scrolls ---- */
+/* ---- the part that scrolls ---- */
+.ld-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden auto; /* scrolls down; never sideways */
+  overscroll-behavior: none; /* no bounce past either end, and nothing passed on to the tracker behind */
+}
+
+/* ---- the bar at the top: a row of its own above the scrolling part, so it cannot move ---- */
 .ld-top {
-  position: sticky;
-  top: 0;
+  position: relative;
+  flex: none;
   z-index: 3;
   display: flex;
   align-items: center;
   gap: clamp(14px, 3vw, 40px);
   padding: 14px var(--ld-pad);
   background: var(--ld-night);
-  transition: background 900ms ease;
+  box-shadow: 0 1px 0 transparent;
+  transition: background 500ms ease, box-shadow 500ms ease;
 }
-#landing.is-live .ld-top { background: rgba(5, 8, 15, 0.66); backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2); }
+/* At the top of the page, over the live globe, the bar is glass. Once the page has moved it is
+   solid, with a hairline under it: what is behind it then is the globe, not the page. */
+#landing.is-live:not(.is-scrolled) .ld-top { background: rgba(5, 8, 15, 0.5); backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2); }
+#landing.is-scrolled .ld-top { box-shadow: 0 1px 0 var(--ld-faint); }
 .ld-mark { display: inline-flex; align-items: center; gap: 10px; font: 600 17px var(--font-display); letter-spacing: 0.02em; }
 .ld-mark .logo { width: 26px; height: 26px; }
 .ld-nav { display: flex; align-items: center; gap: clamp(10px, 2vw, 28px); margin-left: auto; }
@@ -86,10 +102,6 @@ body.home-open :is(#hud, #tooltip, #reticle, #range-tag) { opacity: 0 !important
   min-height: calc(100vh - 66px);
   min-height: calc(100svh - 66px);
   padding: clamp(16px, 4vh, 48px) var(--ld-pad) clamp(40px, 9vh, 96px);
-  /* The tilted drawing's corners must not add to the page's size. `clip` rather than `hidden`:
-     it trims without letting this block shrink below its content on a short screen. */
-  overflow: clip;
-  overflow-clip-margin: 12px;
 }
 /* The backdrop that stands in until the tracker is ready, then fades to let the globe through. */
 .ld-main::before {
@@ -125,9 +137,11 @@ body.home-open :is(#hud, #tooltip, #reticle, #range-tag) { opacity: 0 !important
 .ld-status { margin: 0; font-size: 13.5px; color: var(--ld-soft); font-variant-numeric: tabular-nums; }
 #landing.is-live .ld-status::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: #5ee0a0; box-shadow: 0 0 0 3px rgba(94, 224, 160, 0.16); vertical-align: 1px; }
 
-/* ---- the orbit drawing (the stand-in) ---- */
-.ld-orbit { position: relative; justify-self: end; width: min(100%, 700px, 78vh); aspect-ratio: 5 / 4; margin: 0; transition: opacity 900ms ease; }
-#landing.is-live .ld-orbit { opacity: 0; }
+/* ---- where the name comes from: the logo taken apart, small, by the footer ---- */
+.ld-name { display: flex; align-items: center; gap: clamp(28px, 5vw, 64px); padding: clamp(34px, 6vh, 56px) 0 clamp(40px, 7vh, 64px); border-top: 1px solid var(--ld-faint); }
+.ld-name p { margin: 0; max-width: 52ch; font-size: 14.5px; line-height: 1.65; color: var(--ld-soft); }
+.ld-name dfn { font: italic 500 17px var(--font-display); color: var(--ld-ink); }
+.ld-orbit { position: relative; flex: none; width: min(300px, 58vw); aspect-ratio: 5 / 4; margin: 10px 6px 22px 84px; } /* the left margin holds the near point's label */
 .ld-turn { position: absolute; inset: 0; transform: rotate(-13deg); }
 .ld-turn svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .ld-turn ellipse { fill: none; stroke: rgba(232, 241, 251, 0.34); stroke-width: 1.2; vector-effect: non-scaling-stroke; }
@@ -143,22 +157,22 @@ body.home-open :is(#hud, #tooltip, #reticle, #range-tag) { opacity: 0 !important
   background: radial-gradient(circle at 34% 30%, #ffffff 0%, #dbe6f2 46%, #93a5bd 100%);
 }
 /* A box the size of the whole drawing, moved by percentages of itself: a transform-only
-   animation, so the browser can run it smoothly even while the tracker is loading.
-   That moving box swings well outside the drawing, and anything that sticks out of a
-   scrollable page makes the page longer — so it lives inside .ld-clip, which cuts it off at
-   the drawing's edge. Without that the page's scroll length changed as the satellite went
-   round. */
+   animation. That moving box swings well outside the drawing, and anything that sticks out
+   of a scrollable page makes the page longer — so it lives inside .ld-clip, which cuts it
+   off at the drawing's edge. Without that the page's scroll length changed as the satellite
+   went round. */
 .ld-clip { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
-.ld-sat { position: absolute; inset: 0; animation: ld-kepler 18s linear infinite; will-change: transform; pointer-events: none; }
-#landing.is-live .ld-sat { animation-play-state: paused; }
-.ld-sat i { position: absolute; left: -6px; top: -6px; width: 12px; height: 12px; border-radius: 50%; background: var(--ld-accent); box-shadow: 0 0 0 6px rgba(127, 227, 255, 0.13); }
-.ld-tag { position: absolute; top: 50%; font-size: 13px; line-height: 1.35; color: var(--ld-ink); white-space: nowrap; }
-.ld-tag small { display: block; font-size: 12px; color: var(--ld-soft); }
-.ld-tag::before { content: ''; position: absolute; left: 50%; top: -31px; width: 1px; height: 18px; background: rgba(232, 241, 251, 0.5); }
-/* The near point's label hangs under it; the far point's sits inside the orbit, clear of the line. */
-.ld-peri { left: 4%; transform: translate(-50%, 22px) rotate(13deg); text-align: center; }
-.ld-apo { left: 96%; transform: translate(calc(-100% - 18px), -50%) rotate(13deg); text-align: right; }
-.ld-apo::before { left: auto; right: -12px; top: 50%; width: 7px; height: 1px; }
+.ld-sat { position: absolute; inset: 0; animation: ld-kepler 18s linear infinite; pointer-events: none; }
+.ld-sat i { position: absolute; left: -4px; top: -4px; width: 8px; height: 8px; border-radius: 50%; background: var(--ld-accent); box-shadow: 0 0 0 4px rgba(127, 227, 255, 0.13); }
+.ld-tag { position: absolute; top: 50%; font-size: 12px; line-height: 1.35; color: var(--ld-ink); white-space: nowrap; }
+.ld-tag small { display: block; font-size: 11px; color: var(--ld-soft); }
+.ld-tag::before { content: ''; position: absolute; top: 50%; width: 7px; height: 1px; background: rgba(232, 241, 251, 0.5); }
+/* Each label sits beside its point, clear of the line: the near point's outside the orbit
+   (the planet takes the room inside), the far point's inside. */
+.ld-peri { left: 4%; transform: translate(calc(-100% - 14px), -50%) rotate(13deg); text-align: right; }
+.ld-peri::before { right: -11px; }
+.ld-apo { left: 96%; transform: translate(calc(-100% - 14px), -50%) rotate(13deg); text-align: right; }
+.ld-apo::before { right: -11px; }
 
 @keyframes ld-kepler {
   0.00% { transform: translate(4.00%, 50.00%); }
@@ -214,7 +228,7 @@ body.home-open :is(#hud, #tooltip, #reticle, #range-tag) { opacity: 0 !important
 
 /* ---- everything below the opening screen sits on solid ground ---- */
 .ld-body { position: relative; background: var(--ld-night); padding: 0 var(--ld-pad) clamp(18px, 3vw, 38px); }
-.ld-section { padding: clamp(56px, 11vh, 128px) 0; border-top: 1px solid var(--ld-faint); scroll-margin-top: 64px; }
+.ld-section { padding: clamp(56px, 11vh, 128px) 0; border-top: 1px solid var(--ld-faint); }
 .ld-body > .ld-section:first-child { border-top: 0; }
 .ld-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: end; gap: 14px clamp(28px, 5vw, 80px); }
 .ld-section h2 { margin: 0; max-width: 16ch; font: 600 clamp(28px, 3.4vw, 50px) / 1.04 var(--font-display); letter-spacing: -0.025em; text-wrap: balance; }
@@ -287,13 +301,12 @@ body.home-open :is(#hud, #tooltip, #reticle, #range-tag) { opacity: 0 !important
 .ld-fresh { margin-left: 6px; font-size: 11px; font-weight: 500; color: var(--ld-warm); }
 
 /* ---- games: small, last, and quiet ---- */
-.ld-games { padding: clamp(26px, 5vh, 44px) 0; border-top: 1px solid var(--ld-faint); display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 22px; scroll-margin-top: 64px; }
+.ld-games { padding: clamp(26px, 5vh, 44px) 0; border-top: 1px solid var(--ld-faint); display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 22px; }
 .ld-games h2 { margin: 0; font: 600 17px var(--font-display); color: var(--ld-soft); }
 .ld-games p { margin: 0; font-size: 13.5px; color: var(--ld-soft); opacity: 0.8; }
 
 .ld-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 40px; padding-top: 14px; border-top: 1px solid var(--ld-faint); font-size: 12.5px; line-height: 1.55; color: var(--ld-soft); }
 .ld-foot p { margin: 0; max-width: 62ch; }
-.ld-foot dfn { font-style: italic; color: var(--ld-ink); }
 
 @media (max-width: 860px) {
   .ld-top { flex-wrap: wrap; gap: 6px 14px; padding-top: 10px; padding-bottom: 10px; }
@@ -301,16 +314,16 @@ body.home-open :is(#hud, #tooltip, #reticle, #range-tag) { opacity: 0 !important
   .ld-nav button { padding: 4px 0; font-size: 13px; }
   .ld-button.ld-small { margin-left: auto; height: 36px; }
   /* The globe sits in the upper half, the words below it. */
-  .ld-main { grid-template-columns: 1fr; align-content: end; gap: 8px; min-height: calc(100svh - 92px); padding-top: 4px; padding-bottom: 34px; }
+  /* The top padding is the room kept clear for the globe: on a short, wide screen the words
+     would otherwise climb over it. On a tall phone it is spare space anyway. */
+  .ld-main { grid-template-columns: 1fr; align-content: end; gap: 8px; min-height: calc(100svh - 92px); padding-top: calc(min(90vw, 400px, 40vh) * 0.8 + 22px); padding-bottom: 34px; }
   .ld-main::after { background: linear-gradient(0deg, var(--ld-night) 0%, rgba(5, 8, 15, 0.9) 34%, rgba(5, 8, 15, 0) 62%); }
-  .ld-orbit { order: -1; justify-self: center; width: min(90%, 400px, 40vh); margin: 2px 0 16px; }
+  .ld-name { flex-direction: column; align-items: flex-start; gap: 14px; }
+  .ld-orbit { width: min(260px, 58vw); margin: 6px 0 22px 80px; }
   .ld-copy h1 { max-width: 14ch; font-size: clamp(32px, 9.4vw, 46px); }
   .ld-go { flex-direction: column; align-items: stretch; gap: 10px; }
   .ld-go .ld-button, .ld-section > .ld-button { width: 100%; height: 52px; }
   .ld-status { text-align: center; }
-  .ld-tag { font-size: 11.5px; }
-  .ld-tag small { font-size: 10.5px; }
-  .ld-sat i { left: -5px; top: -5px; width: 10px; height: 10px; }
   .ld-head, .ld-demo, .ld-scale { grid-template-columns: 1fr; }
   .ld-tabs { gap: 2px 18px; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
   .ld-tabs::-webkit-scrollbar { display: none; }
@@ -323,6 +336,6 @@ body.home-open :is(#hud, #tooltip, #reticle, #range-tag) { opacity: 0 !important
 
 @media (prefers-reduced-motion: reduce) {
   .ld-sat { animation: none; transform: translate(85.97%, 21.32%); }
-  html #landing, .ld-main::before, .ld-orbit, .ld-screen img { transition: none; }
+  html #landing, .ld-top, .ld-main::before, .ld-screen img { transition: none; }
   .ld-plate figure { animation: none; }
 }

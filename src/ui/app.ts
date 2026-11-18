@@ -37,6 +37,11 @@ export interface FrameInfo {
 export type Toggle = 'monitor' | 'cells' | 'autopilot' | 'sky' | 'ride' | 'fullscreen' | 'howto' | 'keys' | 'share';
 export type ViewName = 'home' | 'earth' | 'leo' | 'geo' | 'moon';
 export type PanelName = 'objects' | 'layers' | 'conj' | 'settings';
+/** The sections of the Objects panel, by the name each carries in index.html (`data-section`). */
+export type SectionName =
+  | 'watchlist' | 'notable' | 'type' | 'orbit' | 'appearance' // Browse
+  | 'tonight' | 'launches' | 'changes' | 'newest' | 'trains' | 'lowest' // Activity
+  | 'constellations' | 'growth' | 'designer'; // Tools
 
 export interface App {
   // ---- what is loaded, selected and open -------------------------------------------------
@@ -77,10 +82,14 @@ export interface App {
   view(which: ViewName): void;
   /** Open one of the left-hand panels (or close them all with null). */
   openPanel(name: PanelName | null): void;
+  /** Open the Objects panel at one of its sections (whichever tab that section is in). */
+  openSection(name: SectionName): void;
   /** Switch something on or off; without `on`, flip it (or simply open it). */
   toggle(what: Toggle, on?: boolean): void;
   /** A short message at the bottom of the screen. */
   toast(text: string): void;
+  /** Is the tracker itself in front and ready for input? False while it is loading and while the home page covers it. */
+  ready(): boolean;
   /**
    * Hide objects from the globe (and from screening). Every registered test must pass for an
    * object to be shown; register under a key of your own, and pass null to remove the test.

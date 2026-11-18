@@ -519,6 +519,14 @@ kbd { font-size: 10.5px; padding: 1px 5px; border: 1px solid var(--line-strong);
 .sec > summary:hover { color: var(--text); }
 .sec[open] > summary { margin-bottom: 9px; }
 .sum-note { margin-left: auto; font: 400 10.5px var(--font-mono); color: var(--muted); }
+/* A closed section can say in one line what is inside it (the Objects panel's Activity and
+   Tools tabs read as a short menu that way). Open, its content speaks for itself. */
+.sum-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sum-text small { font-size: 11px; font-weight: 400; line-height: 1.3; color: var(--muted); opacity: 0.85; }
+.sec[open] > summary .sum-text small { display: none; }
+.sec:not([open]) > summary:has(.sum-text) { padding: 3px 0; }
+/* The first section actually on show has no line above it (earlier ones may belong to another tab). */
+.sec.is-first { padding-top: 0; border-top: 0; }
 .sec + .btn.wide { margin-top: 12px; }
 
 /* a row with its switch on the right */

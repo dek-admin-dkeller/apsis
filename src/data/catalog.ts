@@ -115,10 +115,24 @@ export function buildCatalog(snapshot: Snapshot, live = false): Catalog {
 }
 
 /**
- * Search by name or NORAD id. Three hash lookups, each O(1) expected:
+ * What people type for objects the catalogue files under another name: the telescope everyone
+ * calls Hubble is listed as "HST". One more small hash table, Map<what is typed, catalogue name>.
+ */
+const COMMON_NAMES = new Map<string, string>([
+  ['HUBBLE', 'HST'],
+  ['HUBBLE SPACE TELESCOPE', 'HST'],
+  ['TIANGONG', 'CSS (TIANHE)'],
+  ['CHINESE SPACE STATION', 'CSS (TIANHE)'],
+  ['SPACE STATION', 'ISS (ZARYA)'],
+  ['INTERNATIONAL SPACE STATION', 'ISS (ZARYA)'],
+]);
+
+/**
+ * Search by name or NORAD id. Hash lookups, each O(1) expected:
  *   1. exact NORAD id   → byNorad.get(id)
  *   2. exact name       → byName.get(NAME)
- *   3. autocomplete     → prefixIndex.get(first ≤4 chars of the first word typed), then the
+ *   3. common name      → COMMON_NAMES ("hubble" → HST), then byName.get
+ *   4. autocomplete     → prefixIndex.get(first ≤4 chars of the first word typed), then the
  *                         short candidate list is filtered against the full query text.
  */
 export function searchCatalog(catalog: Catalog, query: string, limit = 8): Satellite[] {
@@ -135,6 +149,11 @@ export function searchCatalog(catalog: Catalog, query: string, limit = 8): Satel
 
   if (/^\d+$/.test(q)) add(catalog.byNorad.get(Number(q)));
   for (const sat of catalog.byName.get(q) ?? []) add(sat);
+  if (q.length >= 3) {
+    for (const [typed, name] of COMMON_NAMES) {
+      if (typed.startsWith(q)) for (const sat of catalog.byName.get(name) ?? []) add(sat);
+    }
+  }
 
   const firstWord = q.split(/[^A-Z0-9]+/).filter(Boolean)[0] ?? '';
   const candidates = catalog.prefixIndex.get(firstWord.slice(0, PREFIX_LEN)) ?? [];

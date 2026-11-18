@@ -49,6 +49,8 @@
         <button class="ld-button ld-small" data-ld-enter>Open the tracker</button>
       </header>
 
+      <!-- Everything below the bar scrolls in here, so the bar itself can never move. -->
+      <div class="ld-scroll" id="landing-scroll">
       <main class="ld-main">
         <div class="ld-copy">
           <h1>Everything in orbit around Earth, right now.</h1>
@@ -58,18 +60,6 @@
             <p id="landing-status" class="ld-status" aria-live="polite">Getting the catalogue ready</p>
           </div>
         </div>
-        <figure class="ld-orbit" aria-hidden="true">
-          <div class="ld-turn">
-            <svg viewBox="0 0 500 400" preserveAspectRatio="none">
-              <line x1="20" y1="200" x2="480" y2="200" />
-              <ellipse cx="250" cy="200" rx="230" ry="184" />
-            </svg>
-            <i class="ld-earth"></i>
-            <div class="ld-clip"><div class="ld-sat"><i></i></div></div>
-            <span class="ld-tag ld-peri">periapsis<small>nearest point</small></span>
-            <span class="ld-tag ld-apo">apoapsis<small>farthest point</small></span>
-          </div>
-        </figure>
       </main>
 
       <div class="ld-body">
@@ -149,10 +139,28 @@
           <p>A side project: small games played on the live catalogue. There is nothing here yet.</p>
         </section>
 
+        <!-- Where the name comes from: the logo taken apart, with its two apsides marked. -->
+        <section class="ld-name">
+          <figure class="ld-orbit" aria-hidden="true">
+            <div class="ld-turn">
+              <svg viewBox="0 0 500 400" preserveAspectRatio="none">
+                <line x1="20" y1="200" x2="480" y2="200" />
+                <ellipse cx="250" cy="200" rx="230" ry="184" />
+              </svg>
+              <i class="ld-earth"></i>
+              <div class="ld-clip"><div class="ld-sat"><i></i></div></div>
+              <span class="ld-tag ld-peri">periapsis<small>nearest point</small></span>
+              <span class="ld-tag ld-apo">apoapsis<small>farthest point</small></span>
+            </div>
+          </figure>
+          <p><dfn>apsis</dfn>, noun. Either of the two points on an orbit that lie nearest to and farthest from the body being orbited. A satellite is fastest at the near one and slowest at the far one, which is how the dot in the drawing moves.</p>
+        </section>
+
         <footer class="ld-foot">
-          <p><dfn>apsis</dfn>, noun. Either of the two points on an orbit that lie nearest to and farthest from the body being orbited.</p>
-          <p>Orbital data from CelesTrak, imagery from NASA. Nothing to install and no account.</p>
+          <p>Orbital data from CelesTrak, imagery from NASA.</p>
+          <p>Nothing to install and no account.</p>
         </footer>
+      </div>
       </div>
     </div>
 
@@ -307,18 +315,30 @@
         <!-- Objects -->
         <section class="panel is-hidden" id="panel-objects">
           <header class="panel-head"><h2>Objects</h2><button class="icon-btn" data-close-panel aria-label="Close panel">×</button></header>
-          <div class="panel-body">
-            <details class="sec" open>
+          <!-- Three tabs instead of one long scroll (src/ui/objectTabs.ts). Each section says which
+               tab it belongs to with data-tab; data-section is the name other code opens it by. -->
+          <div class="tabs" id="obj-tabs" role="tablist" aria-label="Objects">
+            <button role="tab" data-tab="browse" class="is-on" aria-selected="true" title="Choose what is on the globe and pick things out of it">Browse</button>
+            <button role="tab" data-tab="activity" aria-selected="false" title="What is happening in orbit: passes tonight, launches, orbit changes, re-entries">Activity</button>
+            <button role="tab" data-tab="tools" aria-selected="false" title="Constellations, growth by year, design your own satellite">Tools</button>
+          </div>
+          <div class="panel-body" id="obj-body">
+            <!-- ================= Browse: what is on the globe, and picking things out of it ================= -->
+            <details class="sec" data-tab="browse" data-section="watchlist" open>
               <summary>Watchlist</summary>
               <ol class="watch-list" id="watch-list"></ol>
               <p class="note" id="watch-empty">Star an object in its inspector to keep it here.</p>
-              <button class="btn wide" id="contacts-open">Contact timeline</button>
+              <button class="btn wide is-hidden" id="contacts-open">Contact timeline</button>
             </details>
-            <details class="sec" open>
+            <details class="sec" data-tab="browse" data-section="notable" open>
+              <summary>Notable objects</summary>
+              <div class="quick" id="quick-list"></div>
+            </details>
+            <details class="sec" data-tab="browse" data-section="type" open>
               <summary>Type</summary>
               <div class="chip-grid" id="category-chips"></div>
             </details>
-            <details class="sec" open>
+            <details class="sec" data-tab="browse" data-section="orbit" open>
               <summary>Orbit regime</summary>
               <div class="chip-row" id="orbit-chips"></div>
               <div class="field">
@@ -329,7 +349,7 @@
                 </div>
               </div>
             </details>
-            <details class="sec" open>
+            <details class="sec" data-tab="browse" data-section="appearance" open>
               <summary>Appearance</summary>
               <p class="field-label">Colour by</p>
               <div class="segmented grid3" data-setting="colorMode">
@@ -347,49 +367,51 @@
               <div class="field"><div class="field-head"><span>Glow</span><output id="glow-label"></output></div>
                 <input type="range" data-setting="glow" min="0" max="1.4" step="0.05" aria-label="Glow strength" /></div>
             </details>
-            <details class="sec" open>
-              <summary>Notable objects</summary>
-              <div class="quick" id="quick-list"></div>
-            </details>
-            <!-- The empty elements with ids ending in -body below are filled in by the modules in src/features/. -->
-            <details class="sec" data-feature>
-              <summary>Visible tonight</summary>
+
+            <!-- ================= Activity: what is happening up there =================
+                 Closed until asked for: the tab then reads as a short menu, one line per section.
+                 Sections that share a `name` open one at a time (the browser closes the others).
+                 The empty elements with ids ending in -body are filled in by the modules in src/features/. -->
+            <details class="sec" name="obj-activity" data-tab="activity" data-section="tonight" data-feature>
+              <summary><span class="sum-text">Visible tonight<small>Bright passes you could see from the ground</small></span></summary>
               <div id="tonight-body"></div>
             </details>
-            <details class="sec" data-feature>
-              <summary>Upcoming launches</summary>
+            <details class="sec" name="obj-activity" data-tab="activity" data-section="launches" data-feature>
+              <summary><span class="sum-text">Upcoming launches<small>What goes up next, with a countdown</small></span></summary>
               <div id="launches-body"></div>
             </details>
-            <details class="sec" data-feature>
-              <summary>Orbit changes</summary>
+            <details class="sec" name="obj-activity" data-tab="activity" data-section="changes" data-feature>
+              <summary><span class="sum-text">Orbit changes<small>Raised, lowered, new and gone since the last update</small></span></summary>
               <div id="changes-body"></div>
             </details>
-            <details class="sec">
-              <summary>Newest in orbit</summary>
+            <details class="sec" name="obj-activity" data-tab="activity" data-section="newest">
+              <summary><span class="sum-text">Newest in orbit<small>The latest launches, grouped</small></span></summary>
               <ol class="watch-list" id="feed-new"></ol>
             </details>
-            <details class="sec">
-              <summary>Satellite trains</summary>
+            <details class="sec" name="obj-activity" data-tab="activity" data-section="trains">
+              <summary><span class="sum-text">Satellite trains<small>Fresh batches still flying in a line</small></span></summary>
               <p class="note">Batches launched in the last two months, still flying in a line. Click one to light it up.</p>
               <ol class="watch-list" id="feed-trains"></ol>
               <p class="note is-hidden" id="feed-trains-empty">No recent batches in the data.</p>
             </details>
-            <details class="sec">
-              <summary>Constellations</summary>
-              <div id="constellation-body"></div>
-            </details>
-            <details class="sec">
-              <summary>Lowest orbits</summary>
+            <details class="sec" name="obj-activity" data-tab="activity" data-section="lowest">
+              <summary><span class="sum-text">Lowest orbits<small>Next to come down, and today’s space weather</small></span></summary>
               <p class="note">Lowest point of each orbit. Below about 300 km the thin air drags objects down within weeks.</p>
               <div id="weather-body"></div>
               <ol class="watch-list" id="feed-low"></ol>
             </details>
-            <details class="sec" data-feature>
-              <summary>Growth by year</summary>
+
+            <!-- ================= Tools: things to do with the catalogue ================= -->
+            <details class="sec" name="obj-tools" data-tab="tools" data-section="constellations">
+              <summary><span class="sum-text">Constellations<small>Draw a whole network and where it reaches</small></span></summary>
+              <div id="constellation-body"></div>
+            </details>
+            <details class="sec" name="obj-tools" data-tab="tools" data-section="growth" data-feature>
+              <summary><span class="sum-text">Growth by year<small>Wind the catalogue back to 1957</small></span></summary>
               <div id="growth-body"></div>
             </details>
-            <details class="sec" id="designer">
-              <summary>Design a satellite</summary>
+            <details class="sec" name="obj-tools" data-tab="tools" data-section="designer" id="designer">
+              <summary><span class="sum-text">Design a satellite<small>Launch your own and see what it passes</small></span></summary>
               <div id="designer-body"></div>
             </details>
           </div>

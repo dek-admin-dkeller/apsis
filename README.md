@@ -31,6 +31,8 @@ Other commands:
 ```bash
 npm run bench        # brute force vs spatial hash in Node — prints a table for the report
 npm run build        # type-check + production build into dist/
+npm run check        # the feature checks: orbit changes, visible passes, the report, decay, the command bar
+npm run fetch-radio  # refresh the SatNOGS radio records in public/data/radio.json (at most every 6 hours)
 npm run shots        # retake the home page's screenshots (needs Chrome and `npm run dev` running)
 ```
 
@@ -51,7 +53,16 @@ status line sit along the bottom.
 | Home | the logo (or `0`) closes everything and returns to the whole Earth at the present time |
 | Inspect an object | click a dot, or search by name / NORAD ID (press `/`; suggestions show a photo or a 3D-model thumbnail). The camera flies to the object and locks on: dragging now turns the view around **it**, not the Earth (`T` unlocks) |
 | Inspector tabs | **Live** telemetry, ground-track map, altitude chart · **Orbit** shape to scale, orbital elements, speed and sunlight charts · **Passes** over your ground station with a sky chart · **Record** owner, launch, size, a Wikipedia summary and the raw element record |
-| Objects panel (`O`) | filter by type, orbit regime, altitude band; colour by type, orbit, altitude, owner, launch year or tilt; labels, marker size; shortcuts to notable objects |
+| Objects panel (`O`) | three tabs. **Browse**: watchlist, notable objects, filters by type, orbit regime and altitude band, colour by type, orbit, altitude, owner, launch year, tilt or data age, labels, marker size. **Activity**: visible tonight, upcoming launches, orbit changes, newest in orbit, satellite trains, lowest orbits. **Tools**: constellations, growth by year, design a satellite. Activity and Tools open one section at a time, each with a line saying what is in it |
+| Command bar (`Ctrl` `K`, `Cmd` `K` on a Mac) | type an object ("iss", "hubble"), a place ("tokyo"), a time ("tomorrow 9 pm", "+90m", "now"), a speed ("100x", "pause") or an action ("monitor on", "launches", "sky view", "miles"). Each row says what it will do before you choose it. On a phone: menu → **Type a command** |
+| Visible tonight | Objects → Activity: the bright passes you could see with your own eyes in the next 24 hours from your ground station (the satellite in sunlight, your sky dark), brightest first, with where to look. Click one to jump to it |
+| Upcoming launches | Objects → Activity: what is due to go up next, who is launching it and from where, with a countdown; the pads are marked on the globe and a click flies to one |
+| Orbit changes | Objects → Activity: what differs between the two most recent downloads of the catalogue: orbits raised, lowered or tilted by more than drag and noise explain (possible manoeuvres), new objects, objects that are gone |
+| Space weather and re-entries | Objects → Activity → Lowest orbits: today's solar radio flux and geomagnetic activity from NOAA in plain words, and a rough "time left" beside each of the lowest objects |
+| Growth by year | Objects → Tools: drag a slider from 1957 to today (or press Play) and the globe shows only what had been launched by that year, with a chart of what is still up from each year |
+| Radio, last heard, Doppler | inspector, Live tab: when a volunteer ground station last received the object and on which frequency. Passes tab: its listed transmitters and the Doppler shift of one of them as heard at your ground station right now |
+| Data age | inspector, Live tab: how old the object's orbital elements are, with a warning once they are stale, and its catalogue status. Objects → Browse → Colour by → **Data age** colours the whole catalogue the same way |
+| Close-approach report | with a close approach open: **Report** opens a one-page summary to print or save as a PDF; **Data (CSV)** downloads both objects' positions, velocities and the range between them through the approach |
 | Layers panel (`L`) | orbit path, ground track, coverage footprint, 3D model; ground-station marker, clouds, atmosphere, coastlines and borders, lat/long grid, day/night line; stars, constellations, planets, names in the sky; screening cells (`G`) |
 | Close-approach monitor (`C`) | **Right now**: switch it on, set the alert distance; the pairs inside it are sorted into two lists — **Passing** (objects on different orbits crossing paths, with their passing speed) and **Flying together** (docked spacecraft, formations and launch trains, which are close all the time). The counts in the top bar and on the globe are of the passing kind only. **Coming hours**: scan up to 24 hours ahead for predicted close passes. Click any pair to open the **close-approach view** (time keeps running live; the panel's replay and scrubber give a slow-motion or frozen look): both spacecraft as 3D models, their flight paths, the live distance between them, a range chart you can scrub, and a slow-motion replay |
 | Ride along (`V`) | from the inspector: sit on the selected object and look out from it. Drag to look around, scroll to zoom |
@@ -78,7 +89,7 @@ status line sit along the bottom.
 | Settings (`,`) | kilometres or miles, UTC or local time, the hover card and the welcome page on or off, rendering quality, ground-station location, download current elements |
 | Home page | the first thing a visitor sees, while the tracker loads behind it: what Apsis is, everything it can do, how the search works, and **Open the tracker**. **About** in the tracker's top bar (the round **i** on a phone) brings it back. Skipped on arrival for share links and when switched off in Settings |
 | How it works | summarised on the home page, with a link to the full walkthrough: the screening algorithm with a live trace, live hash-table statistics, the look-ahead method and the benchmark. Also reachable from the monitor panel |
-| Phones | below 760 px the layout is built around the globe: a search field, two round buttons (sky view, and a menu with the views, time and speed, location and share), a short four-tool tab bar, and sheets that rest on the tab bar and can be dragged to any height or tucked away. There is no time bar on a phone; a small chip appears only while time is not running live. It can be added to the home screen and then runs full screen like an app |
+| Phones | below 760 px the layout is built around the globe: a search field, two round buttons (sky view, and a menu with the views, time and speed, the command bar, location and share), a short four-tool tab bar, and sheets that rest on the tab bar and can be dragged to any height or tucked away. There is no time bar on a phone; a small chip appears only while time is not running live. Left alone, once the globe starts its slow turn the controls dim to half strength and come back at the next touch. It can be added to the home screen and then runs full screen like an app |
 | Other keys | `P` save a picture, `F` full screen, `H` hide the interface, `?` all controls, `Esc` close / deselect |
 
 ## How the spatial hash works
@@ -171,10 +182,14 @@ sampling every 0.2 s on a 4,000-object subset, the scan reported every crossing 
 
 The app is static files, so it runs on GitHub Pages. `.github/workflows/deploy.yml` builds
 and deploys on every push to `main`, and every 8 hours it first downloads fresh orbital data
-from CelesTrak (which asks for no more than one download every 2 hours). The refreshed data
-is published but not committed, so the repository stays small; if CelesTrak cannot be
-reached, the snapshot in the repository is published instead. In the repository settings,
-Pages must be set to deploy from **GitHub Actions**.
+from CelesTrak (which asks for no more than one download every 2 hours) and fresh radio
+records from SatNOGS, and compares the new elements with the ones published before (the
+"Orbit changes" list). The refreshed data is published but not committed, so the repository
+stays small; if CelesTrak cannot be reached, the snapshot in the repository is published
+instead. A build started by a push downloads nothing from outside: it reads the data files
+back from the site as it is published and keeps them if they are newer than the repository's
+(`scripts/carry-over.mjs`), so a push never puts the site back on older data. In the
+repository settings, Pages must be set to deploy from **GitHub Actions**.
 
 GitHub switches off scheduled workflows in repositories with no activity for 60 days. That
 would not take the site down — it would only stop the data refreshing — and the workflow
@@ -197,11 +212,18 @@ src/
     satcat.ts            catalogue facts (owner, launch, size) in a Map keyed by NORAD id
     wiki.ts              name → Wikipedia article; fetches the summary and lead photo on demand
     regions.ts           rough place name under a latitude / longitude
+    radio.ts             SatNOGS records (transmitters, last heard) in a Map keyed by NORAD id
+    doppler.ts           range rate and Doppler shift of a transmitter as heard at the ground station
+    changes.ts           compares two downloads: raised, lowered, tilted, new, gone
+    decay.ts             rough time left in orbit for the lowest objects        spaceWeather.ts   NOAA solar flux and Kp
+    launches.ts          upcoming launches (Launch Library 2), cached           places.ts   cities for the command bar
+    visibility.ts        which passes are bright enough to see, and when        approachData.ts   numbers for the report
     types.ts
   worker/
     sim.worker.ts        Web Worker: SGP4 propagation, screening, benchmark
     SimClient.ts         main-thread side: holds two position snapshots and interpolates between them
     lookahead.worker.ts  runs the prediction scan on its own thread
+    tonight.worker.ts    looks through the next 24 hours for visible passes
     propagate.ts         SGP4 helpers (satellite.js)        protocol.ts   message types
   render/
     scene.ts             renderer, camera, bloom, quality presets
@@ -214,7 +236,12 @@ src/
     cameraRig.ts         fly-to, object-centred focus camera, view presets
     firstPerson.ts       ride-along and sky-view cameras        siteMarker.ts   the ground-station dot
     constellation.ts     all orbits of a group + ground coverage map   aurora.ts   live aurora oval
-    orbitLine.ts  groundTrack.ts  encounterViz.ts  conjunctionMarkers.ts  gridViz.ts
+    orbitLine.ts  groundTrack.ts  encounterViz.ts  conjunctionMarkers.ts  gridViz.ts  padMarkers.ts
+  features/              later additions, each one file installed through the App interface (ui/app.ts):
+    radio.ts             last heard, transmitters, Doppler            changes.ts   orbit changes and data age
+    weather.ts           space weather and time-left estimates        launches.ts  upcoming launches and pads
+    tonight.ts           passes visible tonight (+ tonightWords.ts)   report.ts    close-approach report and CSV (+ reportPage.ts)
+    growth.ts            growth by year                               command.ts   the command bar (+ commandParse.ts)
   ui/
     inspector.ts         the selected object's four tabs          charts.ts   hand-drawn canvas charts
     monitor.ts           close-approach list (right now)          encounterPanel.ts   one pair in detail
@@ -226,6 +253,8 @@ src/
     cinema.ts            autopilot tour and video recording        sheet.ts   draggable bottom sheets on phones
     landing.ts           the home page (what it does, how it works)  dom.ts   DOM, number, unit and clock helpers
     featureList.ts       every feature in one list; the home page is drawn from it
+    app.ts               the App interface: all a feature module may know about the rest
+    objectTabs.ts        the Objects panel's Browse / Activity / Tools tabs
     launch.ts            the loading screen's launch scene         intro.ts   loading progress and hand-over
     howto.ts             the walkthrough page                     hashTrace.ts   one object through the hash
     filters.ts  search.ts  settings.ts  timeControls.ts  labels.ts  benchmarkModal.ts  intro.ts
@@ -233,16 +262,23 @@ src/
   main.ts                wires everything together; the per-frame loop
 scripts/
   fetch-data.mjs         one-time download of the element snapshot, catalogue facts and textures
+  fetch-radio.mjs        SatNOGS radio records into public/data/radio.json
+  diff-elements.mjs      compares two element downloads and writes public/data/changes.json
+  carry-over.mjs         push builds: keep the data the published site is already showing
   build-borders.mjs      turns the world-atlas map data into public/data/borders.bin
   bench.mjs              the benchmark in Node
+  check-*.mjs  decay-check.mjs  test-command.mjs    the feature checks behind `npm run check`
+  shots.mjs              retakes the home page's screenshots
 ```
 
 Other places hashing is used: every catalogue lookup is a built-in `Map` or `Set` —
 `Map<noradId, Satellite>` for search, a prefix index `Map<prefix, ids[]>` for
 autocomplete, `Map<category, Set<id>>` for the filter toggles, `Map<noradId, facts>` for
 the inspector, a `Map<title, summary>` cache for Wikipedia lookups, a `Set` of starred
-NORAD numbers for the watchlist, and a `Map<pair, time>` that stops the look-ahead scan
-reporting the same pass twice.
+NORAD numbers for the watchlist, a `Map<pair, time>` that stops the look-ahead scan
+reporting the same pass twice, a `Map<typed name, catalogue name>` so that "hubble" finds
+the object filed as HST, a `Map<noradId, radio record>` for the radio details, and the
+two `Map<noradId, record>` tables that the orbit-change comparison joins.
 
 ## Data and its limits
 
@@ -262,6 +298,25 @@ reporting the same pass twice.
   is optional; without it those rows show a dash.
 - **Aurora, geomagnetic activity and station crews** are fetched live when used (NOAA Space
   Weather Prediction Center and a public crew list); offline, those features stay empty.
+- **Nobody can "ping" a satellite.** "Last heard" and the transmitter lists come from
+  [SatNOGS](https://satnogs.org), a volunteer ground-station network (Libre Space Foundation,
+  CC BY-SA). A copy of its records is saved when the site is built (every 8 hours), so the
+  page never calls SatNOGS itself. It covers only the newest few hours of reports, and
+  stations listen only to what somebody scheduled: an object with no report was not picked
+  up in that window, which is not the same as being silent. The Doppler figures are geometry.
+- **Upcoming launches** come from Launch Library 2 (The Space Devs), asked only when the
+  section is opened and kept for an hour. Launch times are "no earlier than" and slip.
+- **Orbit changes are inferences.** "Raised", "lowered" and "tilted" mean the elements moved
+  by more than air drag and measurement noise explain between two downloads. That is a
+  possible manoeuvre, not a confirmed one. The thresholds have been checked on synthetic
+  cases, not yet against a long run of real data.
+- **Time left in orbit is rough.** It comes from each object's own sinking rate and today's
+  solar activity; it could easily be half or double, and a thruster changes it at will.
+- **Visible passes use estimated brightness.** A pass is listed when the satellite is in
+  sunlight, the ground is dark and the object is well above the horizon; the magnitude is
+  an estimate from size and distance, not a measurement.
+- **Growth by year counts what is still in orbit today**, not everything ever launched, and
+  a fragment carries the launch year of the object it came from.
 - **Close-up ground imagery** is NASA's Blue Marble (shaded relief and bathymetry), streamed
   as map tiles from the public GIBS service only while the camera is within about 6,000 km of
   the ground. Its finest level is roughly 600 m per pixel, so cities and coastlines sharpen

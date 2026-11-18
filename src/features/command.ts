@@ -22,7 +22,7 @@
 import './command.css';
 import { PLACES, type Place } from '../data/places.ts';
 import { CATEGORY_COLORS } from '../data/types.ts';
-import type { App, PanelName, Toggle, ViewName } from '../ui/app.ts';
+import type { App, PanelName, Toggle, ViewName, SectionName } from '../ui/app.ts';
 import { fmt, fmtInt } from '../ui/dom.ts';
 import { clockShiftMs, clockStamp, duration } from '../ui/inspector.ts';
 import type { Settings } from '../ui/settings.ts';
@@ -133,6 +133,20 @@ export function installCommand(app: App): void {
     panel('conj', 'close approaches,close approach panel,conjunctions', 'Open the Close-approach monitor panel');
     panel('settings', 'settings,settings panel,preferences,options', 'Open the Settings panel');
     add('Panel', 'close panel,close panels,close the panel', false, () => ({ text: 'Close the open panel', run: () => app.openPanel(null) }));
+
+    // Every section of the Objects panel by name, so that no feature is more than a few keys away.
+    const section = (name: SectionName, phrases: string, text: string): void => add('Panel', phrases, false, () => ({ text, run: () => app.openSection(name) }));
+    section('tonight', 'visible tonight,tonight,bright passes,passes tonight,what can i see', 'Show the bright passes visible tonight');
+    section('launches', 'launches,upcoming launches,next launch,rocket launches,launch schedule', 'Show the upcoming launches');
+    section('changes', 'orbit changes,changes,manoeuvres,maneuvers,what changed', 'Show which orbits have changed since the last update');
+    section('newest', 'newest in orbit,newest,latest launches,new objects,recent launches', 'Show the newest objects in orbit');
+    section('trains', 'satellite trains,trains,starlink train', 'Show the satellite trains');
+    section('lowest', 'lowest orbits,lowest,re-entries,reentries,decay,space weather,solar activity', 'Show the lowest orbits and today’s space weather');
+    section('constellations', 'constellations,constellation,coverage,networks', 'Open the constellations');
+    section('growth', 'growth by year,growth,by year,history,since 1957', 'Open growth by year');
+    section('designer', 'design a satellite,designer,design,my own satellite', 'Open the satellite designer');
+    section('watchlist', 'watchlist,watch list,starred,favourites,favorites', 'Open the watchlist');
+    section('appearance', 'colours,colors,colour by,color by,appearance,marker size,labels', 'Open the colour, label and marker settings');
 
     add('Action', 'deselect,clear selection,unselect', false, () => {
       const sat = app.selected();
@@ -433,7 +447,7 @@ export function installCommand(app: App): void {
    * Not while the welcome page or the loading screen is in front: the bar would open unseen
    * behind them and swallow the Enter key the welcome page is waiting for.
    */
-  const ready = (): boolean => !document.getElementById('landing') && !document.getElementById('hud')?.classList.contains('hud-hidden');
+  const ready = (): boolean => app.ready();
 
   /** Keep the bar inside what is actually visible: on a phone the on-screen keyboard covers the lower half. */
   function fit(): void {

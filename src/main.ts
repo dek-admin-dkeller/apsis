@@ -74,6 +74,7 @@ import { ShareDialog } from './ui/share.ts';
 import { Sheets } from './ui/sheet.ts';
 import { thumbnail } from './ui/thumb.ts';
 import { TimeControls, type SimClock } from './ui/timeControls.ts';
+import { ObjectTabs } from './ui/objectTabs.ts';
 import { Tour } from './ui/tour.ts';
 import { Watchlist } from './ui/watchlist.ts';
 import type { ScreenStats } from './worker/protocol.ts';
@@ -470,6 +471,7 @@ function openPanel(name: PanelName | null): void {
   }
 }
 const togglePanel = (name: PanelName) => openPanel(openPanelName === name ? null : name);
+const objectTabs = new ObjectTabs(); // the Objects panel's Browse / Activity / Tools tabs
 for (const button of document.querySelectorAll<HTMLElement>('.rail-btn')) {
   button.addEventListener('click', () => togglePanel(button.dataset.panel as PanelName));
 }
@@ -523,6 +525,10 @@ for (const button of document.querySelectorAll<HTMLElement>('[data-proxy]')) {
     document.querySelector<HTMLElement>(button.dataset.proxy!)?.click();
   });
 }
+// Whatever a menu item does (some belong to feature modules, such as "Type a command"), choosing it puts the menu away.
+viewsMenu.addEventListener('click', (event) => {
+  if ((event.target as HTMLElement).closest('button')) setViewsMenu(false);
+});
 $('m-views-open').addEventListener('click', (event) => {
   event.stopPropagation();
   setViewsMenu(viewsMenu.classList.contains('is-hidden'));
@@ -1799,7 +1805,13 @@ const app: App = {
     else if (what === 'keys') flip(!keysOverlay.classList.contains('is-hidden'), () => setKeys(keysOverlay.classList.contains('is-hidden')));
     else if (what === 'share') shareDialog.open(shareUrl(), !!selected || encPanel.isOpen);
   },
+  openSection: (name) => {
+    if (isPhone() && inspector.isOpen) select(null); // one sheet at a time on a phone
+    openPanel('objects');
+    objectTabs.open(name);
+  },
   toast: (text) => toast(text),
+  ready: () => !landing.showing && !$('hud').classList.contains('hud-hidden'),
   setFilter: (key, keep) => filters.setExtra(key, keep),
 
   position: (index, out) => sim.getPosition(index, out),

@@ -92,6 +92,7 @@ export class Watchlist {
     }
     this.list.replaceChildren(...rows);
     $('watch-empty').classList.toggle('is-hidden', rows.length > 0);
+    $('contacts-open').classList.toggle('is-hidden', rows.length === 0); // the timeline is about starred objects: nothing to show without one
     this.lastTick = -Infinity;
   }
 

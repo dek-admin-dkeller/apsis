@@ -4,13 +4,16 @@
  * It is built to SHOW the tracker rather than describe it:
  *   - the opening screen has the live globe itself behind the headline (the tracker is already
  *     running underneath; once it is ready the page's backdrop fades and the real thing shows
- *     through). Until then, and on a machine that cannot draw it, an orbit drawing stands in;
+ *     through). Until then, and on a machine that cannot draw it, the headline stands alone;
  *   - a showcase of real screens (SHOTS in featureList.ts; retaken with `npm run shots`);
  *   - a live drawing of the search that runs the project's own hash table (hashDemo.ts);
  *   - a plate of the tracker's 3D models, drawn by the same code that draws them in orbit;
  *   - the complete list of features (FEATURES in featureList.ts — the one place to keep it
  *     current), as a compact index;
- *   - a small corner for games.
+ *   - a small corner for games, and a small drawing that explains the name.
+ *
+ * The bar at the top sits outside the element that scrolls (#landing-scroll), so nothing the
+ * visitor does to the page — the elastic bounce past its top included — can move the bar.
  *
  * The page is an opaque layer over the tracker, static markup in index.html so it is painted
  * before any script has run. "Open the tracker" puts it away; "About" in the tracker's top
@@ -35,6 +38,7 @@ export class Landing {
   /** Resolves when the visitor first chooses to go in (immediately if the page was skipped on arrival). */
   readonly entered: Promise<void>;
   private readonly root = $('landing');
+  private readonly scroller = $('landing-scroll'); // everything under the bar
   private visible: boolean;
   private firstEntry: (() => void) | null = null;
   private host: LandingHost | null = null;
@@ -69,6 +73,12 @@ export class Landing {
       link.addEventListener('click', () => $(link.dataset.ldJump!).scrollIntoView({ behavior: 'smooth', block: 'start' }));
     }
     $('landing-how').addEventListener('click', () => this.host?.howItWorks());
+    // The bar is glass over the live globe only while the page is at its very top.
+    this.scroller.addEventListener('scroll', () => this.root.classList.toggle('is-scrolled', this.scroller.scrollTop > 8), { passive: true });
+    // The bar is not inside the part that scrolls, so a wheel turned over it has to be passed on.
+    this.root.querySelector<HTMLElement>('.ld-top')!.addEventListener('wheel', (event) => {
+      this.scroller.scrollTop += event.deltaMode === 1 ? event.deltaY * 18 : event.deltaY; // mode 1 counts lines
+    }, { passive: true });
     // Enter goes in — unless the key belongs to a button that has the focus (that button handles it).
     window.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' && this.visible && !(event.target as HTMLElement).closest('button, a, input')) this.enter();
@@ -200,7 +210,7 @@ export class Landing {
 
   /** Is the opening screen — the part the live globe shows through — on screen? */
   get heroInView(): boolean {
-    return this.visible && this.root.scrollTop < window.innerHeight * 0.95;
+    return this.visible && this.scroller.scrollTop < window.innerHeight * 0.95;
   }
 
   /**
@@ -237,7 +247,7 @@ export class Landing {
     document.documentElement.classList.remove('no-landing');
     document.body.classList.add('home-open');
     this.root.classList.remove('is-away', 'is-leaving');
-    this.root.scrollTop = 0;
+    this.scroller.scrollTop = 0;
     for (const button of this.root.querySelectorAll<HTMLElement>('[data-ld-enter]')) button.textContent = 'Back to the tracker';
   }
 
