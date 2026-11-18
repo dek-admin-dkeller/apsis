@@ -155,6 +155,15 @@ cached per article), NOAA SWPC (aurora grid, Kp), a public people-in-space list
 (`src/data/crew.ts`), nothing else. No analytics, no accounts. Location is used only after
 an in-app yes plus the browser's own prompt, and stays in `localStorage`.
 
+## Performance notes
+
+- 3D models are built once per kind and cloned (`buildModel` cache); `prewarmModels()` builds
+  the common ones and compiles their shaders behind the loading screen so selecting an
+  object or changing autopilot scene does not stutter.
+- While the interface is hidden (`body.ui-hidden`: H key, autopilot) the frame loop skips
+  panel-only work (inspector charts, watchlist, status line).
+- Drag and zoom rates in Earth-centred views scale with altitude (`cameraRig.ts`).
+
 ## Verifying a change
 
 1. `npm run build` (zero TypeScript errors) and, if hashing/look-ahead changed, `npm run bench`.

@@ -34,7 +34,7 @@ import { createGlobe } from './render/globe.ts';
 import { GridViz } from './render/gridViz.ts';
 import { GroundTrack } from './render/groundTrack.ts';
 import { OrbitLine } from './render/orbitLine.ts';
-import { SatelliteModel } from './render/satModels.ts';
+import { prewarmModels, SatelliteModel } from './render/satModels.ts';
 import { behindEarth, legendFor, SatelliteCloud } from './render/satellites.ts';
 import { createScene, EARTH_RADIUS, EARTH_RADIUS_KM, KM } from './render/scene.ts';
 import { SiteMarker } from './render/siteMarker.ts';
@@ -186,8 +186,8 @@ const monitor = new Monitor({
 const ahead = new AheadPanel(
   () => (catalog ? { records: catalog.sats.map((sat) => sat.omm), sats: catalog.sats, mask: cloud.visible.slice(), startMs: clock.time } : null),
   (approach) => {
-    // A predicted pass: go to that moment and open it like any other close approach.
-    jumpTo(approach.tcaMs);
+    // A predicted pass: go to a few seconds before it and watch it happen live.
+    jumpTo(approach.tcaMs - 6000);
     openEncounter(approach.a, approach.b);
   },
 );
@@ -411,7 +411,7 @@ document.addEventListener('pointerdown', (event) => {
   // a tap anywhere else closes the views menu
   if (!viewsMenu.classList.contains('is-hidden') && !(event.target as HTMLElement).closest('#m-views, #m-views-open')) setViewsMenu(false);
 });
-const fitLabelsToScreen = () => (labels.nearby = Sheets.isPhone ? 5 : 18); // a phone screen fits far fewer name tags
+const fitLabelsToScreen = () => (labels.nearby = Sheets.isPhone ? 10 : 36); // a phone screen fits fewer name tags
 fitLabelsToScreen();
 window.addEventListener('resize', fitLabelsToScreen);
 /** A short tick on phones that support it (Android), so a tap that selects something can be felt. */
@@ -546,13 +546,8 @@ function openEncounter(aIndex: number, bIndex: number): void {
   const gapKm = approach.coMoving && Number.isFinite(nowKm) ? Math.max(nowKm, approach.missKm) : approach.missKm;
   encViewDistance = THREE.MathUtils.clamp(Math.max(gapKm, 0.3) * 2.6 * KM, 0.0004, 1.2);
   encModelSize = Math.max(gapKm * 0.32, 0.05) * KM; // a third of the gap: large, but they can never touch
-  if (approach.coMoving) {
-    clock.paused = true;
-    timeControls.sync();
-  } else {
-    // Play the approach in: from the edge of the window up to the closest point, then hold there.
-    startReplay(approach.tcaMs - windowS * 1000, approach.tcaMs, (2 * windowS) / 10, approach.tcaMs);
-  }
+  // Time keeps running: the pair is watched live. (Replay and the scrubber in the panel are there
+  // for a slow-motion or frozen look at the closest point.)
   encFrame = encViz.update(clock.time, realSeconds);
   focusEncounter('both', 1.4);
 }
@@ -752,7 +747,7 @@ const designer = new Designer($('designer-body'), {
   },
   context: () => (catalog ? { records: catalog.sats.map((sat) => sat.omm), sats: catalog.sats, mask: cloud.visible.slice(), startMs: clock.time } : null),
   openApproach: (a, b, tcaMs) => {
-    jumpTo(tcaMs);
+    jumpTo(tcaMs - 6000);
     openEncounter(a, b);
   },
   now: () => clock.time,
@@ -956,7 +951,7 @@ function applyLink(): boolean {
   const a = byId(idA), b = byId(idB), sat = byId(q.get('sat') ?? undefined);
   const cam = (q.get('cam') ?? '').split(',').map(Number);
   if (!(a && b) && !sat && cam.length !== 3 && !q.has('t')) return false;
-  if (q.has('t') && Number.isFinite(t)) jumpTo(t * 1000);
+  if (q.has('t') && Number.isFinite(t)) jumpTo(t * 1000 - (a && b ? 6000 : 0)); // a shared pass opens a few seconds before its closest point
   if (a && b) openEncounter(a.index, b.index);
   else if (sat) select(sat);
   else if (cam.length === 3 && cam.every(Number.isFinite)) {
@@ -1178,7 +1173,7 @@ function updateSelection(realSeconds: number): void {
   labelAvoid = near && screen && !riding ? { x: screen.x, y: screen.y, r: 150 } : null; // no name tags on top of the model
   reticle.classList.toggle('is-hidden', !shown);
   if (shown && screen) reticle.style.transform = `translate(${screen.x.toFixed(1)}px, ${screen.y.toFixed(1)}px)`;
-  inspector.frame(clock.time, realSeconds);
+  if (!uiHidden) inspector.frame(clock.time, realSeconds); // no point drawing charts nobody can see (autopilot)
 }
 
 function updateEncounter(realSeconds: number): void {
@@ -1309,6 +1304,7 @@ function watchFrameRate(now: number): void {
   }
 }
 
+let uiHidden = false; // interface hidden (H key, autopilot): skip work that only updates panels
 let lastFrame = performance.now();
 let realSeconds = 0;
 
@@ -1327,6 +1323,7 @@ function frame(now: number): void {
     jumpTo(hold);
   }
 
+  uiHidden = document.body.classList.contains('ui-hidden');
   sim.update(clock.time, clock.paused ? 0 : clock.speed); // snapshot bookkeeping + interpolation factor
   cloud.update();
   const date = new Date(clock.time);
@@ -1348,13 +1345,13 @@ function frame(now: number): void {
   site.update(realSeconds);
   aurora.update(realSeconds, globe.sunDirection);
   constView.update(clock.time, realSeconds, constMembers.length, (i, out) => sim.getPosition(constMembers[i], out));
-  constPanel.frame(realSeconds);
-  watch.frame(realSeconds);
+  if (!uiHidden) constPanel.frame(realSeconds);
+  if (!uiHidden) watch.frame(realSeconds);
   markers.update(realSeconds);
   updateGrid();
   updateTrace(realSeconds);
   updateHover();
-  updateStatus(realSeconds);
+  if (!uiHidden) updateStatus(realSeconds);
   requestScreening(realSeconds);
   timeControls.render();
   kit.render();
@@ -1384,6 +1381,9 @@ async function boot(): Promise<void> {
     const positionsReady = new Promise<void>((resolve) => (firstSnapshot = resolve));
     applyCatalog(first);
     await Promise.all([texturesReady, positionsReady]);
+    // Build the 3D models and compile their shaders now, behind the loading screen, so the
+    // first click on a satellite (and every autopilot scene change) does not stutter.
+    prewarmModels(kit.renderer, kit.scene, kit.camera);
     await loading.finish();
 
     const home = homeView();

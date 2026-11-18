@@ -1042,25 +1042,55 @@ function mergeByMaterial(root: THREE.Group): THREE.Group {
 }
 
 /** Build a model, centred and scaled so its largest dimension is 1 unit. */
+const built = new Map<ModelKind, THREE.Group>(); // each kind is built once; every use is a cheap clone sharing its geometry
+
 export function buildModel(kind: ModelKind): THREE.Group {
-  const parts = new THREE.Group();
-  BUILDERS[kind](parts, materials());
-  const inner = mergeByMaterial(parts);
-  const bounds = new THREE.Box3().setFromObject(inner);
-  const size = bounds.getSize(new THREE.Vector3());
-  inner.position.copy(bounds.getCenter(new THREE.Vector3())).multiplyScalar(-1);
-  const outer = new THREE.Group();
-  outer.add(inner);
-  outer.scale.setScalar(1 / Math.max(size.x, size.y, size.z));
-  return outer;
+  let model = built.get(kind);
+  if (!model) {
+    const parts = new THREE.Group();
+    BUILDERS[kind](parts, materials());
+    const inner = mergeByMaterial(parts);
+    const bounds = new THREE.Box3().setFromObject(inner);
+    const size = bounds.getSize(new THREE.Vector3());
+    inner.position.copy(bounds.getCenter(new THREE.Vector3())).multiplyScalar(-1);
+    model = new THREE.Group();
+    model.add(inner);
+    model.scale.setScalar(1 / Math.max(size.x, size.y, size.z));
+    built.set(kind, model);
+  }
+  return model.clone(true);
 }
 
-/** Free a model's geometry (materials and textures are shared, so they stay). */
+/** Remove a model from its holder. Geometry, materials and textures belong to the cache and stay. */
 function disposeModel(holder: THREE.Group): void {
-  holder.traverse((object) => {
-    if (object instanceof THREE.Mesh) (object.geometry as THREE.BufferGeometry).dispose();
-  });
   holder.clear();
+}
+
+/**
+ * Do the expensive first-time work up front: build the commonest models and compile the
+ * lit-material shaders with the scene's real lights. Without this, the first satellite that
+ * is selected costs a visible stutter (geometry merging + shader compilation). The remaining
+ * kinds are built one per idle moment afterwards.
+ */
+export function prewarmModels(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera): void {
+  const first: ModelKind[] = ['iss', 'telescope', 'starlink', 'geocomsat', 'dragon', 'debris'];
+  const holder = new THREE.Group();
+  holder.position.set(0, 0, -5000); // far outside the view; compile() does not cull
+  holder.scale.setScalar(0.001);
+  for (const kind of first) holder.add(buildModel(kind));
+  scene.add(holder);
+  renderer.compile(scene, camera);
+  scene.remove(holder);
+
+  const rest = (Object.keys(BUILDERS) as ModelKind[]).filter((kind) => !first.includes(kind));
+  const idle = (work: () => void) => ('requestIdleCallback' in window ? window.requestIdleCallback(work, { timeout: 4000 }) : setTimeout(work, 300));
+  const next = () => {
+    const kind = rest.shift();
+    if (!kind) return;
+    buildModel(kind);
+    idle(next);
+  };
+  idle(next);
 }
 
 // Dead objects are not attitude-controlled: they tumble. Value = tumble speed (1 = debris).

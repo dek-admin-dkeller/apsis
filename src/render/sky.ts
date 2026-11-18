@@ -970,6 +970,8 @@ export function createSky(kit: SceneKit): Sky {
         }`,
     }),
   );
+  // Drawn four times its true size: at its real half a degree the Moon is a dozen pixels and nobody notices it.
+  moon.scale.setScalar(4);
   scene.add(moon);
 
   const cameraToSun = new THREE.Vector3();

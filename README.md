@@ -52,7 +52,7 @@ status line sit along the bottom.
 | Inspector tabs | **Live** telemetry, ground-track map, altitude chart · **Orbit** shape to scale, orbital elements, speed and sunlight charts · **Passes** over your ground station with a sky chart · **Record** owner, launch, size, a Wikipedia summary and the raw element record |
 | Objects panel (`O`) | filter by type, orbit regime, altitude band; colour by type, orbit, altitude, owner, launch year or tilt; labels, marker size; shortcuts to notable objects |
 | Layers panel (`L`) | orbit path, ground track, coverage footprint, 3D model; ground-station marker, clouds, atmosphere, coastlines and borders, lat/long grid, day/night line; stars, constellations, planets, names in the sky; screening cells (`G`) |
-| Close-approach monitor (`C`) | **Right now**: switch it on, set the alert distance; the list shows every pair inside it. **Coming hours**: scan up to 24 hours ahead for predicted close passes. Click any pair to open the **close-approach view**: both spacecraft as 3D models, their flight paths, the live distance between them, a range chart you can scrub, and a slow-motion replay |
+| Close-approach monitor (`C`) | **Right now**: switch it on, set the alert distance; the list shows every pair inside it. **Coming hours**: scan up to 24 hours ahead for predicted close passes. Click any pair to open the **close-approach view** (time keeps running live; the panel's replay and scrubber give a slow-motion or frozen look): both spacecraft as 3D models, their flight paths, the live distance between them, a range chart you can scrub, and a slow-motion replay |
 | Ride along (`V`) | from the inspector: sit on the selected object and look out from it. Drag to look around, scroll to zoom |
 | Sky view (`4`) | the **Sky** button at the foot of the rail: stand at the ground station and watch objects cross overhead |
 | Your location | Apsis asks once whether it may show where you are; the crosshair button in the top bar does the same at any time. Only after a yes does the browser's own permission prompt appear. You are then a green dot, and passes and the sky view use that spot |
@@ -253,6 +253,9 @@ reporting the same pass twice.
   is optional; without it those rows show a dash.
 - **Aurora, geomagnetic activity and station crews** are fetched live when used (NOAA Space
   Weather Prediction Center and a public crew list); offline, those features stay empty.
+- **Operator logos** beside names are loaded from each operator's Wikipedia article, not
+  stored here; they are trademarks of their owners, shown only to identify the operator.
+- **The Moon is drawn four times its true size** so it can be found; its position is real.
 - **Photos and descriptions** come from Wikipedia, fetched when an object is selected. An
   object is matched to the article for its programme (a Starlink satellite shows the
   Starlink article's picture), so the photo shows that kind of spacecraft, not necessarily

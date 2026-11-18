@@ -12,16 +12,19 @@ import { behindEarth, type SatelliteCloud } from '../render/satellites.ts';
 import type { SceneKit } from '../render/scene.ts';
 import type { SimClient } from '../worker/SimClient.ts';
 import { $ } from './dom.ts';
+import { describe } from '../data/describe.ts';
+import { operatorLogo } from '../data/operators.ts';
 
 export type LabelMode = 'off' | 'notable' | 'nearby';
 
-const FAMOUS = /^(ISS \(ZARYA\)|CSS \(TIANHE\)|HST|LANDSAT 9|GOES 19|TERRASAR-X|NOAA 21|SENTINEL-2A|TDRS 13|METEOSAT-12 \(MTG-I1\)|HIMAWARI-9)$/;
-const POOL = 26;
+const FAMOUS = /^(ISS \(ZARYA\)|CSS \(TIANHE\)|HST|LANDSAT [89]|GOES 1[6-9]|TERRASAR-X|TANDEM-X|NOAA 2[01]|SUOMI NPP|SENTINEL-[1236][A-D]?|SENTINEL-6.*|TDRS 1[0-3]|METEOSAT-1[012].*|HIMAWARI-[89]|TERRA|AQUA|AURA|CXO|XMM-NEWTON|SWIFT|TESS|NUSTAR|IXPE|ICESAT-2|SWOT|PACE|JASON-3|GPM-CORE|SMAP|CALIPSO|CLOUDSAT|GRACE-FO [12]|CRYOSAT 2|METOP-[BC]|ELEKTRO-L 4|FENGYUN 4[AB]|GEO-KOMPSAT-2A|INSAT-3DS|CREW DRAGON.*|SOYUZ-MS.*|PROGRESS-MS.*|CYGNUS.*|TIANZHOU.*|SHENZHOU.*)$/;
+const POOL = 64;
 
 export class Labels {
   mode: LabelMode = 'nearby';
   /** How many of the nearest objects get a name tag (fewer on a phone, where they crowd the screen). */
-  nearby = 18;
+  nearby = 36;
+  private readonly operators = new Map<number, string | null>(); // object index → operator (worked out once)
   private readonly elements: HTMLDivElement[] = [];
   private famous: number[] = [];
   private pinned: number[] = []; // watchlist: always labelled
@@ -40,6 +43,12 @@ export class Labels {
     for (let i = 0; i < POOL; i++) {
       const el = document.createElement('div');
       el.className = 'sat-label';
+      const logo = document.createElement('img');
+      logo.className = 'op';
+      logo.alt = '';
+      logo.referrerPolicy = 'no-referrer';
+      logo.style.display = 'none';
+      el.append(logo, document.createElement('span'));
       el.style.display = 'none';
       container.append(el);
       this.elements.push(el);
@@ -48,6 +57,7 @@ export class Labels {
 
   setCatalog(catalog: Catalog): void {
     this.catalog = catalog;
+    this.operators.clear();
     this.famous = catalog.sats.filter((sat) => FAMOUS.test(sat.name)).map((sat) => sat.index);
     this.chosen = [];
     this.lastPick = -Infinity;
@@ -63,7 +73,7 @@ export class Labels {
   private pick(cameraEci: THREE.Vector3): void {
     this.chosen = [...new Set([...this.pinned, ...this.famous])].filter((i) => this.cloud.visible[i]);
     // Only label the crowd once the camera is within ~4,000 km of the surface.
-    if (this.mode !== 'nearby' || this.kit.camera.position.length() > 10.5) return;
+    if (this.mode !== 'nearby' || this.kit.camera.position.length() > 24) return; // out to the whole-Earth view
     const nearest: { index: number; d2: number }[] = [];
     const p = { x: 0, y: 0, z: 0 };
     for (let i = 0; i < this.sim.count; i++) {
@@ -111,7 +121,17 @@ export class Labels {
       placed.push({ x, y });
       const el = this.elements[used++];
       const sat = this.catalog.sats[index];
-      if (el.textContent !== sat.name) el.textContent = sat.name;
+      // Each tag is [operator logo] name; the logo arrives from Wikipedia the first time that operator is seen.
+      const text = el.lastElementChild as HTMLElement, logo = el.firstElementChild as HTMLImageElement;
+      if (text.textContent !== sat.name) text.textContent = sat.name;
+      let operator = this.operators.get(index);
+      if (operator === undefined) this.operators.set(index, (operator = describe(sat).operator));
+      const url = operatorLogo(operator) ?? '';
+      if (logo.dataset.url !== url) {
+        logo.dataset.url = url;
+        logo.style.display = url ? '' : 'none';
+        if (url) logo.src = url;
+      }
       el.classList.toggle('is-notable', this.famous.includes(index) || this.pinned.includes(index));
       el.style.display = '';
       el.style.transform = `translate(${x.toFixed(1)}px, ${(y - 7).toFixed(1)}px)`;

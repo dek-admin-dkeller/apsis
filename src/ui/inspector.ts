@@ -11,6 +11,7 @@
 
 import { eciToGeodetic, gstime, type SatRec } from 'satellite.js';
 import { describe, KIND_LABEL } from '../data/describe.ts';
+import { operatorLogoAsync } from '../data/operators.ts';
 import {
   compass, findPasses, isSunlit, lookAngles, makeSatrec, orbitSeries, stateAt, sunDirection, wrapLon,
   type Look, type Observer, type OrbitSeries, type Pass,
@@ -149,6 +150,16 @@ export class Inspector {
     status.textContent = facts ? statusLabel(facts.status) : sat.category === 'Debris' ? 'Debris' : '';
     status.classList.toggle('is-ok', !!facts && facts.status === '+');
     this.preview.show(profile.kind);
+    // operator logo (from Wikipedia), if this operator has one
+    const logo = $<HTMLImageElement>('insp-oplogo');
+    logo.classList.add('is-hidden');
+    const logoFor = sat;
+    void operatorLogoAsync(profile.operator).then((url) => {
+      if (!url || this.sat !== logoFor) return;
+      logo.src = url;
+      logo.title = profile.operator ?? '';
+      logo.classList.remove('is-hidden');
+    });
     this.setLock(locked);
     this.setPhoto(null, null);
 

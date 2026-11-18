@@ -1297,3 +1297,8 @@ body.quiet-ui .timebar[data-direction='back']:not(.is-open) #speeds button.is-on
 #home { cursor: pointer; border-radius: var(--radius-s); transition: opacity var(--fast); }
 #home:hover { opacity: 0.8; }
 #home:active { opacity: 0.6; }
+
+/* ---------- operator logos (loaded from Wikipedia): a small white chip so dark logos stay readable ---------- */
+
+.sat-label .op { flex: none; width: 22px; height: 13px; padding: 1px 2px; border-radius: 3px; background: rgba(255, 255, 255, 0.92); object-fit: contain; }
+.op-logo { flex: none; width: 44px; height: 28px; padding: 3px 4px; border-radius: 6px; background: rgba(255, 255, 255, 0.94); object-fit: contain; }
