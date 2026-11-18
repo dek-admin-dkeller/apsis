@@ -55,12 +55,21 @@ export class Lookahead {
   private readonly mask: Uint8Array;
   private readonly startMs: number;
   private readonly alertKm: number;
+  private readonly focus: number;
 
-  constructor(satrecs: SatRec[], mask: Uint8Array, startMs: number, hours: number, alertKm: number) {
+  /**
+   * @param focus  optional object index. When given, only pairs that include that object are
+   *               examined ("what will come near THIS one?"): everything is still propagated
+   *               and hashed, but the 27-cell query runs for that single object, so a whole
+   *               day costs little more than the propagation. The focus object is always
+   *               scanned, whether or not the mask shows it.
+   */
+  constructor(satrecs: SatRec[], mask: Uint8Array, startMs: number, hours: number, alertKm: number, focus = -1) {
     this.satrecs = satrecs;
     this.mask = mask;
     this.startMs = startMs;
     this.alertKm = alertKm;
+    this.focus = focus;
     this.steps = Math.ceil((hours * 3600) / STEP_S);
     this.pos = new Float64Array(satrecs.length * 3);
     this.vel = new Float64Array(satrecs.length * 3);
@@ -81,14 +90,13 @@ export class Lookahead {
   step(k: number): void {
     const { satrecs, pos, vel, valid } = this;
     const n = satrecs.length;
-    const half = STEP_S / 2;
     const t = this.startMs + (k + 0.5) * STEP_S * 1000; // middle of the k-th interval
 
     // 1. propagate + build the hash table
     const grid = new SpatialHash(this.cell);
     for (let i = 0; i < n; i++) {
       valid[i] = 0;
-      if (!this.mask[i]) continue;
+      if (!this.mask[i] && i !== this.focus) continue;
       const state = sgp4(satrecs[i], sinceEpoch(satrecs[i], t));
       if (!state || !Number.isFinite(state.position.x)) continue;
       pos[3 * i] = state.position.x;
@@ -102,34 +110,49 @@ export class Lookahead {
     }
 
     // 2. each object against the objects in its 27 surrounding cells
-    const near2 = (this.alertKm + 0.5) ** 2;
-    for (let i = 0; i < n; i++) {
-      if (!valid[i]) continue;
-      const ix = pos[3 * i], iy = pos[3 * i + 1], iz = pos[3 * i + 2];
-      const neighbours = grid.queryNeighbors(ix, iy, iz, this.scratch);
+    //    (with a focus object: just that one against its 27 cells)
+    if (this.focus >= 0) {
+      const f = this.focus;
+      if (!valid[f]) return;
+      const neighbours = grid.queryNeighbors(pos[3 * f], pos[3 * f + 1], pos[3 * f + 2], this.scratch);
       for (let q = 0; q < neighbours.length; q++) {
         const j = neighbours[q];
-        if (j <= i) continue; // each pair once
-        this.examined++;
-        const rx = pos[3 * j] - ix, ry = pos[3 * j + 1] - iy, rz = pos[3 * j + 2] - iz;
-        const vx = vel[3 * j] - vel[3 * i], vy = vel[3 * j + 1] - vel[3 * i + 1], vz = vel[3 * j + 2] - vel[3 * i + 2];
-        const v2 = vx * vx + vy * vy + vz * vz;
-        if (v2 < CO_MOVING_KM_S * CO_MOVING_KM_S) continue; // travelling together
-        const tStar = -(rx * vx + ry * vy + rz * vz) / v2; // seconds from the sample to closest approach
-        if (tStar < -half - 1 || tStar >= half + 1) continue; // belongs to another step
-        const mx = rx + vx * tStar, my = ry + vy * tStar, mz = rz + vz * tStar;
-        if (mx * mx + my * my + mz * mz > near2) continue;
-
-        // 3. exact closest approach
-        const exact = this.refine(i, j, t + tStar * 1000);
-        if (exact.missKm >= this.alertKm) continue;
-        const key = i * n + j;
-        const previous = this.lastSeen.get(key);
-        if (previous !== undefined && Math.abs(exact.tcaMs - previous) < 30000) continue; // same pass seen from the neighbouring step
-        this.lastSeen.set(key, exact.tcaMs);
-        this.found.push({ a: i, b: j, tcaMs: exact.tcaMs, missKm: exact.missKm, relSpeedKmS: Math.sqrt(v2) });
+        if (j !== f) this.examine(Math.min(f, j), Math.max(f, j), t);
+      }
+      return;
+    }
+    for (let i = 0; i < n; i++) {
+      if (!valid[i]) continue;
+      const neighbours = grid.queryNeighbors(pos[3 * i], pos[3 * i + 1], pos[3 * i + 2], this.scratch);
+      for (let q = 0; q < neighbours.length; q++) {
+        const j = neighbours[q];
+        if (j > i) this.examine(i, j, t); // each pair once
       }
     }
+  }
+
+  /** One candidate pair (i < j) at sample time t: straight-line estimate, then the exact search. */
+  private examine(i: number, j: number, t: number): void {
+    const { pos, vel } = this;
+    const half = STEP_S / 2;
+    this.examined++;
+    const rx = pos[3 * j] - pos[3 * i], ry = pos[3 * j + 1] - pos[3 * i + 1], rz = pos[3 * j + 2] - pos[3 * i + 2];
+    const vx = vel[3 * j] - vel[3 * i], vy = vel[3 * j + 1] - vel[3 * i + 1], vz = vel[3 * j + 2] - vel[3 * i + 2];
+    const v2 = vx * vx + vy * vy + vz * vz;
+    if (v2 < CO_MOVING_KM_S * CO_MOVING_KM_S) return; // travelling together
+    const tStar = -(rx * vx + ry * vy + rz * vz) / v2; // seconds from the sample to closest approach
+    if (tStar < -half - 1 || tStar >= half + 1) return; // belongs to another step
+    const mx = rx + vx * tStar, my = ry + vy * tStar, mz = rz + vz * tStar;
+    if (mx * mx + my * my + mz * mz > (this.alertKm + 0.5) ** 2) return;
+
+    // 3. exact closest approach
+    const exact = this.refine(i, j, t + tStar * 1000);
+    if (exact.missKm >= this.alertKm) return;
+    const key = i * this.satrecs.length + j;
+    const previous = this.lastSeen.get(key);
+    if (previous !== undefined && Math.abs(exact.tcaMs - previous) < 30000) return; // same pass seen from the neighbouring step
+    this.lastSeen.set(key, exact.tcaMs);
+    this.found.push({ a: i, b: j, tcaMs: exact.tcaMs, missKm: exact.missKm, relSpeedKmS: Math.sqrt(v2) });
   }
 
   private range(i: number, j: number, timeMs: number): number {

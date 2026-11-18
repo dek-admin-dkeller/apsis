@@ -16,6 +16,7 @@ interface Flight {
 
 const ORIGIN = new THREE.Vector3();
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
+const ZOOM_SPEED = 0.9; // OrbitControls' zoom step far from the Earth (matches scene.ts)
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
 export class CameraRig {
@@ -173,6 +174,18 @@ export class CameraRig {
     const internals = controls as unknown as { _quat: THREE.Quaternion; _quatInverse: THREE.Quaternion };
     internals._quat.setFromUnitVectors(camera.up, WORLD_UP);
     internals._quatInverse.copy(internals._quat).invert();
+
+    // Scroll-zoom multiplies the distance to the look-at point. Around a satellite that is
+    // what you want, but with the Earth's CENTRE as that point the same step near the
+    // surface swallows most of the remaining altitude and feels wildly sensitive. So in an
+    // Earth-centred view the step is scaled by how much altitude is left.
+    if (!this.focus && controls.target.lengthSq() < 1) {
+      const distance = camera.position.length();
+      const altitudeShare = Math.max(0, distance - EARTH_RADIUS) / distance; // 0 at the surface → 1 far away
+      controls.zoomSpeed = ZOOM_SPEED * THREE.MathUtils.clamp(altitudeShare * 2.2, 0.14, 1);
+    } else {
+      controls.zoomSpeed = ZOOM_SPEED;
+    }
 
     controls.update();
     // Never let the camera sink into the planet.

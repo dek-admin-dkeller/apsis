@@ -1283,3 +1283,39 @@ body.quiet-ui .timebar[data-direction='back']:not(.is-open) #speeds button.is-on
 .statusbar .link { font-size: 11px; color: var(--muted); }
 .statusbar .link:hover { color: var(--text); }
 .keys-card .panel-head h2 { flex: 1; }
+
+/* ---------- top-bar toggles (autopilot, record) ---------- */
+
+.tool[aria-pressed='true'] { color: var(--cyan); border-color: rgba(127, 227, 255, 0.5); background: rgba(127, 227, 255, 0.1); }
+#record[aria-pressed='true'] { color: var(--red); border-color: rgba(255, 77, 94, 0.55); background: rgba(255, 77, 94, 0.12); }
+
+/* ---------- "may we use your location?" ---------- */
+
+#loc-ask {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--status) + var(--timebar) + var(--gap) * 3);
+  z-index: 30;
+  width: min(380px, calc(100vw - 24px));
+  transform: translateX(-50%);
+  padding: 14px 16px;
+  background: var(--solid);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  animation: loc-in 180ms ease-out;
+}
+#loc-ask h2 { font-size: 14px; margin-bottom: 4px; }
+#loc-ask p { color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+#loc-ask div { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+@keyframes loc-in { from { opacity: 0; transform: translate(-50%, 8px); } }
+
+/* ---------- share window ---------- */
+
+.share-card { width: min(380px, 100%); max-height: 100%; overflow: auto; }
+.share-body { display: grid; gap: 12px; padding: 4px 14px 16px; justify-items: center; }
+.share-body .segmented { width: 100%; }
+#share-qr { width: min(260px, 70vw); height: auto; border-radius: 8px; image-rendering: pixelated; }
+.share-row { display: flex; gap: 8px; width: 100%; }
+#share-url { flex: 1; min-width: 0; height: 32px; padding: 0 9px; background: var(--inset); border: 1px solid var(--line); border-radius: var(--radius-s); color: var(--text); font: 11.5px var(--font-mono); }
+#share-url:focus { outline: none; border-color: var(--cyan); }

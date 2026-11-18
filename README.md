@@ -51,15 +51,19 @@ status line sit along the bottom.
 | Close-approach monitor (`C`) | **Right now**: switch it on, set the alert distance; the list shows every pair inside it. **Coming hours**: scan up to 24 hours ahead for predicted close passes. Click any pair to open the **close-approach view**: both spacecraft as 3D models, their flight paths, the live distance between them, a range chart you can scrub, and a slow-motion replay |
 | Ride along (`V`) | from the inspector: sit on the selected object and look out from it. Drag to look around, scroll to zoom |
 | Sky view (`4`) | the **Sky** button at the foot of the rail: stand at the ground station and watch objects cross overhead |
-| Your location | the crosshair button in the top bar asks the browser where you are, marks it with a green dot, and uses it for passes and the sky view |
+| Your location | Apsis asks once whether it may show where you are; the crosshair button in the top bar does the same at any time. Only after a yes does the browser's own permission prompt appear. You are then a green dot, and passes and the sky view use that spot |
 | Watchlist (`S`) | star an object in the inspector; it stays in the Objects panel and keeps its name tag on the globe |
 | Share | the link button in the top bar copies an address that reopens the same object, close approach, time or camera position |
 | Tour | offered on the first visit and always available from the controls sheet (`?`) |
+| Autopilot (`A`) | a hands-free cinematic tour of the view; any key or click stops it |
+| Record (`M`) | saves a video of the 3D view (with captions) to your downloads |
+| Launch and re-entry feed | Objects panel: **Newest in orbit** (grouped by launch) and **Lowest orbits** (next to come down) |
+| Design a satellite | Objects panel: choose an orbit, launch your own object into the live catalogue, and check what it will pass close to in the next 24 hours |
 | Time | the bar at the bottom: drag the timeline to move up to 12 hours either way, pause (`Space`), 1× – 1000×, run backwards (`R`), step 10 minutes (`[` `]`), **Now** (`N`), or click the clock to type a date |
 | Views | `1` `2` `3`, or the three buttons at the foot of the tool rail. Left alone, a whole-Earth view drifts slowly around the planet (Layers → Earth to switch off) |
 | Settings (`,`) | rendering quality, ground-station location, download current elements |
 | How it works | the button in the top bar: a walkthrough of the screening algorithm with a live trace, live hash-table statistics, the look-ahead method and the benchmark |
-| Phones | below 760 px the rail becomes a bottom tab bar and panels become bottom sheets |
+| Phones | below 760 px the rail becomes a bottom tab bar and panels become bottom sheets. Drag a sheet by its header to any height, or all the way down to give the 3D model the whole screen |
 | Other keys | `P` save a picture, `F` full screen, `H` hide the interface, `?` all controls, `Esc` close / deselect |
 
 ## How the spatial hash works
@@ -157,6 +161,10 @@ is published but not committed, so the repository stays small; if CelesTrak cann
 reached, the snapshot in the repository is published instead. In the repository settings,
 Pages must be set to deploy from **GitHub Actions**.
 
+GitHub switches off scheduled workflows in repositories with no activity for 60 days. That
+would not take the site down — it would only stop the data refreshing — and the workflow
+guards against it by re-enabling itself through the API on every scheduled run.
+
 ## Where the code is
 
 ```
@@ -195,6 +203,8 @@ src/
     monitor.ts           close-approach list (right now)          encounterPanel.ts   one pair in detail
     ahead.ts             close passes predicted for the coming hours
     watchlist.ts         starred objects (a Set of NORAD numbers)  tour.ts   first-visit tour
+    feed.ts              newest launches and lowest orbits         designer.ts   design-your-own satellite
+    cinema.ts            autopilot tour and video recording        sheet.ts   draggable bottom sheets on phones
     howto.ts             the walkthrough page                     hashTrace.ts   one object through the hash
     filters.ts  search.ts  settings.ts  timeControls.ts  labels.ts  benchmarkModal.ts  intro.ts
   mobile.css             phone layout: bottom tab bar and bottom sheets
@@ -262,6 +272,8 @@ reporting the same pass twice.
   cross closely around then", not that a collision is likely. Real operators manoeuvre and
   screen with far more precise data. The scan assumes no pair closes faster than 16 km/s,
   leaves out pairs that fly together, and lists the closest 250.
-- **Your location** is asked for only when you press the button, is stored only in your
-  browser, and is never put in a share link.
+- **Your location** is used only after you say yes in Apsis and then in the browser's own
+  prompt, is stored only in your browser, and is never put in a share link.
+- **A designed satellite** exists only in your browser for that visit, has no drag, and is
+  screened against predicted positions like everything else.
 - The "over" place names are coarse (ocean or continent), from a short table of regions.

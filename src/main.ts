@@ -21,7 +21,7 @@ import { describe } from './data/describe.ts';
 import { makeSatrec, rangeKm, stateAt, wrapLon, type Observer, type Vec3 } from './data/ephemeris.ts';
 import { loadRegions } from './data/regions.ts';
 import { loadFacts, type CatalogFacts } from './data/satcat.ts';
-import type { Satellite } from './data/types.ts';
+import type { OmmRecord, Satellite, Snapshot } from './data/types.ts';
 import { CameraRig } from './render/cameraRig.ts';
 import { ConjunctionMarkers } from './render/conjunctionMarkers.ts';
 import { EncounterViz, type EncounterFrame } from './render/encounterViz.ts';
@@ -38,6 +38,9 @@ import { SiteMarker } from './render/siteMarker.ts';
 import { createSky } from './render/sky.ts';
 import { AheadPanel } from './ui/ahead.ts';
 import { BenchmarkModal } from './ui/benchmarkModal.ts';
+import { Cinema } from './ui/cinema.ts';
+import { CUSTOM_NORAD_ID, Designer } from './ui/designer.ts';
+import { renderFeed } from './ui/feed.ts';
 import { $, fmt, fmtInt } from './ui/dom.ts';
 import { EncounterPanel, type EncounterFocus } from './ui/encounterPanel.ts';
 import { Filters } from './ui/filters.ts';
@@ -49,6 +52,8 @@ import { Labels } from './ui/labels.ts';
 import { Monitor } from './ui/monitor.ts';
 import { initSearch } from './ui/search.ts';
 import { SettingsStore, type Settings } from './ui/settings.ts';
+import { ShareDialog } from './ui/share.ts';
+import { Sheets } from './ui/sheet.ts';
 import { TimeControls, type SimClock } from './ui/timeControls.ts';
 import { Tour } from './ui/tour.ts';
 import { Watchlist } from './ui/watchlist.ts';
@@ -59,6 +64,9 @@ import { SimClient } from './worker/SimClient.ts';
 
 const clock: SimClock = { time: Date.now(), speed: 1, paused: false };
 let catalog: Catalog | null = null;
+let baseSnapshot: Snapshot | null = null; // the downloaded data, without anything the user designed
+let baseLive = false;
+let customRecord: OmmRecord | null = null; // the user's own satellite (Objects → Design a satellite)
 let facts = new Map<number, CatalogFacts>();
 let conjunctionOn = false;
 let gridOn = false;
@@ -86,6 +94,7 @@ let screenPending = false;
 let screenDirty = false; // something changed → screen again right away
 let lastScreenAt = -Infinity;
 let lastStats: ScreenStats | null = null;
+let lastPairs: { a: Uint32Array; b: Uint32Array } | null = null; // the monitor's latest list, closest first
 let lastTraceAt = -Infinity;
 
 // ---------------------------------------------------------------- modules
@@ -221,29 +230,85 @@ function applySettings(s: Settings, changed: keyof Settings | null): void {
 }
 const store = new SettingsStore(applySettings);
 
-/** Ask the browser where the user is, make that the ground station, and show it on the globe. */
-function locate(): void {
-  if (!navigator.geolocation) return toast('This browser cannot share a location');
-  toast('Asking the browser for your location…', 9000);
+// Location is only ever used after the user has said yes in Apsis itself (the button, the
+// tour, or the one-time question below) — and then the browser asks again in its own prompt.
+const LOCATION_CONSENT = 'apsis.location.consent'; // 'yes' | 'no'
+const consent = (): string | null => {
+  try {
+    return localStorage.getItem(LOCATION_CONSENT);
+  } catch {
+    return null;
+  }
+};
+const setConsent = (value: 'yes' | 'no') => {
+  try {
+    localStorage.setItem(LOCATION_CONSENT, value);
+  } catch { /* storage unavailable: the question may be asked again next visit */ }
+};
+
+/**
+ * Ask the browser where the user is, make that the ground station, and show it on the globe.
+ * `quiet` = a returning visitor who already agreed: update the position without messages or camera moves.
+ */
+function locate(quiet = false): void {
+  if (!navigator.geolocation) {
+    if (!quiet) toast('This browser cannot share a location');
+    return;
+  }
+  if (!quiet) {
+    setConsent('yes'); // pressing the button is the yes
+    toast('Asking the browser for your location…', 9000);
+  }
   navigator.geolocation.getCurrentPosition(
     (position) => {
       store.set('siteName', 'My location');
       store.set('siteLat', Math.round(position.coords.latitude * 100) / 100);
       store.set('siteLon', Math.round(position.coords.longitude * 100) / 100);
       store.set('siteMarker', true);
-      toast('You are marked on the globe. Passes and the sky view now use this spot.', 5000);
+      if (quiet) return;
+      toast('You are the green dot. Passes and the sky view now use this spot.', 5000);
       if (fp.mode === 'off' && !encPanel.isOpen) {
         rig.follow = false;
         inspector.setLock(false);
         rig.flyToView(site.worldPosition(new THREE.Vector3()).normalize().multiplyScalar(15), ORIGIN.clone(), 2);
       }
     },
-    () => toast('Location was not shared. You can type coordinates in Settings.', 5000),
+    () => {
+      if (!quiet) toast('Location was not shared. You can type coordinates in Settings.', 5000);
+    },
     { timeout: 10000, maximumAge: 600000 },
   );
 }
-$('locate').addEventListener('click', locate);
-$('locate-top').addEventListener('click', locate);
+
+/** The one-time question, shown after the tour (or the intro, for returning visitors who were never asked). */
+function askForLocation(): void {
+  if (consent() !== null || !navigator.geolocation || document.getElementById('loc-ask')) return;
+  const card = document.createElement('div');
+  card.id = 'loc-ask';
+  card.setAttribute('role', 'dialog');
+  card.setAttribute('aria-label', 'Show your location');
+  card.innerHTML = '<h2>Show where you are on the globe?</h2>'
+    + '<p>Apsis can mark your location with a green dot and use it for passes overhead and the sky view. It stays in this browser and is never shared.</p>'
+    + '<div><button class="btn" data-answer="no">No thanks</button><button class="btn btn-primary" data-answer="yes">Allow</button></div>';
+  card.addEventListener('click', (event) => {
+    const answer = (event.target as HTMLElement).closest<HTMLElement>('[data-answer]')?.dataset.answer;
+    if (!answer) return;
+    card.remove();
+    if (answer === 'yes') locate();
+    else setConsent('no');
+  });
+  document.body.append(card);
+}
+
+/** A returning visitor who agreed before, and whose browser still grants it: refresh the position silently. */
+function refreshLocationIfAllowed(): void {
+  if (consent() !== 'yes' || !navigator.permissions) return;
+  void navigator.permissions.query({ name: 'geolocation' }).then((status) => {
+    if (status.state === 'granted') locate(true);
+  }, () => { /* permissions API not supported for geolocation: leave the saved position */ });
+}
+$('locate').addEventListener('click', () => locate());
+$('locate-top').addEventListener('click', () => locate());
 
 // ---- tool panels (the rail on the left opens one at a time) -------------------------------
 
@@ -268,8 +333,9 @@ for (const button of document.querySelectorAll<HTMLElement>('[data-close-panel]'
 
 // ---- phones: panels are bottom sheets ------------------------------------------------------
 
-const isPhone = () => window.innerWidth <= 760;
+const isPhone = () => Sheets.isPhone;
 let viewShift = -1;
+const sheets = new Sheets(() => (viewShift = -1)); // sheets can be dragged to any height
 window.addEventListener('resize', () => (viewShift = -1));
 /**
  * On a phone a sheet covers the lower part of the screen, so the centre of the 3D view is
@@ -277,7 +343,7 @@ window.addEventListener('resize', () => (viewShift = -1));
  */
 function updateViewShift(): void {
   const sheetOpen = isPhone() && (inspector.isOpen || encPanel.isOpen || openPanelName !== null);
-  const shift = sheetOpen ? Math.round(window.innerHeight * 0.58) : 0;
+  const shift = sheetOpen ? sheets.current : 0;
   if (shift === viewShift) return;
   viewShift = shift;
   if (shift > 0) kit.camera.setViewOffset(window.innerWidth, window.innerHeight, 0, shift / 2, window.innerWidth, window.innerHeight);
@@ -586,12 +652,41 @@ function applyCatalog(next: Catalog): void {
   }));
 }
 
+/** Rebuild the catalogue from the downloaded data plus the user's own satellite, if there is one. */
+function rebuildCatalog(): void {
+  if (!baseSnapshot) return;
+  const snapshot = customRecord ? { ...baseSnapshot, objects: [...baseSnapshot.objects, customRecord] } : baseSnapshot;
+  applyCatalog(buildCatalog(snapshot, baseLive));
+  designer.catalogChanged(customRecord !== null);
+}
+
+const designer = new Designer($('designer-body'), {
+  launch: (record) => {
+    customRecord = record;
+    rebuildCatalog();
+    const sat = catalog?.byNorad.get(CUSTOM_NORAD_ID) ?? null;
+    if (sat) select(sat);
+    return sat;
+  },
+  remove: () => {
+    customRecord = null;
+    rebuildCatalog();
+  },
+  context: () => (catalog ? { records: catalog.sats.map((sat) => sat.omm), sats: catalog.sats, mask: cloud.visible.slice(), startMs: clock.time } : null),
+  openApproach: (a, b, tcaMs) => {
+    jumpTo(tcaMs);
+    openEncounter(a, b);
+  },
+  now: () => clock.time,
+});
+
 function updateDataNote(): void {
   if (!catalog) return;
   const ageH = (Date.now() - Date.parse(catalog.fetchedAt)) / 3.6e6;
   $('data-note').textContent =
     `Orbital elements ${catalog.live ? 'downloaded' : 'saved'} ${utcStamp(Date.parse(catalog.fetchedAt))} UTC, ${ageH < 48 ? `${fmt(ageH, 0)} hours` : `${fmt(ageH / 24, 0)} days`} ago. `
     + (facts.size > 0 ? `Catalogue facts loaded for ${fmtInt(facts.size)} objects.` : 'Catalogue facts (owner, launch, size) are not bundled yet.');
+  renderFeed(catalog, facts, (sat) => select(sat));
   $('about-data').textContent = `${fmtInt(catalog.sats.length)} objects, elements from ${utcStamp(Date.parse(catalog.fetchedAt))} UTC`;
 }
 
@@ -600,7 +695,9 @@ $('refresh').addEventListener('click', async () => {
   button.disabled = true;
   button.textContent = 'Contacting CelesTrak…';
   try {
-    applyCatalog(buildCatalog(await loadLive(), true));
+    baseSnapshot = await loadLive();
+    baseLive = true;
+    rebuildCatalog();
     button.textContent = 'Current elements loaded';
   } catch {
     // CORS, offline, or rate-limited: quietly keep the saved data.
@@ -628,6 +725,7 @@ sim.onMessage = (msg) => {
     howto.setStats(msg.stats, msg.d);
     if (!conjunctionOn) return;
     markers.setPairs(msg.pairA, msg.pairB, msg.d);
+    lastPairs = { a: msg.pairA, b: msg.pairB };
     monitor.setResult(msg, catalog);
     $('sb-screen').textContent = `${fmt(msg.stats.hashMs, 1)} ms`;
   } else if (msg.type === 'benchRow') {
@@ -736,12 +834,8 @@ function shareUrl(): string {
   }
   return `${location.origin}${location.pathname}#${q.toString()}`;
 }
-$('share').addEventListener('click', () => {
-  const url = shareUrl();
-  const copied = navigator.clipboard?.writeText(url);
-  if (copied) copied.then(() => toast('Link copied. It opens this exact view.'), () => window.prompt('Copy this link', url));
-  else window.prompt('Copy this link', url);
-});
+const shareDialog = new ShareDialog();
+$('share').addEventListener('click', () => shareDialog.open(shareUrl(), !!selected || encPanel.isOpen));
 
 /** Was the page opened from a share link? If so, restore what it describes. */
 function applyLink(): boolean {
@@ -799,6 +893,69 @@ $('tour-start').addEventListener('click', () => {
   tour.start();
 });
 
+// ---- autopilot + video recording -------------------------------------------------------------
+
+/** Open the closest pair in the monitor's list that is genuinely crossing (not flying together). */
+function openClosestCrossing(): boolean {
+  if (!catalog || !lastPairs || !conjunctionOn) return false;
+  for (let k = 0; k < Math.min(lastPairs.a.length, 80); k++) {
+    const a = catalog.sats[lastPairs.a[k]], b = catalog.sats[lastPairs.b[k]];
+    const sa = stateAt(makeSatrec(a), clock.time), sb = stateAt(makeSatrec(b), clock.time);
+    if (!sa || !sb) continue;
+    const closing = Math.hypot(sa.velocity.x - sb.velocity.x, sa.velocity.y - sb.velocity.y, sa.velocity.z - sb.velocity.z);
+    if (closing < 0.5) continue;
+    openEncounter(a.index, b.index);
+    return true;
+  }
+  return false;
+}
+
+const cinema = new Cinema({
+  selectByName: (name) => {
+    const sat = catalog?.byName.get(name)?.[0];
+    if (sat) select(sat);
+    return !!sat;
+  },
+  deselect: () => {
+    closeEncounter(true);
+    if (selected) select(null);
+  },
+  preset: (which) => preset(which),
+  rideAlong: (on) => {
+    if (on !== (fp.mode === 'satellite')) rideAlong();
+  },
+  skyView: (on) => {
+    if (on !== (fp.mode === 'ground')) skyView();
+  },
+  setMonitor: (on) => {
+    if (on !== conjunctionOn) setConjunction(on);
+  },
+  openClosestCrossing,
+  closeApproach: () => closeEncounter(),
+  setSpeed: (multiplier) => {
+    replay = null;
+    clock.speed = multiplier;
+    clock.paused = false;
+    timeControls.sync();
+    screenDirty = true;
+  },
+  hideInterface: (on) => document.body.classList.toggle('ui-hidden', on),
+  toast: (text) => toast(text, 4000),
+}, canvas);
+function toggleAutopilot(): void {
+  if (cinema.isPlaying) return cinema.stop();
+  if (tour.isRunning) tour.stop();
+  setKeys(false);
+  openPanel(null);
+  cinema.play();
+}
+$('autopilot').addEventListener('click', toggleAutopilot);
+$('record').addEventListener('click', () => cinema.toggleRecording());
+cinema.onChange = () => {
+  $('autopilot').setAttribute('aria-pressed', String(cinema.isPlaying));
+  $('record').setAttribute('aria-pressed', String(cinema.isRecording));
+};
+
 window.addEventListener('keydown', (event) => {
   const el = event.target as HTMLElement;
   if (el instanceof HTMLInputElement && el.type !== 'checkbox' && el.type !== 'range') return; // typing in a field
@@ -821,6 +978,8 @@ window.addEventListener('keydown', (event) => {
     case ']': timeControls.step(1); break;
     case 'n': jumpToNow(); break;
     case 'p': wantShot = true; break;
+    case 'a': toggleAutopilot(); break;
+    case 'm': cinema.toggleRecording(); break;
     case 'f': toggleFullscreen(); break;
     case 'h': document.body.classList.toggle('ui-hidden'); break;
     case '/':
@@ -840,6 +999,7 @@ window.addEventListener('keydown', (event) => {
       else if (howto.isOpen) howto.close();
       else if (!keysOverlay.classList.contains('is-hidden')) setKeys(false);
       else if (!aboutOverlay.classList.contains('is-hidden')) setAbout(false);
+      else if (shareDialog.isOpen) shareDialog.close();
       else if (fp.mode !== 'off') fp.exit();
       else if (document.body.classList.contains('ui-hidden')) document.body.classList.remove('ui-hidden');
       else if (encPanel.isOpen) closeEncounter();
@@ -1077,7 +1237,8 @@ async function boot(): Promise<void> {
   });
   try {
     loading.progress(0.1, 'Reading orbital elements');
-    const first = buildCatalog(await loadSnapshot());
+    baseSnapshot = await loadSnapshot();
+    const first = buildCatalog(baseSnapshot);
     loading.countTo(first.sats.length);
     loading.progress(0.4, 'Propagating orbits with SGP4');
     const positionsReady = new Promise<void>((resolve) => (firstSnapshot = resolve));
@@ -1087,6 +1248,7 @@ async function boot(): Promise<void> {
 
     const home = homeView();
     $('hud').classList.remove('hud-hidden');
+    refreshLocationIfAllowed();
     kit.camera.position.copy(home);
     if (applyLink()) {
       // Opened from a share link: go straight to what it describes.
@@ -1098,6 +1260,12 @@ async function boot(): Promise<void> {
       setTimeout(() => {
         watchdogArmed = true;
         if (!Tour.seen()) tour.start();
+        // Once the tour is out of the way, ask (once) whether to show the visitor's location.
+        const waiting = setInterval(() => {
+          if (tour.isRunning) return;
+          clearInterval(waiting);
+          setTimeout(askForLocation, 1200);
+        }, 500);
       }, 5200);
     }
   } catch (error) {

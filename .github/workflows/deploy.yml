@@ -20,6 +20,7 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  actions: write # only for the keep-alive step below
 
 concurrency:
   group: pages
@@ -41,6 +42,14 @@ jobs:
       - name: Refresh orbital data (CelesTrak asks for at most one download every 2 hours)
         if: github.event_name != 'push'
         run: node scripts/fetch-data.mjs || echo "CelesTrak unreachable - publishing the stored snapshot"
+      # GitHub switches off scheduled workflows in a repository that has had no activity for
+      # 60 days (the site stays up; only this refresh would stop). Re-enabling the workflow
+      # through the API on each scheduled run resets that timer.
+      - name: Keep the schedule alive
+        if: github.event_name == 'schedule'
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/deploy.yml/enable"
+        env:
+          GH_TOKEN: ${{ github.token }}
       - run: npm run build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

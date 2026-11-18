@@ -14,6 +14,8 @@ export interface LookaheadRequest {
   startMs: number;
   hours: number;
   alertKm: number;
+  /** Optional object index: report only passes that involve this object. */
+  focus?: number;
 }
 
 export interface LookaheadReply {
@@ -28,8 +30,8 @@ export interface LookaheadReply {
 const SHOWN = 250;
 
 self.onmessage = (event: MessageEvent<LookaheadRequest>) => {
-  const { records, mask, startMs, hours, alertKm } = event.data;
-  const scan = new Lookahead(buildSatrecs(records), mask, startMs, hours, alertKm);
+  const { records, mask, startMs, hours, alertKm, focus = -1 } = event.data;
+  const scan = new Lookahead(buildSatrecs(records), mask, startMs, hours, alertKm, focus);
   const began = performance.now();
   let lastReport = began;
   const report = (done: boolean, fraction: number) => {

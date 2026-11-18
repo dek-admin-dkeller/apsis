@@ -311,3 +311,27 @@
   #ahead .ahead-bar { height: 4px; }
   #panel-conj .panel-body > #ahead-list, #ahead #ahead-list { flex: none; min-height: 0; max-height: none; margin-right: 0; padding-right: 0; overflow: visible; }
 }
+
+/* ---------- draggable sheets (src/ui/sheet.ts changes --sheet) ---------- */
+
+@media (max-width: 760px) {
+  .dock > .panel { position: relative; }
+  /* The header is the handle: a grip bar shows it can be dragged. */
+  .dock > .panel > :is(.panel-head, .insp-head) { touch-action: none; cursor: grab; padding-top: 16px; }
+  .dock > .panel::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 6px;
+    z-index: 3;
+    width: 38px;
+    height: 4px;
+    margin-left: -19px;
+    border-radius: 2px;
+    background: var(--line-strong);
+    pointer-events: none;
+  }
+  #hud > .dock > .panel { max-height: min(var(--sheet), calc(100vh - var(--top) - var(--status) - 28px)); min-height: 58px; }
+  #autopilot, #record { display: none; }
+  #loc-ask { bottom: calc(var(--status) + 12px); }
+}

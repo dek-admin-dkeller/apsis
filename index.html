@@ -85,8 +85,14 @@
           <button id="locate-top" class="tool" title="Show where I am on the globe" aria-label="Show where I am on the globe">
             <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="5.5" /><circle cx="10" cy="10" r="1.6" /><path d="M10 1.5v3M10 15.5v3M1.5 10h3M15.5 10h3" /></svg>
           </button>
-          <button id="share" class="tool" title="Copy a link to this view" aria-label="Copy a link to this view">
+          <button id="share" class="tool" title="Share: QR code and link" aria-label="Share: QR code and link">
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8.5 11.5a3.5 3.5 0 0 0 5 0l3-3a3.5 3.5 0 0 0-5-5l-1 1M11.5 8.5a3.5 3.5 0 0 0-5 0l-3 3a3.5 3.5 0 0 0 5 5l1-1" /></svg>
+          </button>
+          <button id="autopilot" class="tool" aria-pressed="false" title="Autopilot: a hands-free tour of the view (A)" aria-label="Autopilot">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5" /><path d="M8.2 6.8v6.4l5-3.2z" /></svg>
+          </button>
+          <button id="record" class="tool" aria-pressed="false" title="Record a video of the view (M)" aria-label="Record a video of the view">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="5.5" width="10.5" height="9" rx="1.5" /><path d="M13 9l4.5-2.5v7L13 11z" /></svg>
           </button>
           <button id="shot" class="tool" title="Save a picture of the view (P)" aria-label="Save a picture of the view">
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6.5h3l1.2-2h5.6l1.2 2h3v9H3z" /><circle cx="10" cy="10.8" r="2.8" /></svg>
@@ -180,6 +186,19 @@
             <details class="sec" open>
               <summary>Notable objects</summary>
               <div class="quick" id="quick-list"></div>
+            </details>
+            <details class="sec">
+              <summary>Newest in orbit</summary>
+              <ol class="watch-list" id="feed-new"></ol>
+            </details>
+            <details class="sec">
+              <summary>Lowest orbits</summary>
+              <p class="note">Lowest point of each orbit. Below about 300 km the thin air drags objects down within weeks.</p>
+              <ol class="watch-list" id="feed-low"></ol>
+            </details>
+            <details class="sec" id="designer">
+              <summary>Design a satellite</summary>
+              <div id="designer-body"></div>
             </details>
           </div>
         </section>
@@ -678,6 +697,24 @@
       </div>
     </div>
 
+    <!-- ============ Share ============ -->
+    <div id="share-dialog" class="overlay is-hidden">
+      <div class="panel share-card">
+        <header class="panel-head"><h2>Share Apsis</h2><button class="icon-btn" id="share-close" aria-label="Close">×</button></header>
+        <div class="share-body">
+          <div class="segmented" id="share-which">
+            <button data-value="view">This view</button><button data-value="home">Home page</button>
+          </div>
+          <canvas id="share-qr" width="480" height="480" aria-label="QR code for the link below"></canvas>
+          <p class="note">Point a phone camera at the code, or send the link.</p>
+          <div class="share-row">
+            <input type="text" id="share-url" readonly aria-label="Link" />
+            <button class="btn btn-primary" id="share-copy">Copy link</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ============ About and credits ============ -->
     <div id="about" class="overlay is-hidden">
       <div class="panel about-card">
@@ -728,6 +765,8 @@
           <div><dt><kbd>4</kbd></dt><dd>Sky view from the ground station</dd></div>
           <div><dt><kbd>S</kbd></dt><dd>Add to or remove from the watchlist</dd></div>
           <div><dt><kbd>P</kbd></dt><dd>Save a picture</dd></div>
+          <div><dt><kbd>A</kbd></dt><dd>Autopilot tour</dd></div>
+          <div><dt><kbd>M</kbd></dt><dd>Record a video</dd></div>
           <div><dt><kbd>F</kbd></dt><dd>Full screen</dd></div>
           <div><dt><kbd>H</kbd></dt><dd>Hide or show the interface</dd></div>
         </dl>
