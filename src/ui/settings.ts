@@ -27,6 +27,7 @@ export interface Settings {
   siteMarker: boolean;
   aurora: boolean;
   clouds: boolean;
+  sharpGround: boolean; // stream detailed imagery when zoomed in
   atmosphere: boolean;
   borders: boolean;
   graticule: boolean;
@@ -60,6 +61,7 @@ const DEFAULTS: Settings = {
   siteMarker: true,
   aurora: false,
   clouds: true,
+  sharpGround: true,
   atmosphere: true,
   borders: false,
   graticule: false,

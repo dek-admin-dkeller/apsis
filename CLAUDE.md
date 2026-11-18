@@ -110,8 +110,8 @@ src/data/                   catalog, categorize, describe (operator/purpose/mode
                             regions ("over the South Pacific"), crew (people in space), types
 src/hashing/                SpatialHash, conjunction, lookahead, benchmark
 src/worker/                 sim.worker (+ SimClient, protocol, propagate), lookahead.worker
-src/render/                 scene (renderer, bloom, quality presets), globe (Earth shader), geoOverlay (borders, grid,
-                            terminator), sky (Milky Way, stars, constellations, planets, Sun, Moon), aurora, satellites
+src/render/                 scene (renderer, bloom, quality presets), globe (Earth shader), tiles (close-up ground:
+                            NASA GIBS map tiles streamed in below ~6,000 km), geoOverlay (borders, grid, terminator), sky (Milky Way, stars, constellations, planets, Sun, Moon), aurora, satellites
                             (the point cloud, colour modes, highlighting, picking), satModels (20 procedural models,
                             previews, thumbnails), cameraRig (fly-to, object focus, Earth drift), firstPerson (ride-along,
                             sky view, phone motion), orbitLine, groundTrack, encounterViz (close-approach drawing),
@@ -152,7 +152,8 @@ camera's view offset up while a sheet is open.
 
 CelesTrak (manual refresh; scheduled in CI), Wikipedia REST summary (photos/descriptions,
 cached per article), NOAA SWPC (aurora grid, Kp), a public people-in-space list
-(`src/data/crew.ts`), nothing else. No analytics, no accounts. Location is used only after
+(`src/data/crew.ts`), NASA GIBS map tiles (`src/render/tiles.ts`, only while zoomed in and
+only with the `sharpGround` setting on), nothing else. No analytics, no accounts. Location is used only after
 an in-app yes plus the browser's own prompt, and stays in `localStorage`.
 
 ## Robustness (added after a "black screen on a friend's laptop" report that could not be reproduced)
@@ -165,6 +166,26 @@ an in-app yes plus the browser's own prompt, and stays in `localStorage`.
 - When the tour ends or is skipped the app returns to the whole-Earth view.
 - About → "This device" shows the graphics card, quality level, frame rate and the last
   recorded problem — ask a user to read that out when they report something odd.
+
+## Close-up ground (`render/tiles.ts`)
+
+- The globe texture is ~10 km per pixel. Below ~6,000 km altitude `EarthTiles.update()` picks a
+  web-map zoom level (5–8) whose pixels match screen pixels, and covers the centre of the view
+  (out to the screen corners, at most 11 × 11 tiles) with curved patches that are children of
+  `globe.earth`, lifted 0.09 % above the surface and lit with the same Sun term as the globe.
+- Tiles are alpha-blended over the globe: fully covering near the ground, 60 % from far away
+  (so the globe's clouds still show), and faded out on the night side (city lights stay).
+- Tile cache is a `Map<"z/x/y", Tile>` with least-recently-used eviction (200 tiles), at most
+  8 downloads in flight, and a 30 s back-off if the service cannot be reached.
+
+## Thumbnails and the hover card
+
+- `modelThumbnail(kind)` (in `satModels.ts`) renders a model once per kind: it tries eight
+  headings and two diagonal leans with an orthographic camera cropped to the model's real
+  outline and keeps the pose that covers most of the square with the most light and colour.
+- `ui/thumb.ts` shows a Wikipedia photo when the article's lead image is a photograph, else
+  that render. A lead image is treated as a logo (never used as the photo) when more than
+  12 % of its pixels are transparent, or, if its pixels cannot be read, when it is an `.svg`.
 
 ## Performance notes
 

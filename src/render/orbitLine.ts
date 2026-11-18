@@ -58,7 +58,7 @@ export class OrbitLine {
     const start = minutesSinceEpoch(this.satrec, simTime);
     for (let s = 0; s <= SEGMENTS; s++) {
       const p = sgp4(this.satrec, start + (this.periodMin * s) / SEGMENTS)?.position;
-      if (!p || !Number.isFinite(p.x)) continue;
+      if (!p || !Number.isFinite(p.x + p.y + p.z)) continue;
       positions.push(p.x, p.y, p.z);
       const fade = 1.05 * Math.pow(1 - s / SEGMENTS, 1.6) + 0.12; // bright ahead of the satellite, dim at the far end
       colors.push(0.35 * fade, 0.85 * fade, 1.0 * fade);

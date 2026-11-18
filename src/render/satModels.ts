@@ -1185,27 +1185,104 @@ export class SatelliteModel {
 const thumbnails = new Map<ModelKind, string>(); // kind → PNG data URL, rendered once each
 let thumbRenderer: THREE.WebGLRenderer | null = null;
 
-/** A small picture of a model kind, for lists. Rendered on first use with a shared off-screen renderer, then cached. */
+/**
+ * The rectangle a model covers as seen by `camera` (camera-space x/y), measured from its real
+ * vertices so the thumbnail can be cropped right up to it.
+ */
+function silhouette(holder: THREE.Object3D, camera: THREE.Camera): { minX: number; maxX: number; minY: number; maxY: number } {
+  holder.updateMatrixWorld(true);
+  const edge = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+  const point = new THREE.Vector3();
+  holder.traverse((part) => {
+    const positions = (part as THREE.Mesh).geometry?.getAttribute('position');
+    if (!positions) return;
+    const toCamera = new THREE.Matrix4().multiplyMatrices(camera.matrixWorldInverse, part.matrixWorld);
+    const stride = Math.max(1, Math.floor(positions.count / 4000)); // plenty for an outline
+    for (let i = 0; i < positions.count; i += stride) {
+      point.fromBufferAttribute(positions, i).applyMatrix4(toCamera);
+      if (!Number.isFinite(point.x + point.y)) continue;
+      edge.minX = Math.min(edge.minX, point.x);
+      edge.maxX = Math.max(edge.maxX, point.x);
+      edge.minY = Math.min(edge.minY, point.y);
+      edge.maxY = Math.max(edge.maxY, point.y);
+    }
+  });
+  return edge;
+}
+
+/**
+ * A small picture of a model kind, for lists and the hover card. Rendered on first use with a
+ * shared off-screen renderer, then cached.
+ *
+ * The little frame should be full, not mostly empty, and the model should show its best side
+ * (a flat satellite seen edge-on, or from its unlit back, is a dark line). So a handful of
+ * poses are tried — eight headings, then the best one laid across either diagonal — each
+ * cropped right up to the model, and the pose that covers the most of the square with the
+ * most light and colour is kept.
+ */
 export function modelThumbnail(kind: ModelKind): string {
   const cached = thumbnails.get(kind);
   if (cached) return cached;
   try {
+    const SIZE = 160;
     thumbRenderer ??= new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
-    thumbRenderer.setSize(96, 96, false);
+    thumbRenderer.setSize(SIZE, SIZE, false);
+    const renderer = thumbRenderer;
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 20);
-    camera.position.set(1.5, 1.0, 1.9);
+    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 60);
+    camera.position.set(1.5, 1.0, 1.9).setLength(20);
     camera.lookAt(0, 0, 0);
+    camera.updateMatrixWorld(true);
+    const towardsCamera = camera.position.clone().normalize();
     addLights(scene).position.set(2.5, 3, 1.5);
     const rim = new THREE.DirectionalLight(0x5ad1ff, 1.4);
     rim.position.set(-3, -1, -2);
-    scene.add(rim);
+    scene.add(rim, new THREE.AmbientLight(0xbfd2f0, 0.55)); // a little extra fill: it is shown on a dark tile
     const holder = new THREE.Group();
     holder.add(buildModel(kind));
-    holder.rotation.y = 0.6;
     scene.add(holder);
-    thumbRenderer.render(scene, camera);
-    const url = thumbRenderer.domElement.toDataURL('image/png');
+
+    const pixels = new Uint8Array(SIZE * SIZE * 4);
+    /** Draw one pose, cropped to the model, and say how good a picture it makes. */
+    const draw = (heading: number, lean: number): number => {
+      holder.rotation.set(0, heading, 0);
+      if (lean !== 0) holder.applyQuaternion(new THREE.Quaternion().setFromAxisAngle(towardsCamera, lean));
+      const e = silhouette(holder, camera);
+      if (!Number.isFinite(e.minX + e.maxX + e.minY + e.maxY)) return 0;
+      const half = Math.max(e.maxX - e.minX, e.maxY - e.minY, 1e-6) * 0.53; // 6% breathing room
+      const cx = (e.minX + e.maxX) / 2, cy = (e.minY + e.maxY) / 2;
+      camera.left = cx - half;
+      camera.right = cx + half;
+      camera.bottom = cy - half;
+      camera.top = cy + half;
+      camera.updateProjectionMatrix();
+      renderer.render(scene, camera);
+      const gl = renderer.getContext();
+      gl.readPixels(0, 0, SIZE, SIZE, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+      let covered = 0, light = 0, colour = 0;
+      for (let i = 0; i < pixels.length; i += 16) { // every fourth pixel is plenty
+        if (pixels[i + 3] < 40) continue;
+        const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
+        covered++;
+        light += (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+        colour += (Math.max(r, g, b) - Math.min(r, g, b)) / 255;
+      }
+      if (covered === 0) return 0;
+      return (covered / (pixels.length / 16)) * (0.35 + light / covered + colour / covered);
+    };
+
+    let best = { heading: 0.6, lean: 0, score: -1 };
+    for (let step = 0; step < 8; step++) {
+      const heading = 0.6 + (step * Math.PI) / 4;
+      const score = draw(heading, 0);
+      if (score > best.score * 1.03) best = { heading, lean: 0, score };
+    }
+    for (const lean of [-0.72, 0.72]) {
+      const score = draw(best.heading, lean);
+      if (score > best.score * 1.1) best = { heading: best.heading, lean, score };
+    }
+    draw(best.heading, best.lean);
+    const url = renderer.domElement.toDataURL('image/png');
     disposeModel(holder);
     thumbnails.set(kind, url);
     return url;

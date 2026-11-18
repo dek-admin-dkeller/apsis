@@ -34,7 +34,7 @@ npm run build        # type-check + production build into dist/
 ```
 
 The data snapshot and textures live in `public/`, so the app runs **offline** (only the
-Wikipedia photos need a connection). Fonts are
+Wikipedia photos and the sharper close-up ground imagery need a connection). Fonts are
 bundled too (the Google Fonts families Inter, Space Grotesk and JetBrains Mono, installed
 from npm so no network request is needed).
 
@@ -64,6 +64,8 @@ status line sit along the bottom.
 | Launch and re-entry feed | Objects panel: **Newest in orbit** (grouped by launch), **Satellite trains** (recent batches still flying in a line; click to light one up) and **Lowest orbits** (next to come down) |
 | Constellations | Objects panel: pick GPS, Starlink, Iridium and so on to draw all its orbits and a live map of how many of its satellites can see each point on the ground |
 | Aurora | Layers → Earth: tonight's aurora oval from NOAA's forecast, with the current geomagnetic activity |
+| Sharp ground | zoom in and the ground under the camera is redrawn from detailed NASA imagery, about sixteen times finer than the globe's own picture (Layers → Earth → *Sharp ground when zoomed in*) |
+| Hover card | point at any dot for a small card: a photo or a 3D picture of it, what it is, who runs it, its height and speed now |
 | People in space | who is aboard the ISS and Tiangong right now, in those stations' Record tab |
 | Contact timeline | Watchlist → **Contact timeline**: when each of several ground stations can see each starred object over the next 24 hours |
 | Point your phone | in the Sky view on a phone, **Use phone motion** aims the view wherever the phone points |
@@ -201,10 +203,11 @@ src/
   render/
     scene.ts             renderer, camera, bloom, quality presets
     globe.ts             Earth shader: relief, clouds and their shadows, city lights, atmosphere, close-up detail
+    tiles.ts             close-up ground: map tiles streamed from NASA GIBS, kept in a Map keyed "z/x/y"
     geoOverlay.ts        coastlines and borders, latitude / longitude grid, day / night line
     sky.ts               Milky Way, real bright stars, constellation figures, planets, Sun, Moon
     satellites.ts        all objects as one THREE.Points draw call; GPU-side interpolation; picking
-    satModels.ts         procedural 3D models (20 kinds of spacecraft)
+    satModels.ts         procedural 3D models (20 kinds of spacecraft) and their cropped thumbnails
     cameraRig.ts         fly-to, object-centred focus camera, view presets
     firstPerson.ts       ride-along and sky-view cameras        siteMarker.ts   the ground-station dot
     constellation.ts     all orbits of a group + ground coverage map   aurora.ts   live aurora oval
@@ -254,6 +257,11 @@ reporting the same pass twice.
   is optional; without it those rows show a dash.
 - **Aurora, geomagnetic activity and station crews** are fetched live when used (NOAA Space
   Weather Prediction Center and a public crew list); offline, those features stay empty.
+- **Close-up ground imagery** is NASA's Blue Marble (shaded relief and bathymetry), streamed
+  as map tiles from the public GIBS service only while the camera is within about 6,000 km of
+  the ground. Its finest level is roughly 600 m per pixel, so cities and coastlines sharpen
+  but individual streets never appear. It shows no clouds, so the globe's cloud layer fades
+  out underneath it. Offline, or with the setting off, the globe's own picture is used.
 - **Name tags appear as you zoom.** The whole-Earth view names only the ISS, Tiangong, Hubble
   and your watchlist; closer in, well-known spacecraft and then the nearest objects are named
   (Layers → Name tags: Off / Well-known / As you zoom).

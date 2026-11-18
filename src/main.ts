@@ -39,6 +39,7 @@ import { behindEarth, legendFor, SatelliteCloud } from './render/satellites.ts';
 import { createScene, EARTH_RADIUS, EARTH_RADIUS_KM, KM } from './render/scene.ts';
 import { SiteMarker } from './render/siteMarker.ts';
 import { createSky } from './render/sky.ts';
+import { EarthTiles } from './render/tiles.ts';
 import { AheadPanel } from './ui/ahead.ts';
 import { BenchmarkModal } from './ui/benchmarkModal.ts';
 import { Cinema } from './ui/cinema.ts';
@@ -179,6 +180,7 @@ const encModels = [new SatelliteModel(kit, false), new SatelliteModel(kit, false
 const labels = new Labels(kit, sim, cloud);
 const trace = new HashTrace(sim);
 const site = new SiteMarker(globe.earth, kit); // the ground station / "you are here" marker
+const tiles = new EarthTiles(globe.earth); // detailed imagery streamed in when zoomed close
 const aurora = new Aurora(globe.earth); // tonight's aurora oval (live NOAA forecast)
 aurora.onStatus = (text) => ($('aurora-status').textContent = text);
 const constView = new ConstellationView(kit.eciGroup, globe.earth); // all orbits of one constellation + its ground coverage
@@ -274,6 +276,7 @@ function applySettings(s: Settings, changed: keyof Settings | null): void {
   site.setVisible(s.siteMarker);
   sky.setConstellations(s.constellations);
   aurora.setVisible(s.aurora);
+  tiles.enabled = s.sharpGround;
   globe.setClouds(s.clouds);
   globe.setAtmosphere(s.atmosphere);
   overlay.setBorders(s.borders);
@@ -1458,6 +1461,7 @@ function step(now: number): void {
   updateSkyLabels();
   site.update(realSeconds);
   aurora.update(realSeconds, globe.sunDirection);
+  tiles.update(kit.camera, globe.sunDirection, realSeconds, dt);
   constView.update(clock.time, realSeconds, constMembers.length, (i, out) => sim.getPosition(constMembers[i], out));
   if (!uiHidden) constPanel.frame(realSeconds);
   if (!uiHidden) watch.frame(realSeconds);

@@ -30,7 +30,11 @@ function sinceEpoch(satrec: SatRec, timeMs: number): number {
 /** Exact position (km) and velocity (km/s) in the inertial frame, or null if SGP4 fails. */
 export function stateAt(satrec: SatRec, timeMs: number): { position: Vec3; velocity: Vec3 } | null {
   const state = sgp4(satrec, sinceEpoch(satrec, timeMs));
-  return state && Number.isFinite(state.position.x) ? state : null;
+  if (!state) return null;
+  const { position: p, velocity: v } = state;
+  // SGP4 can return a partly non-finite state for a decayed or badly-fitted object: treat that as "unknown"
+  // so nothing downstream (camera, lines, models) is ever handed a NaN.
+  return Number.isFinite(p.x + p.y + p.z + v.x + v.y + v.z) ? state : null;
 }
 
 /** Unit vector from the Earth to the Sun, inertial frame. */

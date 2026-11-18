@@ -236,12 +236,15 @@ async function load(title: string): Promise<WikiSummary | null> {
     if (page.type !== 'standard') return null;
     const picture = page.thumbnail?.source ?? null;
     const kind = picture ? await classify(picture) : null;
+    // If the pixels could not be read (a blocked or rate-limited download), fall back on the
+    // file type: a lead image drawn as vector art (.svg) is a logo or a diagram, never a photo.
+    const isLogo = kind ? kind.logo : !!picture && /\.svg/i.test(picture);
     return {
       title: page.title ?? title,
       extract: page.extract ?? '',
-      imageUrl: kind?.logo ? null : picture,
-      logoUrl: kind?.logo ? picture : null,
-      logoDark: !!kind?.logo && kind.dark,
+      imageUrl: isLogo ? null : picture,
+      logoUrl: isLogo ? picture : null,
+      logoDark: isLogo && (kind ? kind.dark : true), // unknown artwork is drawn white: safe on the dark interface
       pageUrl: page.content_urls?.desktop?.page ?? `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}`,
     };
   } catch {
