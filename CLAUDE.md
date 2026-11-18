@@ -174,7 +174,13 @@ an in-app yes plus the browser's own prompt, and stays in `localStorage`.
   (out to the screen corners, at most 11 × 11 tiles) with curved patches that are children of
   `globe.earth`, lifted 0.09 % above the surface and lit with the same Sun term as the globe.
 - Tiles are alpha-blended over the globe: fully covering near the ground, 60 % from far away
-  (so the globe's clouds still show), and faded out on the night side (city lights stay).
+  (so the globe's clouds still show). They are drawn on the night side as well (the first
+  version faded them out there, which read as "not working" to anyone zooming in after dark):
+  the night tone equals the globe's from far away and rises to bright moonlight near the
+  ground, and the globe's city-lights texture (the same uniform objects, borrowed from the
+  Earth material) is added through a 16-tap cubic B-spline, because its real detail is ~20 km
+  and plain linear filtering shows as squares.
+- `tiles.status` feeds About → "This device" (off / service not reachable / N tiles shown).
 - Tile cache is a `Map<"z/x/y", Tile>` with least-recently-used eviction (200 tiles), at most
   8 downloads in flight, and a 30 s back-off if the service cannot be reached.
 

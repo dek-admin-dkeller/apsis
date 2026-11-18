@@ -1056,6 +1056,7 @@ const setAbout = (open: boolean) => {
   const info = gl.getExtension('WEBGL_debug_renderer_info');
   const gpu = info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : 'graphics card not reported';
   $('about-diag').textContent = `${gpu}; ${kit.quality} quality at ${fmt(kit.pixelRatio, 2)}× pixels, ${$('sb-fps').textContent}`
+    + `; ${tiles.status}`
     + (lastProblem ? `; last problem: ${lastProblem.slice(0, 120)}` : '; no problems recorded');
 };
 $('about-open').addEventListener('click', () => setAbout(true));

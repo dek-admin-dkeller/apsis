@@ -9,8 +9,10 @@
  *
  * Tiles are the standard "web map" pyramid: at zoom z the world is 2^z × 2^z squares in the
  * Mercator projection. Each tile here is a small curved patch of sphere sitting just above
- * the surface, a child of the rotating Earth, lit by the same Sun as the globe and faded out
- * on the night side so the city lights underneath still show.
+ * the surface, a child of the rotating Earth, shaded the same way as the globe: the same
+ * Sun by day, and at night a dim moonlit tone with the globe's city lights on top. Close to
+ * the ground that night tone is brighter than the globe's, otherwise a zoomed-in view of the
+ * night side would be too dark to show any of the extra detail.
  *
  * Tiles are remembered in a Map keyed by "z/x/y" (a hash table again): asking "do I already
  * have this tile?" is O(1), and the least recently used ones are dropped beyond a limit.
@@ -49,17 +51,68 @@ const vertexShader = /* glsl */ `
 
 const fragmentShader = /* glsl */ `
   uniform sampler2D uMap;
+  uniform sampler2D uNight; // the globe's city-lights picture (whole Earth)
+  uniform float uHasNight;
+  uniform vec2 uNightTexel; // size of one pixel of that picture, in texture coordinates
   uniform vec3 uSun;      // direction to the Sun in the Earth's own (rotating) frame
   uniform float uOpacity; // fades the tile in once its picture has arrived
   uniform float uCover;   // how completely the tile hides the globe's own (blurrier) picture
+  uniform float uClose;   // 0 far away … 1 near the ground
   varying vec2 vUv;
   varying vec3 vNormalLocal;
+
+  // The city-lights picture read with a cubic B-spline: the 4 × 4 neighbouring cells blended
+  // by a smooth bell curve, on a grid twice as coarse as the picture's pixels (its real
+  // detail). Ordinary linear filtering leaves every cell's outline visible when magnified
+  // this much; the spline has no creases, so the squares become a glow.
+  vec4 bell(float f) {
+    float f2 = f * f, f3 = f2 * f;
+    return vec4(1.0 - 3.0 * f + 3.0 * f2 - f3, 4.0 - 6.0 * f2 + 3.0 * f3, 1.0 + 3.0 * f + 3.0 * f2 - 3.0 * f3, f3) / 6.0;
+  }
+  vec3 softLights(vec2 uv) {
+    vec2 cell = uNightTexel * 2.0;
+    vec2 p = uv / cell - 0.5;
+    vec2 f = fract(p);
+    vec2 corner = (p - f - 0.5) * cell; // centre of the cell one up and one left of this one
+    vec4 wx = bell(f.x), wy = bell(f.y);
+    vec3 sum = vec3(0.0);
+    for (int j = 0; j < 4; j++) {
+      for (int i = 0; i < 4; i++) {
+        sum += wx[i] * wy[j] * texture2D(uNight, corner + vec2(float(i), float(j)) * cell).rgb;
+      }
+    }
+    return sum;
+  }
+
   void main() {
     vec3 N = normalize(vNormalLocal);
     float sun = dot(N, uSun);
-    float day = smoothstep(-0.10, 0.20, sun);                       // same day / night edge as the globe
-    vec3 ground = texture2D(uMap, vUv).rgb * (0.05 + 1.1 * max(sun, 0.0)); // same daylight as the globe
-    gl_FragColor = vec4(clamp(ground, 0.0, 4.0), clamp(day * uOpacity * uCover, 0.0, 1.0));
+    float day = smoothstep(-0.10, 0.20, sun);          // same day / night edge as the globe
+    vec3 ground = texture2D(uMap, vUv).rgb;
+    vec3 lit = ground * (0.05 + 1.1 * max(sun, 0.0));  // same daylight as the globe
+
+    // Night: far away, exactly the globe's faint tone; near the ground, bright moonlight.
+    vec3 moonlight = mix(vec3(0.030, 0.038, 0.060), vec3(0.105, 0.135, 0.205), uClose);
+    vec3 night = ground * moonlight + vec3(0.0022, 0.0030, 0.0055);
+
+    // City lights, looked up in the globe's whole-Earth picture by latitude and longitude.
+    // (Tiles stop short of the poles, so N.x and N.z are never both zero here.)
+    // That picture is coarse (its detail is ~20 km), so from close up it would be drawn as
+    // visible squares. softLights() below reads it through a smooth curve instead, turning
+    // the squares into a glow; it is also dimmed a little near the ground so the sharper
+    // detail underneath shows.
+    vec3 lights = vec3(0.0);
+    if (uHasNight > 0.5) {
+      vec2 lonLat = vec2(0.5 + atan(-N.z, N.x) / 6.2831853, 0.5 + asin(clamp(N.y, -1.0, 1.0)) / 3.1415927);
+      vec3 nightTex = softLights(lonLat);
+      float brightness = max(nightTex.r, max(nightTex.g, nightTex.b));
+      lights = nightTex * mix(vec3(1.36, 0.94, 0.54), vec3(1.16, 1.08, 0.92), smoothstep(0.25, 0.90, brightness)) * 1.55;
+      lights *= mix(1.0, 0.62, uClose);
+    }
+    float lightsOn = 1.0 - smoothstep(-0.14, 0.03, sun);
+
+    vec3 color = mix(night, lit, day) + lights * lightsOn;
+    gl_FragColor = vec4(clamp(color, 0.0, 4.0), clamp(uOpacity * uCover, 0.0, 1.0));
   }`;
 
 export class EarthTiles {
@@ -69,6 +122,10 @@ export class EarthTiles {
   private readonly loader = new THREE.TextureLoader().setCrossOrigin('anonymous');
   private readonly sun = { value: new THREE.Vector3(1, 0, 0) }; // one uniform shared by every tile
   private readonly cover = { value: 1 }; // shared too
+  private readonly close = { value: 0 };
+  private readonly nightMap: { value: THREE.Texture | null };
+  private readonly hasNightMap: { value: number };
+  private readonly nightTexel = { value: new THREE.Vector2(1 / 4096, 1 / 2048) };
   private readonly earth: THREE.Object3D;
   private wanted: string[] = []; // tiles for the current view, nearest the centre first
   private loading = 0;
@@ -79,6 +136,19 @@ export class EarthTiles {
   constructor(earth: THREE.Object3D) {
     this.earth = earth;
     earth.add(this.group);
+    // Borrow the globe's city-lights picture: the same uniform objects, so it arrives here
+    // the moment the globe has loaded it.
+    const globeUniforms = ((earth as THREE.Mesh).material as THREE.ShaderMaterial | undefined)?.uniforms;
+    this.nightMap = globeUniforms?.uNight ?? { value: null };
+    this.hasNightMap = globeUniforms?.uHasNight ?? { value: 0 };
+  }
+
+  /** One short phrase for About → "This device", so a "no sharp ground" report can be diagnosed. */
+  get status(): string {
+    if (!this.enabled) return 'sharp ground off';
+    if (this.offline) return 'sharp ground: imagery service not reachable';
+    const shown = this.shown;
+    return shown > 0 ? `sharp ground: ${shown} tiles shown` : 'sharp ground: none needed at this distance';
   }
 
   /** Number of detailed tiles on screen (for the status line / debugging). */
@@ -96,7 +166,10 @@ export class EarthTiles {
     // From far away the tiles are partly see-through, so the globe's drifting clouds still show;
     // close in (where those clouds are only a blur) they cover it completely.
     const altitude = this.earth.worldToLocal(camera.position.clone()).length() - EARTH_RADIUS;
-    this.cover.value = THREE.MathUtils.lerp(1, 0.6, THREE.MathUtils.smoothstep(altitude, 1.5, 5));
+    this.close.value = 1 - THREE.MathUtils.smoothstep(altitude, 1.5, 5);
+    const lightsPicture = this.nightMap.value?.image as { width?: number; height?: number } | undefined;
+    if (lightsPicture?.width && lightsPicture.height) this.nightTexel.value.set(1 / lightsPicture.width, 1 / lightsPicture.height);
+    this.cover.value = THREE.MathUtils.lerp(0.6, 1, this.close.value);
 
     if (realSeconds - this.lastPlan > 0.25) {
       this.lastPlan = realSeconds;
@@ -201,7 +274,10 @@ export class EarthTiles {
     geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
     geometry.setIndex(index);
     const material = new THREE.ShaderMaterial({
-      uniforms: { uMap: { value: null }, uSun: this.sun, uOpacity: { value: 0 }, uCover: this.cover },
+      uniforms: {
+        uMap: { value: null }, uNight: this.nightMap, uHasNight: this.hasNightMap, uNightTexel: this.nightTexel,
+        uSun: this.sun, uOpacity: { value: 0 }, uCover: this.cover, uClose: this.close,
+      },
       vertexShader,
       fragmentShader,
       transparent: true,

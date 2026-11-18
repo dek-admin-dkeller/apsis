@@ -261,7 +261,10 @@ reporting the same pass twice.
   as map tiles from the public GIBS service only while the camera is within about 6,000 km of
   the ground. Its finest level is roughly 600 m per pixel, so cities and coastlines sharpen
   but individual streets never appear. It shows no clouds, so the globe's cloud layer fades
-  out underneath it. Offline, or with the setting off, the globe's own picture is used.
+  out underneath it. It works on the night side too: close to the ground the land is shown
+  in brighter moonlight than is realistic (otherwise there would be nothing to see), with the
+  city lights smoothed into a glow on top. Offline, or with the setting off, the globe's own
+  picture is used. About → "This device" says how many detailed tiles are on screen.
 - **Name tags appear as you zoom.** The whole-Earth view names only the ISS, Tiangong, Hubble
   and your watchlist; closer in, well-known spacecraft and then the nearest objects are named
   (Layers → Name tags: Off / Well-known / As you zoom).
