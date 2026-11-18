@@ -1,0 +1,22 @@
+/* Constellations section of the Objects panel (ui/constellations.ts). */
+
+.constellation-pills { margin-top: 8px; }
+.constellation-pills button { display: inline-flex; align-items: baseline; gap: 6px; }
+.constellation-pills .count { font: 10.5px var(--font-mono); color: var(--muted); }
+.constellation-pills button.is-on { color: var(--cyan); border-color: rgba(127, 227, 255, 0.6); background: rgba(127, 227, 255, 0.12); }
+.constellation-pills button.is-on .count { color: inherit; opacity: 0.75; }
+
+.constellation-controls { display: grid; gap: 6px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.constellation-controls .field-label { margin: 6px 0 0; }
+.constellation-summary { color: var(--text); }
+.constellation-readout { margin-top: 4px; color: var(--text); font-variant-numeric: tabular-nums; }
+.constellation-controls .link { justify-self: start; margin-top: 4px; }
+
+/* What the colours of the coverage map mean: number of satellites above the horizon. */
+.constellation-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font: 10.5px var(--font-mono); color: var(--muted); }
+.constellation-legend span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.constellation-legend i { width: 9px; height: 9px; border-radius: 2px; opacity: 0.85; }
+
+@media (pointer: coarse) {
+  .constellation-pills button { min-height: 36px; }
+}

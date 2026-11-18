@@ -1319,3 +1319,23 @@ body.quiet-ui .timebar[data-direction='back']:not(.is-open) #speeds button.is-on
 .share-row { display: flex; gap: 8px; width: 100%; }
 #share-url { flex: 1; min-width: 0; height: 32px; padding: 0 9px; background: var(--inset); border: 1px solid var(--line); border-radius: var(--radius-s); color: var(--text); font: 11.5px var(--font-mono); }
 #share-url:focus { outline: none; border-color: var(--cyan); }
+
+/* ---------- colour picker with six choices, its legend, highlighted feed rows ---------- */
+
+.segmented.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); }
+.segmented.grid3 button { border: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.segmented.grid3 button:nth-child(3n) { border-right: 0; }
+.segmented.grid3 button:nth-last-child(-n + 3) { border-bottom: 0; }
+#color-legend i { background: var(--legend-bar, none); }
+#color-legend .swatches { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 2px; font-size: 11px; color: var(--muted); }
+#color-legend .swatches span { display: flex; align-items: center; gap: 5px; }
+#color-legend .swatches b { width: 8px; height: 8px; border-radius: 50%; }
+.watch-list li.is-on { background: rgba(127, 227, 255, 0.12); }
+#contacts-open { margin-top: 8px; }
+.keys-crew { margin: 0 14px 6px; }
+
+/* ---------- search suggestions: photo or 3D model beside each name ---------- */
+
+#suggestions li .thumb { flex: none; width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--line-strong); background: var(--inset); object-fit: contain; }
+#suggestions li .thumb.is-photo { object-fit: cover; }
+#suggestions li { padding-top: 4px; padding-bottom: 4px; }

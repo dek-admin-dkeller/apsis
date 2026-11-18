@@ -22,8 +22,10 @@ import { makeSatrec, rangeKm, stateAt, wrapLon, type Observer, type Vec3 } from 
 import { loadRegions } from './data/regions.ts';
 import { loadFacts, type CatalogFacts } from './data/satcat.ts';
 import type { OmmRecord, Satellite, Snapshot } from './data/types.ts';
+import { Aurora } from './render/aurora.ts';
 import { CameraRig } from './render/cameraRig.ts';
 import { ConjunctionMarkers } from './render/conjunctionMarkers.ts';
+import { ConstellationView } from './render/constellation.ts';
 import { EncounterViz, type EncounterFrame } from './render/encounterViz.ts';
 import { FirstPersonView } from './render/firstPerson.ts';
 import { GeoOverlay } from './render/geoOverlay.ts';
@@ -32,13 +34,16 @@ import { GridViz } from './render/gridViz.ts';
 import { GroundTrack } from './render/groundTrack.ts';
 import { OrbitLine } from './render/orbitLine.ts';
 import { SatelliteModel } from './render/satModels.ts';
-import { behindEarth, SatelliteCloud } from './render/satellites.ts';
+import { behindEarth, legendFor, SatelliteCloud } from './render/satellites.ts';
 import { createScene, EARTH_RADIUS, EARTH_RADIUS_KM, KM } from './render/scene.ts';
 import { SiteMarker } from './render/siteMarker.ts';
 import { createSky } from './render/sky.ts';
 import { AheadPanel } from './ui/ahead.ts';
 import { BenchmarkModal } from './ui/benchmarkModal.ts';
 import { Cinema } from './ui/cinema.ts';
+import { ConstellationsPanel } from './ui/constellations.ts';
+import { Contacts } from './ui/contacts.ts';
+import { renderCrew, renderCrewSummary } from './ui/crew.ts';
 import { CUSTOM_NORAD_ID, Designer } from './ui/designer.ts';
 import { renderFeed } from './ui/feed.ts';
 import { $, fmt, fmtInt } from './ui/dom.ts';
@@ -121,6 +126,10 @@ const encModels = [new SatelliteModel(kit, false), new SatelliteModel(kit, false
 const labels = new Labels(kit, sim, cloud);
 const trace = new HashTrace(sim);
 const site = new SiteMarker(globe.earth, kit); // the ground station / "you are here" marker
+const aurora = new Aurora(globe.earth); // tonight's aurora oval (live NOAA forecast)
+aurora.onStatus = (text) => ($('aurora-status').textContent = text);
+const constView = new ConstellationView(kit.eciGroup, globe.earth); // all orbits of one constellation + its ground coverage
+let constMembers: number[] = []; // object indices of the constellation on show
 const fp = new FirstPersonView(kit, canvas, () => {
   // back from a ride-along or sky view: the ordinary camera and the 3D model take over again
   model.enabled = store.settings.model && !encPanel.isOpen;
@@ -197,7 +206,7 @@ let qualitySetting: Settings['quality'] | null = null;
 function applySettings(s: Settings, changed: keyof Settings | null): void {
   cloud.setColorMode(s.colorMode);
   for (const mode of ['category', 'orbit', 'altitude']) document.body.classList.toggle(`color-${mode}`, s.colorMode === mode);
-  $('altitude-legend').classList.toggle('is-hidden', s.colorMode !== 'altitude');
+  if (changed === null || changed === 'colorMode') renderLegend(s.colorMode);
   labels.mode = s.labels;
   cloud.setPointSize(s.pointSize);
   kit.setBloom(s.glow);
@@ -211,6 +220,7 @@ function applySettings(s: Settings, changed: keyof Settings | null): void {
   site.set(s.siteLat, s.siteLon);
   site.setVisible(s.siteMarker);
   sky.setConstellations(s.constellations);
+  aurora.setVisible(s.aurora);
   globe.setClouds(s.clouds);
   globe.setAtmosphere(s.atmosphere);
   overlay.setBorders(s.borders);
@@ -227,6 +237,32 @@ function applySettings(s: Settings, changed: keyof Settings | null): void {
   }
   // Blurring the globe behind every panel costs GPU time each frame; skip it in Fast quality.
   document.body.classList.toggle('no-glass', !s.glass || kit.quality === 'fast');
+}
+/** The key under the colour picker: a gradient with tick labels, or a list of swatches. */
+function renderLegend(mode: Settings['colorMode']): void {
+  const legend = legendFor(mode);
+  const box = $('color-legend');
+  box.classList.toggle('is-hidden', legend === null);
+  box.replaceChildren();
+  if (!legend) return;
+  if ('gradient' in legend) {
+    const bar = document.createElement('i');
+    bar.style.setProperty('--legend-bar', legend.gradient);
+    const ticks = document.createElement('div');
+    ticks.append(...legend.ticks.map((text) => Object.assign(document.createElement('span'), { textContent: text })));
+    box.append(bar, ticks);
+  } else {
+    const list = document.createElement('div');
+    list.className = 'swatches';
+    list.append(...legend.swatches.map(([name, color]) => {
+      const item = document.createElement('span');
+      const dot = document.createElement('b');
+      dot.style.background = color;
+      item.append(dot, name);
+      return item;
+    }));
+    box.append(list);
+  }
 }
 const store = new SettingsStore(applySettings);
 
@@ -405,6 +441,10 @@ function select(sat: Satellite | null): void {
   if (isPhone()) openPanel(null); // one sheet at a time on a phone
   inspector.show(sat, facts.get(sat.noradId), true);
   inspector.setStarred(watch.has(sat));
+  // The two crewed stations also list who is aboard right now.
+  $('rc-crew').replaceChildren();
+  if (sat.name === 'ISS (ZARYA)') renderCrew($('rc-crew'), 'ISS');
+  else if (sat.name === 'CSS (TIANHE)') renderCrew($('rc-crew'), 'Tiangong');
   rig.flyToFocus(() => selScene, FOCUS_DISTANCE);
 }
 
@@ -635,6 +675,8 @@ function applyCatalog(next: Catalog): void {
   filters.setCatalog(next, cloud.visible);
   labels.setCatalog(next);
   watch.setCatalog(next);
+  constMembers = [];
+  constPanel.catalogChanged();
   labels.setPinned(watch.indices());
   ahead.reset();
   $('stat-tracked').textContent = fmtInt(next.sats.length);
@@ -680,13 +722,41 @@ const designer = new Designer($('designer-body'), {
   now: () => clock.time,
 });
 
+const constPanel = new ConstellationsPanel($('constellation-body'), {
+  catalog: () => catalog,
+  highlight: (indices) => cloud.setHighlight(indices),
+  show: (members, options) => {
+    constMembers = members ?? [];
+    // Drawing 11,000 Starlink orbits would be a solid ball: sample at most 300 evenly.
+    const stride = Math.max(1, Math.ceil(constMembers.length / 300));
+    const drawn = options.orbits && catalog ? constMembers.filter((_, k) => k % stride === 0).map((i) => catalog!.sats[i]) : [];
+    constView.setOrbits(drawn.map(makeSatrec), drawn.map((sat) => sat.periodMin), new THREE.Color(options.color));
+    constView.setCoverage(constMembers.length > 0 && options.coverage, options.minElevationDeg);
+  },
+  stats: () => ({ coveredFraction: constView.coveredFraction, maxInView: constView.maxInView }),
+});
+
+const contacts = new Contacts({
+  watchlist: () => (catalog ? watch.indices().map((i) => catalog!.sats[i]) : []),
+  home: () => observer,
+  now: () => clock.time,
+  select: (sat) => select(sat),
+  jumpTo: (timeMs) => jumpTo(timeMs),
+});
+$('contacts-open').addEventListener('click', () => contacts.open());
+
 function updateDataNote(): void {
   if (!catalog) return;
   const ageH = (Date.now() - Date.parse(catalog.fetchedAt)) / 3.6e6;
   $('data-note').textContent =
     `Orbital elements ${catalog.live ? 'downloaded' : 'saved'} ${utcStamp(Date.parse(catalog.fetchedAt))} UTC, ${ageH < 48 ? `${fmt(ageH, 0)} hours` : `${fmt(ageH / 24, 0)} days`} ago. `
     + (facts.size > 0 ? `Catalogue facts loaded for ${fmtInt(facts.size)} objects.` : 'Catalogue facts (owner, launch, size) are not bundled yet.');
-  renderFeed(catalog, facts, (sat) => select(sat));
+  const all = catalog;
+  cloud.setOwners((index) => facts.get(all.sats[index].noradId)?.owner);
+  renderFeed(catalog, facts, (sat) => select(sat), (members, lead) => {
+    cloud.setHighlight(members); // a satellite train: light up the whole batch
+    if (lead) select(lead);
+  });
   $('about-data').textContent = `${fmtInt(catalog.sats.length)} objects, elements from ${utcStamp(Date.parse(catalog.fetchedAt))} UTC`;
 }
 
@@ -809,7 +879,10 @@ function toggleFullscreen(): void {
 $('fullscreen').addEventListener('click', toggleFullscreen);
 
 const keysOverlay = $('keys');
-const setKeys = (open: boolean) => keysOverlay.classList.toggle('is-hidden', !open);
+const setKeys = (open: boolean) => {
+  keysOverlay.classList.toggle('is-hidden', !open);
+  if (open) renderCrewSummary($('crew-summary'));
+};
 $('keys-open').addEventListener('click', () => setKeys(true));
 $('keys-close').addEventListener('click', () => setKeys(false));
 keysOverlay.addEventListener('pointerdown', (event) => {
@@ -1209,6 +1282,9 @@ function frame(now: number): void {
   labels.update(realSeconds, selected ? selected.index : -1, labelAvoid);
   updateSkyLabels();
   site.update(realSeconds);
+  aurora.update(realSeconds, globe.sunDirection);
+  constView.update(clock.time, realSeconds, constMembers.length, (i, out) => sim.getPosition(constMembers[i], out));
+  constPanel.frame(realSeconds);
   watch.frame(realSeconds);
   markers.update(realSeconds);
   updateGrid();

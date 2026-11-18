@@ -44,23 +44,68 @@ const fragmentShader = /* glsl */ `
     gl_FragColor = vec4(vColor * (0.55 + core * 1.25), core * 0.95 + halo * 0.35);
   }`;
 
-export type ColorMode = 'category' | 'orbit' | 'altitude';
+export type ColorMode = 'category' | 'orbit' | 'altitude' | 'owner' | 'age' | 'tilt';
 
-/** Altitude colour ramp stops (km → colour), on a log scale from low orbit to beyond GEO. */
+/** A colour ramp: value → colour stops, interpolated (optionally on a log scale). */
+type Ramp = { stops: [number, string][]; log?: boolean };
+
+/** Altitude (km), on a log scale from low orbit to beyond GEO. */
 export const ALTITUDE_STOPS: [number, string][] = [[300, '#5ad1ff'], [800, '#6dffb0'], [2000, '#f7f06a'], [20000, '#ff9d4d'], [40000, '#ff5d8f']];
+const RAMPS: Record<'altitude' | 'age' | 'tilt', Ramp> = {
+  altitude: { stops: ALTITUDE_STOPS, log: true },
+  // launch year: the oldest hardware glows red, this year's is cyan
+  age: { stops: [[1975, '#ff5d5d'], [2000, '#ff9d4d'], [2015, '#f7f06a'], [2022, '#6dffb0'], [2026, '#5ad1ff']] },
+  // inclination: equatorial → mid-latitude → polar → retrograde (sun-synchronous and beyond)
+  tilt: { stops: [[0, '#f7f06a'], [35, '#ff9d4d'], [55, '#5ad1ff'], [90, '#ffffff'], [100, '#b693ff'], [145, '#ff5d8f']] },
+};
 
-export function colorFor(sat: Satellite, mode: ColorMode): string {
-  if (mode === 'category') return CATEGORY_COLORS[sat.category];
-  if (mode === 'orbit') return ORBIT_COLORS[sat.orbitClass];
-  const alt = Math.max(sat.meanAltKm, 1);
-  for (let i = 1; i < ALTITUDE_STOPS.length; i++) {
-    const [a, ca] = ALTITUDE_STOPS[i - 1], [b, cb] = ALTITUDE_STOPS[i];
-    if (alt <= b || i === ALTITUDE_STOPS.length - 1) {
-      const t = THREE.MathUtils.clamp(Math.log(alt / a) / Math.log(b / a), 0, 1);
+/** Who owns it, grouped into the handful of operators that own nearly everything. */
+const OWNER_GROUPS: [name: string, color: string, codes: string[]][] = [
+  ['United States', '#6fb1ff', ['US']],
+  ['China', '#ff6b6b', ['PRC']],
+  ['Russia', '#ffb454', ['CIS']],
+  ['Europe', '#4ff0b4', ['ESA', 'FR', 'GER', 'IT', 'SPN', 'UK', 'EUME', 'EUTE', 'SES', 'LUXE', 'NETH', 'NOR', 'SWED', 'FIN', 'DEN', 'BEL', 'SWTZ', 'AUST', 'POL', 'CZCH', 'POR', 'GREC', 'FGER', 'FRIT']],
+  ['Japan', '#ffffff', ['JPN']],
+  ['India', '#ffd966', ['IND']],
+];
+const OWNER_OTHER = '#7f90a6';
+const ownerColor = new Map<string, string>(); // owner code → colour: one hash lookup per object
+for (const [, color, codes] of OWNER_GROUPS) for (const code of codes) ownerColor.set(code, color);
+
+function ramp(r: Ramp, value: number): string {
+  const { stops } = r;
+  for (let i = 1; i < stops.length; i++) {
+    const [a, ca] = stops[i - 1], [b, cb] = stops[i];
+    if (value <= b || i === stops.length - 1) {
+      const t = THREE.MathUtils.clamp(r.log ? Math.log(Math.max(value, 1) / a) / Math.log(b / a) : (value - a) / (b - a), 0, 1);
       return '#' + new THREE.Color(ca).lerp(new THREE.Color(cb), t).getHexString();
     }
   }
-  return ALTITUDE_STOPS[0][1];
+  return stops[0][1];
+}
+
+export function colorFor(sat: Satellite, mode: ColorMode, owner?: string): string {
+  switch (mode) {
+    case 'category': return CATEGORY_COLORS[sat.category];
+    case 'orbit': return ORBIT_COLORS[sat.orbitClass];
+    case 'altitude': return ramp(RAMPS.altitude, sat.meanAltKm);
+    case 'age': return sat.launchYear ? ramp(RAMPS.age, sat.launchYear) : OWNER_OTHER;
+    case 'tilt': return ramp(RAMPS.tilt, sat.inclinationDeg);
+    case 'owner': return (owner && ownerColor.get(owner)) || OWNER_OTHER;
+  }
+}
+
+/** What the colours mean, for the legend under the colour picker (null = the filter chips already show it). */
+export type Legend = { gradient: string; ticks: string[] } | { swatches: [string, string][] } | null;
+export function legendFor(mode: ColorMode): Legend {
+  const bar = (r: Ramp) => `linear-gradient(90deg, ${r.stops.map(([, c], i) => `${c} ${Math.round((i / (r.stops.length - 1)) * 100)}%`).join(', ')})`;
+  switch (mode) {
+    case 'altitude': return { gradient: bar(RAMPS.altitude), ticks: ['300 km', '2,000', '40,000 km'] };
+    case 'age': return { gradient: bar(RAMPS.age), ticks: ['1975', '2015', 'this year'] };
+    case 'tilt': return { gradient: bar(RAMPS.tilt), ticks: ['equatorial', 'polar', 'backwards'] };
+    case 'owner': return { swatches: [...OWNER_GROUPS.map(([name, color]) => [name, color] as [string, string]), ['Everyone else', OWNER_OTHER]] };
+    default: return null;
+  }
 }
 
 export class SatelliteCloud {
@@ -75,8 +120,12 @@ export class SatelliteCloud {
   private attrB!: THREE.BufferAttribute;
   private attrVisible!: THREE.BufferAttribute;
   private attrColor!: THREE.BufferAttribute;
+  private attrSize!: THREE.BufferAttribute;
+  private baseSizes = new Float32Array(0);
   private catalog: Catalog | null = null;
   private colorMode: ColorMode = 'category';
+  private owners: (index: number) => string | undefined = () => undefined;
+  private highlight: Set<number> | null = null; // when set: these stand out, the rest are dimmed
 
   constructor(kit: SceneKit, sim: SimClient) {
     this.kit = kit;
@@ -113,25 +162,50 @@ export class SatelliteCloud {
     this.geometry.setAttribute('position', this.attrA);
     this.geometry.setAttribute('positionB', this.attrB);
     this.geometry.setAttribute('aColor', this.attrColor);
+    this.baseSizes = sizes;
+    this.attrSize = new THREE.BufferAttribute(new Float32Array(sizes), 1);
+    this.geometry.setAttribute('aSize', this.attrSize);
+    this.highlight = null;
     this.setColorMode(this.colorMode);
-    this.geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
     this.geometry.setAttribute('aVisible', this.attrVisible);
     this.points.visible = false; // until the first snapshot arrives
   }
 
-  /** Recolour every point: by category, by orbit class, or by altitude. */
+  /** Recolour every point by the chosen property (type, orbit, altitude, owner, launch year or tilt). */
   setColorMode(mode: ColorMode): void {
     this.colorMode = mode;
+    this.repaint();
+  }
+
+  /** Where owner codes come from (the catalogue facts load after the catalogue itself). */
+  setOwners(lookup: (index: number) => string | undefined): void {
+    this.owners = lookup;
+    if (this.colorMode === 'owner') this.repaint();
+  }
+
+  /** Make a group stand out (a launch, a constellation) and dim everything else; null = back to normal. */
+  setHighlight(indices: number[] | null): void {
+    this.highlight = indices && indices.length > 0 ? new Set(indices) : null;
+    this.repaint();
+  }
+
+  private repaint(): void {
     if (!this.catalog) return;
     const color = new THREE.Color();
-    const array = this.attrColor.array as Float32Array;
+    const colors = this.attrColor.array as Float32Array;
+    const sizes = this.attrSize.array as Float32Array;
+    const group = this.highlight;
     for (const sat of this.catalog.sats) {
-      color.set(colorFor(sat, mode)); // sRGB hex → linear working space
-      array[sat.index * 3] = color.r;
-      array[sat.index * 3 + 1] = color.g;
-      array[sat.index * 3 + 2] = color.b;
+      const i = sat.index;
+      color.set(colorFor(sat, this.colorMode, this.owners(i))); // sRGB hex → linear working space
+      const level = !group ? 1 : group.has(i) ? 1.5 : 0.14;
+      colors[i * 3] = color.r * level;
+      colors[i * 3 + 1] = color.g * level;
+      colors[i * 3 + 2] = color.b * level;
+      sizes[i] = this.baseSizes[i] * (group?.has(i) ? 1.7 : 1);
     }
     this.attrColor.needsUpdate = true;
+    this.attrSize.needsUpdate = true;
   }
 
   setPointSize(scale: number): void {

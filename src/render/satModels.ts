@@ -1150,6 +1150,40 @@ export class SatelliteModel {
   }
 }
 
+// ---- still thumbnails (search suggestions) ---------------------------------------------------
+
+const thumbnails = new Map<ModelKind, string>(); // kind → PNG data URL, rendered once each
+let thumbRenderer: THREE.WebGLRenderer | null = null;
+
+/** A small picture of a model kind, for lists. Rendered on first use with a shared off-screen renderer, then cached. */
+export function modelThumbnail(kind: ModelKind): string {
+  const cached = thumbnails.get(kind);
+  if (cached) return cached;
+  try {
+    thumbRenderer ??= new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
+    thumbRenderer.setSize(96, 96, false);
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 20);
+    camera.position.set(1.5, 1.0, 1.9);
+    camera.lookAt(0, 0, 0);
+    addLights(scene).position.set(2.5, 3, 1.5);
+    const rim = new THREE.DirectionalLight(0x5ad1ff, 1.4);
+    rim.position.set(-3, -1, -2);
+    scene.add(rim);
+    const holder = new THREE.Group();
+    holder.add(buildModel(kind));
+    holder.rotation.y = 0.6;
+    scene.add(holder);
+    thumbRenderer.render(scene, camera);
+    const url = thumbRenderer.domElement.toDataURL('image/png');
+    disposeModel(holder);
+    thumbnails.set(kind, url);
+    return url;
+  } catch {
+    return ''; // no WebGL context to spare: the caller falls back to a plain dot
+  }
+}
+
 /** A small, slowly turning view of a model for the info card (its own tiny renderer). */
 export class ModelPreview {
   private readonly renderer: THREE.WebGLRenderer;

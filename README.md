@@ -46,7 +46,7 @@ status line sit along the bottom.
 | Look around | drag = rotate, scroll = zoom, right-drag = pan |
 | Inspect an object | click a dot, or search by name / NORAD ID (press `/`). The camera flies to the object and locks on: dragging now turns the view around **it**, not the Earth (`T` unlocks) |
 | Inspector tabs | **Live** telemetry, ground-track map, altitude chart · **Orbit** shape to scale, orbital elements, speed and sunlight charts · **Passes** over your ground station with a sky chart · **Record** owner, launch, size, a Wikipedia summary and the raw element record |
-| Objects panel (`O`) | filter by type, orbit regime, altitude band; colour mode, labels, marker size; shortcuts to notable objects |
+| Objects panel (`O`) | filter by type, orbit regime, altitude band; colour by type, orbit, altitude, owner, launch year or tilt; labels, marker size; shortcuts to notable objects |
 | Layers panel (`L`) | orbit path, ground track, coverage footprint, 3D model; ground-station marker, clouds, atmosphere, coastlines and borders, lat/long grid, day/night line; stars, constellations, planets, names in the sky; screening cells (`G`) |
 | Close-approach monitor (`C`) | **Right now**: switch it on, set the alert distance; the list shows every pair inside it. **Coming hours**: scan up to 24 hours ahead for predicted close passes. Click any pair to open the **close-approach view**: both spacecraft as 3D models, their flight paths, the live distance between them, a range chart you can scrub, and a slow-motion replay |
 | Ride along (`V`) | from the inspector: sit on the selected object and look out from it. Drag to look around, scroll to zoom |
@@ -57,7 +57,12 @@ status line sit along the bottom.
 | Tour | offered on the first visit and always available from the controls sheet (`?`) |
 | Autopilot (`A`) | a hands-free cinematic tour of the view; any key or click stops it |
 | Record (`M`) | saves a video of the 3D view (with captions) to your downloads |
-| Launch and re-entry feed | Objects panel: **Newest in orbit** (grouped by launch) and **Lowest orbits** (next to come down) |
+| Launch and re-entry feed | Objects panel: **Newest in orbit** (grouped by launch), **Satellite trains** (recent batches still flying in a line; click to light one up) and **Lowest orbits** (next to come down) |
+| Constellations | Objects panel: pick GPS, Starlink, Iridium and so on to draw all its orbits and a live map of how many of its satellites can see each point on the ground |
+| Aurora | Layers → Earth: tonight's aurora oval from NOAA's forecast, with the current geomagnetic activity |
+| People in space | who is aboard the ISS and Tiangong right now, in those stations' Record tab |
+| Contact timeline | Watchlist → **Contact timeline**: when each of several ground stations can see each starred object over the next 24 hours |
+| Point your phone | in the Sky view on a phone, **Use phone motion** aims the view wherever the phone points |
 | Design a satellite | Objects panel: choose an orbit, launch your own object into the live catalogue, and check what it will pass close to in the next 24 hours |
 | Time | the bar at the bottom: drag the timeline to move up to 12 hours either way, pause (`Space`), 1× – 1000×, run backwards (`R`), step 10 minutes (`[` `]`), **Now** (`N`), or click the clock to type a date |
 | Views | `1` `2` `3`, or the three buttons at the foot of the tool rail. Left alone, a whole-Earth view drifts slowly around the planet (Layers → Earth to switch off) |
@@ -197,13 +202,16 @@ src/
     satModels.ts         procedural 3D models (20 kinds of spacecraft)
     cameraRig.ts         fly-to, object-centred focus camera, view presets
     firstPerson.ts       ride-along and sky-view cameras        siteMarker.ts   the ground-station dot
+    constellation.ts     all orbits of a group + ground coverage map   aurora.ts   live aurora oval
     orbitLine.ts  groundTrack.ts  encounterViz.ts  conjunctionMarkers.ts  gridViz.ts
   ui/
     inspector.ts         the selected object's four tabs          charts.ts   hand-drawn canvas charts
     monitor.ts           close-approach list (right now)          encounterPanel.ts   one pair in detail
     ahead.ts             close passes predicted for the coming hours
     watchlist.ts         starred objects (a Set of NORAD numbers)  tour.ts   first-visit tour
-    feed.ts              newest launches and lowest orbits         designer.ts   design-your-own satellite
+    feed.ts              newest launches, trains, lowest orbits    designer.ts   design-your-own satellite
+    constellations.ts    constellation picker                      contacts.ts   ground-station contact timeline
+    crew.ts              people in space                           share.ts   QR code and link
     cinema.ts            autopilot tour and video recording        sheet.ts   draggable bottom sheets on phones
     howto.ts             the walkthrough page                     hashTrace.ts   one object through the hash
     filters.ts  search.ts  settings.ts  timeControls.ts  labels.ts  benchmarkModal.ts  intro.ts
@@ -238,6 +246,8 @@ reporting the same pass twice.
 - **Catalogue facts** (owner, launch date and site, object type, radar size) come from
   CelesTrak's SATCAT, saved by `npm run fetch-data` to `public/data/satcat.json`. The file
   is optional; without it those rows show a dash.
+- **Aurora, geomagnetic activity and station crews** are fetched live when used (NOAA Space
+  Weather Prediction Center and a public crew list); offline, those features stay empty.
 - **Photos and descriptions** come from Wikipedia, fetched when an object is selected. An
   object is matched to the article for its programme (a Starlink satellite shows the
   Starlink article's picture), so the photo shows that kind of spacecraft, not necessarily

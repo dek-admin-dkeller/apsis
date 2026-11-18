@@ -148,6 +148,7 @@
               <summary>Watchlist</summary>
               <ol class="watch-list" id="watch-list"></ol>
               <p class="note" id="watch-empty">Star an object in its inspector to keep it here.</p>
+              <button class="btn wide" id="contacts-open">Contact timeline</button>
             </details>
             <details class="sec" open>
               <summary>Type</summary>
@@ -167,13 +168,11 @@
             <details class="sec" open>
               <summary>Appearance</summary>
               <p class="field-label">Colour by</p>
-              <div class="segmented" data-setting="colorMode">
+              <div class="segmented grid3" data-setting="colorMode">
                 <button data-value="category">Type</button><button data-value="orbit">Orbit</button><button data-value="altitude">Altitude</button>
+                <button data-value="owner">Owner</button><button data-value="age">Launch year</button><button data-value="tilt">Tilt</button>
               </div>
-              <div class="legend is-hidden" id="altitude-legend">
-                <i></i>
-                <div><span>300 km</span><span>2,000</span><span>40,000 km</span></div>
-              </div>
+              <div class="legend is-hidden" id="color-legend"></div>
               <p class="field-label">Name labels</p>
               <div class="segmented" data-setting="labels">
                 <button data-value="off">Off</button><button data-value="notable">Notable</button><button data-value="nearby">Nearby</button>
@@ -190,6 +189,16 @@
             <details class="sec">
               <summary>Newest in orbit</summary>
               <ol class="watch-list" id="feed-new"></ol>
+            </details>
+            <details class="sec">
+              <summary>Satellite trains</summary>
+              <p class="note">Batches launched in the last two months, still flying in a line. Click one to light it up.</p>
+              <ol class="watch-list" id="feed-trains"></ol>
+              <p class="note is-hidden" id="feed-trains-empty">No recent batches in the data.</p>
+            </details>
+            <details class="sec">
+              <summary>Constellations</summary>
+              <div id="constellation-body"></div>
             </details>
             <details class="sec">
               <summary>Lowest orbits</summary>
@@ -219,6 +228,7 @@
               <summary>Earth</summary>
               <label class="row-toggle"><span>Slowly circle the Earth</span><input type="checkbox" data-setting="earthDrift" /></label>
               <label class="row-toggle"><span>Ground station marker</span><input type="checkbox" data-setting="siteMarker" /></label>
+              <label class="row-toggle"><span>Aurora, live <span class="sum-note" id="aurora-status"></span></span><input type="checkbox" data-setting="aurora" /></label>
               <label class="row-toggle"><span>Clouds</span><input type="checkbox" data-setting="clouds" /></label>
               <label class="row-toggle"><span>Atmosphere</span><input type="checkbox" data-setting="atmosphere" /></label>
               <label class="row-toggle"><span>Coastlines and borders</span><input type="checkbox" data-setting="borders" /></label>
@@ -434,6 +444,7 @@
                 <div><dt>Source group</dt><dd id="rc-group" class="plain"></dd></div>
               </dl>
               <p class="note" id="rc-note"></p>
+              <div id="rc-crew"></div>
               <div class="about is-hidden" id="rc-about">
                 <p id="rc-extract"></p>
                 <a id="rc-wiki" target="_blank" rel="noopener noreferrer">Read more on Wikipedia</a>
@@ -746,6 +757,7 @@
     <div id="keys" class="overlay is-hidden">
       <div class="panel keys-card">
         <header class="panel-head"><h2>Controls</h2><button class="btn" id="tour-start">Take the tour</button><button class="icon-btn" id="keys-close" aria-label="Close">×</button></header>
+        <p class="note keys-crew" id="crew-summary"></p>
         <dl class="keys">
           <div><dt>Drag</dt><dd>Rotate around the Earth, or around the selected object</dd></div>
           <div><dt>Scroll</dt><dd>Zoom</dd></div>

@@ -25,6 +25,7 @@ export interface Settings {
   // Earth
   earthDrift: boolean;
   siteMarker: boolean;
+  aurora: boolean;
   clouds: boolean;
   atmosphere: boolean;
   borders: boolean;
@@ -57,6 +58,7 @@ const DEFAULTS: Settings = {
   autoOrbit: true,
   earthDrift: true,
   siteMarker: true,
+  aurora: false,
   clouds: true,
   atmosphere: true,
   borders: false,

@@ -1,0 +1,120 @@
+/* Contact timeline (src/ui/contacts.ts): ground stations × watchlist over the next 24 hours. */
+
+.contacts-card {
+  width: min(980px, 100%);
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--solid-strong);
+}
+.contacts-card .panel-head h2 + span { display: block; margin-top: 1px; }
+
+.contacts-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  gap: 10px;
+  padding: 4px 14px 16px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+/* ---------- stations ---------- */
+
+.contacts-stations { display: flex; flex-wrap: wrap; gap: 6px; }
+.contacts-station {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 3px 4px 3px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--inset);
+  font-size: 12px;
+  line-height: 20px;
+}
+.contacts-station.is-home { padding-right: 10px; border-color: rgba(91, 227, 164, 0.45); }
+.contacts-station b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.contacts-station span { flex: none; font: 10.5px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--muted); }
+.contacts-station button {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+}
+.contacts-station button:hover { color: var(--text); background: var(--hover); }
+
+.contacts-quick button:disabled { opacity: 0.4; cursor: default; pointer-events: none; }
+
+.contacts-add { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+.contacts-add .text-field { margin-top: 0; }
+.contacts-add .btn { height: 30px; }
+.contacts-form-note { color: var(--amber); }
+
+/* ---------- chart ---------- */
+
+.contacts-working { display: grid; gap: 8px; min-width: 0; }
+.contacts-progress { min-height: 16px; }
+.contacts-progress:empty { display: block; } /* keep its line so the chart does not jump when it clears */
+.contacts-scroll {
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  background: var(--inset);
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+.contacts-chart { display: block; }
+.contacts-summary { font-size: 12.5px; line-height: 1.5; color: var(--text); }
+.contacts-summary:empty { display: none; }
+
+.contacts-empty { display: grid; justify-items: start; gap: 12px; padding: 18px 2px 6px; font-size: 13px; line-height: 1.5; }
+
+/* ---------- tooltip ---------- */
+
+.contacts-tip {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 45;
+  display: grid;
+  gap: 1px;
+  max-width: 260px;
+  padding: 7px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-s);
+  background: var(--solid-strong);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted);
+  pointer-events: none;
+}
+.contacts-tip b { font-weight: 600; color: var(--text); }
+.contacts-tip .contacts-tip-station { color: var(--text); }
+
+/* ---------- phones: a full-screen page (mobile.css turns .overlay > .panel into one) ---------- */
+
+@media (max-width: 760px) {
+  .contacts-card { display: block; }
+  .contacts-body { overflow: visible; padding: 8px 16px 24px; }
+  .contacts-add { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .contacts-add .text-field:first-child { grid-column: 1 / -1; }
+  .contacts-add .btn { grid-column: 1 / -1; height: 40px; }
+  .contacts-station { line-height: 28px; }
+  .contacts-station button { width: 28px; height: 28px; }
+  .contacts-scroll { -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+}

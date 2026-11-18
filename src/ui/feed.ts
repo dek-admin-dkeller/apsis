@@ -40,15 +40,22 @@ function row(sat: Satellite, title: string, right: string, onSelect: (sat: Satel
   return li;
 }
 
-export function renderFeed(catalog: Catalog, facts: Map<number, CatalogFacts>, onSelect: (sat: Satellite) => void): void {
+/** A recently launched batch still flying together: its objects, for highlighting. */
+export type TrainPick = (members: number[] | null, lead: Satellite | null) => void;
+let activeTrain = '';
+
+export function renderFeed(catalog: Catalog, facts: Map<number, CatalogFacts>, onSelect: (sat: Satellite) => void, onTrain: TrainPick): void {
   // ---- newest: one row per launch, most recent first
-  const launches = new Map<string, { first: Satellite; count: number; date: string }>(); // launch id → its objects
+  const launches = new Map<string, { first: Satellite; count: number; date: string; members: number[]; altSum: number }>(); // launch id → its objects
   for (const sat of catalog.sats) {
     if (sat.category === 'Debris' || sat.intlDes.length < 8) continue;
     const id = sat.intlDes.slice(0, 8); // "2026-204"
     const known = launches.get(id);
-    if (known) known.count++;
-    else launches.set(id, { first: sat, count: 1, date: facts.get(sat.noradId)?.launchDate ?? '' });
+    if (known) {
+      known.count++;
+      known.members.push(sat.index);
+      known.altSum += sat.meanAltKm;
+    } else launches.set(id, { first: sat, count: 1, date: facts.get(sat.noradId)?.launchDate ?? '', members: [sat.index], altSum: sat.meanAltKm });
   }
   const newest = [...launches.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1)).slice(0, 7);
   $('feed-new').replaceChildren(...newest.map(([id, launch]) => {
@@ -56,6 +63,27 @@ export function renderFeed(catalog: Catalog, facts: Map<number, CatalogFacts>, o
     const title = launch.count > 1 ? `${launch.first.name} + ${launch.count - 1} more` : launch.first.name;
     return row(launch.first, title, when, onSelect);
   }));
+
+  // ---- trains: big batches from the last two months, still climbing in a line from their drop-off orbit
+  const cutoff = Date.now() - 60 * 86400000;
+  const trains = [...launches.entries()]
+    .filter(([, launch]) => launch.count >= 6 && (launch.date ? Date.parse(launch.date) > cutoff : true))
+    .sort((a, b) => (a[0] < b[0] ? 1 : -1))
+    .slice(0, 6);
+  if (!trains.some(([id]) => id === activeTrain)) activeTrain = '';
+  $('feed-trains').replaceChildren(...trains.map(([id, launch]) => {
+    const when = launch.date ? `${Number(launch.date.slice(8, 10))} ${MONTHS[Number(launch.date.slice(5, 7)) - 1]}` : id;
+    const family = launch.first.name.replace(/[-\s]?\d+.*$/, '') || launch.first.name;
+    const li = row(launch.first, `${launch.count} × ${family}, ${fmtInt(launch.altSum / launch.count)} km`, when, () => {
+      // First click: light up the whole batch and go to its lead object. Second click: back to normal.
+      activeTrain = activeTrain === id ? '' : id;
+      onTrain(activeTrain ? launch.members : null, activeTrain ? launch.first : null);
+      for (const other of $('feed-trains').children) other.classList.toggle('is-on', other === li && activeTrain === id);
+    });
+    li.classList.toggle('is-on', id === activeTrain);
+    return li;
+  }));
+  $('feed-trains-empty').classList.toggle('is-hidden', trains.length > 0);
 
   // ---- lowest: smallest perigee (ignoring nonsense values from stale elements)
   const lowest = catalog.sats

@@ -31,7 +31,12 @@
   color: var(--cyan);
 }
 .fp-readout:empty { display: none; }
-.fp-exit { flex: none; }
+.fp-exit, .fp-motion, .fp-north { flex: none; }
+.fp-note { font-size: 11px; color: var(--amber, #ffb454); white-space: normal; max-width: 34ch; }
+.fp-note:empty { display: none; }
+.fp-motion[aria-pressed='true'] { color: var(--cyan); border-color: rgba(127, 227, 255, 0.5); background: rgba(127, 227, 255, 0.1); }
+/* While the phone aims the view there is nothing to grab. */
+body.fp-motion-on #scene { cursor: default; }
 
 /* The scene is something you grab and pull while a view is active. */
 body.first-person #scene { cursor: grab; }
@@ -64,8 +69,12 @@ body.first-person #scene:active { cursor: grabbing; }
 .fp-compass span.is-main { font-size: 13px; font-weight: 600; color: var(--text); }
 
 @media (max-width: 760px) {
-  .fp-banner { top: 52px; gap: 8px; padding: 5px 6px 5px 10px; }
+  /* Room for the extra "Use phone motion" button: the banner may wrap onto two lines. */
+  .fp-banner { top: 52px; gap: 6px 8px; padding: 5px 6px 5px 10px; flex-wrap: wrap; justify-content: center; width: max-content; }
+  .fp-text { flex: 1 1 100%; text-align: center; justify-items: center; }
+  .fp-note { max-width: none; }
+  .fp-motion, .fp-north, .fp-exit { min-height: 36px; }
   .fp-hint { display: none; }
   .fp-readout { min-width: 0; padding-left: 8px; font-size: 10.5px; }
-  .fp-title { font-size: 12px; max-width: 42vw; }
+  .fp-title { font-size: 12px; max-width: 86vw; }
 }
