@@ -7,18 +7,18 @@
  *   cyan  = the selected object's cell, with the 3 × 3 × 3 block of cells around it —
  *           the 27 buckets a neighbour query looks into.
  *
- * While a close approach is open the drawing is about that pair and nothing else: object A's
- * cell in cyan, object B's in amber, lightly filled so they read as boxes, and a faint
- * outline of the 3 × 3 × 3 block that A's query searches. The pair is found because B's cell
- * lies inside that block (or is the very same cell). While the two are inside the alert
- * distance both cells turn red: that is the moment the screening flags them.
+ * While a close approach is open the same grid is drawn, dimmer, around the pair, and on top
+ * of it: object A's cell in cyan, object B's in amber, lightly filled so they read as boxes,
+ * and a faint outline of the 3 × 3 × 3 block that A's query searches. The pair is found
+ * because B's cell lies inside that block (or is the very same cell). While the two are
+ * inside the alert distance both cells turn red: that is the moment the screening flags them.
  *
  * The cells are fixed in space and the objects cross one every second or so (10 km at
  * 7.6 km/s), while the camera travels with the pair. Drawn naively the highlighted cube
- * would jump to the next cell each time, and the surrounding lattice with it. So each lit
- * cell fades in as its object arrives and fades out behind it: a short trail of boxes,
- * like footprints, instead of a flicker. The other occupied cells nearby are left out of
- * this view for the same reason — hundreds of them streaming past at orbital speed is noise.
+ * would jump to the next cell each time. So each lit cell fades in as its object arrives and
+ * fades out behind it: a short trail of boxes, like footprints, instead of a flicker. For
+ * the same reason every cube of the grid fades with its distance from the centre of the
+ * drawing, so cells drift in and out at the edge instead of popping.
  */
 
 import * as THREE from 'three';
@@ -163,13 +163,7 @@ export class GridViz {
     const dt = THREE.MathUtils.clamp(seconds - this.lastSeconds, 0, 0.1);
     this.lastSeconds = seconds;
 
-    if (pair) {
-      this.drawPair(d, pair, dt, seconds);
-      this.cellsDrawn = this.lit.length;
-      this.finish();
-      return;
-    }
-    this.lit.length = 0;
+    if (!pair) this.lit.length = 0;
 
     // Hash the objects near the focus point — exactly what the screening does for all of them.
     const grid = new SpatialHash(d);
@@ -187,11 +181,23 @@ export class GridViz {
       cells.push({ ix, iy, iz, size: bucket.length, dist });
     });
     if (cells.length > MAX_CELLS) cells.sort((a, b) => a.dist - b.dist).length = MAX_CELLS;
+    // Cubes fade towards the edge of the drawn region (the focus moves at orbital speed, and a
+    // hard edge would make them pop in and out). Around a close approach the whole grid is
+    // dimmed so the pair's own cells stand out.
+    const dim = pair ? 0.5 : 1;
     for (const cell of cells) {
-      if (cell.size > 1) this.cube(cell.ix, cell.iy, cell.iz, d, 1, 1.5, 0.25, 0.3);
-      else this.cube(cell.ix, cell.iy, cell.iz, d, 1, 0.12, 0.62, 0.6);
+      const fade = dim * (1 - THREE.MathUtils.smoothstep(Math.sqrt(cell.dist), radius * 0.55, radius));
+      if (fade <= 0.01) continue;
+      if (cell.size > 1) this.cube(cell.ix, cell.iy, cell.iz, d, 1, 1.5 * fade, 0.25 * fade, 0.3 * fade);
+      else this.cube(cell.ix, cell.iy, cell.iz, d, 1, 0.12 * fade, 0.62 * fade, 0.6 * fade);
     }
     this.cellsDrawn = cells.length;
+
+    if (pair) {
+      this.drawPair(d, pair, dt, seconds);
+      this.finish();
+      return;
+    }
 
     if (selected >= 0 && this.sim.getPosition(selected, p)) {
       // The selected object's own cell and the 27-cell neighbourhood a query visits.

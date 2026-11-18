@@ -1375,6 +1375,10 @@ body.quiet-ui .timebar[data-direction='back']:not(.is-open) #speeds button.is-on
 }
 #about-diag { font-family: var(--font-ui); font-size: 12px; text-align: right; }
 
+/* A section reserved for a feature module (src/features/) stays out of sight until that module
+   has put something in it — so a module that is missing or failed to start leaves no empty box. */
+details[data-feature]:has(> div:empty) { display: none; }
+
 /* ---------- hover card: picture + what the object is ---------- */
 
 #tooltip {

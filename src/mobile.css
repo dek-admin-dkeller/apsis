@@ -855,3 +855,13 @@
   /* The buttons keep their place under the pill's width, so they do not jump apart. */
   #hud:has(.dock > .panel:not(.is-hidden)) .rail { padding-left: max(4px, calc((100% - 322px) / 2)); padding-right: max(4px, calc((100% - 322px) / 2)); }
 }
+
+/* ============================================================== 9. two buttons on the right
+ * The sky view has its own button (it is the thing a phone does that a laptop cannot), and
+ * everything else that used to float there — location, share — moved into the menu behind
+ * the second button.
+ */
+@media (max-width: 760px) {
+  #m-sky { color: var(--cyan); border-color: rgba(127, 227, 255, 0.32); }
+  #m-views button { min-height: 40px; }
+}

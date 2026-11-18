@@ -15,7 +15,9 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { stateAt, type Approach, type Vec3 } from '../data/ephemeris.ts';
 import { KM, type SceneKit } from './scene.ts';
 
-const PATH_SAMPLES = 160;
+const PATH_REACH_S = 600; // each flight path is drawn this long before and after: ten minutes, about a ninth of a low orbit
+const PATH_STEP_S = 4; // one point every four seconds (30 km): the arcs are gentle, so that is smooth
+const PATH_POINTS_MAX = 700;
 export const COLOR_A = new THREE.Color(0.35, 0.86, 1.0); // cyan
 export const COLOR_B = new THREE.Color(1.0, 0.68, 0.3); // amber
 
@@ -43,6 +45,10 @@ export class EncounterViz {
   private recA: SatRec | null = null;
   private recB: SatRec | null = null;
   private readonly origin = new THREE.Vector3();
+  private tcaMs = 0;
+  private windowS = 1;
+  private pathFromMs = 0; // the stretch of time the drawn paths cover
+  private pathToMs = 0;
 
   constructor(kit: SceneKit) {
     this.kit = kit;
@@ -124,23 +130,9 @@ export class EncounterViz {
     this.origin.set((a.position.x + b.position.x) / 2, (a.position.y + b.position.y) / 2, (a.position.z + b.position.z) / 2);
     this.group.position.copy(this.origin);
 
-    const build = (line: Line2, rec: SatRec, color: THREE.Color) => {
-      const positions: number[] = [], colors: number[] = [];
-      for (let i = 0; i <= PATH_SAMPLES; i++) {
-        const u = (i / PATH_SAMPLES) * 2 - 1; // −1 … 1
-        const state = stateAt(rec, approach.tcaMs + u * windowS * 1000);
-        if (!state) continue;
-        positions.push(state.position.x - this.origin.x, state.position.y - this.origin.y, state.position.z - this.origin.z);
-        const level = 0.18 + 1.1 * Math.pow(1 - Math.abs(u), 1.6); // brightest at the closest point
-        colors.push(color.r * level, color.g * level, color.b * level);
-      }
-      line.geometry.dispose();
-      line.geometry = new LineGeometry();
-      line.geometry.setPositions(positions);
-      line.geometry.setColors(colors);
-    };
-    build(this.pathA, recA, COLOR_A);
-    build(this.pathB, recB, COLOR_B);
+    this.tcaMs = approach.tcaMs;
+    this.windowS = windowS;
+    this.buildPaths(approach.tcaMs);
 
     const o = this.origin;
     const tcaA = [a.position.x - o.x, a.position.y - o.y, a.position.z - o.z];
@@ -156,6 +148,43 @@ export class EncounterViz {
     dots.set(tcaA, 6);
     dots.set(tcaB, 9);
     this.group.visible = true;
+  }
+
+  /**
+   * Draw both flight paths as long arcs through the closest point: bright where the two pass
+   * each other, dim before and after.
+   *
+   * They used to cover only the few seconds around the closest point (the stretch the range
+   * chart shows). But the view runs in live time, and two objects crossing at 10 km/s had left
+   * the ends of those short lines a moment after the panel opened — it looked as if their
+   * orbits had vanished. So the arcs are long, and `update()` rebuilds them further along
+   * whenever the clock nears either end.
+   */
+  private buildPaths(aroundMs: number): void {
+    if (!this.recA || !this.recB) return;
+    this.pathFromMs = Math.min(this.tcaMs, aroundMs) - PATH_REACH_S * 1000;
+    this.pathToMs = Math.max(this.tcaMs, aroundMs) + PATH_REACH_S * 1000;
+    const stepMs = Math.max(PATH_STEP_S * 1000, (this.pathToMs - this.pathFromMs) / PATH_POINTS_MAX);
+    const first = Math.ceil((this.pathFromMs - this.tcaMs) / stepMs), last = Math.floor((this.pathToMs - this.tcaMs) / stepMs);
+    const core = Math.max(this.windowS, 20) * 1000; // the bright part: the approach itself
+    const build = (line: Line2, rec: SatRec, color: THREE.Color) => {
+      const positions: number[] = [], colors: number[] = [];
+      for (let k = first; k <= last; k++) {
+        const t = this.tcaMs + k * stepMs; // counted from the closest point, so the line passes exactly through it
+        const state = stateAt(rec, t);
+        if (!state) continue;
+        positions.push(state.position.x - this.origin.x, state.position.y - this.origin.y, state.position.z - this.origin.z);
+        const level = 0.16 + 1.12 * Math.pow(Math.max(0, 1 - Math.abs(t - this.tcaMs) / core), 1.6);
+        colors.push(color.r * level, color.g * level, color.b * level);
+      }
+      if (positions.length < 6) return; // fewer than two usable points: keep whatever was drawn
+      line.geometry.dispose();
+      line.geometry = new LineGeometry();
+      line.geometry.setPositions(positions);
+      line.geometry.setColors(colors);
+    };
+    build(this.pathA, this.recA, COLOR_A);
+    build(this.pathB, this.recB, COLOR_B);
   }
 
   /** With 3D models drawn at the two objects, drop the solid centre dots and keep only the rings. */
@@ -174,6 +203,9 @@ export class EncounterViz {
     if (!this.group.visible || !this.recA || !this.recB) return null;
     const a = stateAt(this.recA, simTime), b = stateAt(this.recB, simTime);
     if (!a || !b) return null;
+    // Keep the drawn paths ahead of (and behind) the clock.
+    const margin = PATH_REACH_S * 250; // a quarter of the reach, in ms
+    if (simTime > this.pathToMs - margin || simTime < this.pathFromMs + margin) this.buildPaths(simTime);
     this.dotMaterial.uniforms.uTime.value = realSeconds;
     this.dotMaterial.uniforms.uPixelRatio.value = this.kit.pixelRatio;
     const o = this.origin;

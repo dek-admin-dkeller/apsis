@@ -159,23 +159,22 @@
 
       <!-- ============ phones only: three round buttons on the right edge; the middle one opens the list of views ============ -->
       <div id="m-stack" class="m-only">
-        <button data-proxy="#locate-top" aria-label="Show where I am on the globe">
-          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="5.5" /><circle cx="10" cy="10" r="1.6" /><path d="M10 1.5v3M10 15.5v3M1.5 10h3M15.5 10h3" /></svg>
+        <!-- Sky view: hold the phone up and it shows what is overhead. Asks for the location, then fills the screen. -->
+        <button id="m-sky" aria-label="Sky view: hold your phone up to see what is overhead">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2.5 15.5c2.3-2.4 4.8-3.6 7.5-3.6s5.2 1.2 7.5 3.6" /><path d="M10 2.6l1 2.5 2.5 1-2.5 1-1 2.5-1-2.5-2.5-1 2.5-1z" /><circle cx="4.6" cy="8.2" r="0.6" /><circle cx="15.6" cy="9.4" r="0.6" /></svg>
         </button>
-        <button id="m-views-open" aria-label="Views" aria-expanded="false">
-          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" /><path d="M3 10h14M10 3c2.5 2 2.5 12 0 14M10 3c-2.5 2-2.5 12 0 14" /></svg>
-        </button>
-        <button data-proxy="#share" aria-label="Share: QR code and link">
-          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 12.5V3M6.5 6L10 2.5 13.5 6M4.5 10v6.5h11V10" /></svg>
+        <button id="m-views-open" aria-label="Views and more" aria-expanded="false">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="4.5" cy="10" r="1.3" /><circle cx="10" cy="10" r="1.3" /><circle cx="15.5" cy="10" r="1.3" /></svg>
         </button>
       </div>
-      <div id="m-views" class="m-only is-hidden" role="menu" aria-label="Views">
+      <div id="m-views" class="m-only is-hidden" role="menu" aria-label="Views and more">
         <button role="menuitem" data-proxy="[data-view='1']">Whole Earth</button>
         <button role="menuitem" data-proxy="[data-view='2']">Low orbit</button>
         <button role="menuitem" data-proxy="[data-view='3']">GEO ring</button>
         <button role="menuitem" data-proxy="[data-view='5']">Earth and Moon</button>
-        <button role="menuitem" data-proxy="#view-sky">Sky from my location</button>
         <button role="menuitem" data-proxy="#autopilot">Autopilot tour</button>
+        <button role="menuitem" data-proxy="#locate-top">Show where I am</button>
+        <button role="menuitem" data-proxy="#share">Share</button>
       </div>
 
       <!-- ============ tool rail ============ -->
@@ -261,15 +260,15 @@
               <div class="quick" id="quick-list"></div>
             </details>
             <!-- The empty elements with ids ending in -body below are filled in by the modules in src/features/. -->
-            <details class="sec">
+            <details class="sec" data-feature>
               <summary>Visible tonight</summary>
               <div id="tonight-body"></div>
             </details>
-            <details class="sec">
+            <details class="sec" data-feature>
               <summary>Upcoming launches</summary>
               <div id="launches-body"></div>
             </details>
-            <details class="sec">
+            <details class="sec" data-feature>
               <summary>Orbit changes</summary>
               <div id="changes-body"></div>
             </details>
@@ -293,7 +292,7 @@
               <div id="weather-body"></div>
               <ol class="watch-list" id="feed-low"></ol>
             </details>
-            <details class="sec">
+            <details class="sec" data-feature>
               <summary>Growth by year</summary>
               <div id="growth-body"></div>
             </details>

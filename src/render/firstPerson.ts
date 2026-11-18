@@ -358,6 +358,24 @@ export class FirstPersonView {
 
   // ---- phone motion -------------------------------------------------------------------------
 
+  /**
+   * Ask for the motion sensors ahead of entering the sky view. iOS only shows its question
+   * when this is called straight from a tap, so the phone's sky button calls it first thing
+   * and starts the motion later with `useMotion()`. Resolves true where the sensors may be
+   * used (Android needs no question), false where they are missing or refused.
+   */
+  askMotionPermission(): Promise<boolean> {
+    if (typeof DeviceOrientationEvent === 'undefined') return Promise.resolve(false);
+    const permission = DeviceOrientationEvent as unknown as OrientationPermission;
+    if (typeof permission.requestPermission !== 'function') return Promise.resolve(true);
+    return permission.requestPermission().then((answer) => answer === 'granted', () => false);
+  }
+
+  /** Aim the sky view with the phone (permission already settled by `askMotionPermission`). */
+  useMotion(): void {
+    this.startMotion();
+  }
+
   /** "Use phone motion" was pressed: ask for the sensors (iOS needs a yes), then start listening. */
   private requestMotion(): void {
     if (this.current !== 'ground' || this.motionOn) return;

@@ -211,6 +211,7 @@ let constMembers: number[] = []; // object indices of the constellation on show
 const fp = new FirstPersonView(kit, canvas, () => {
   // back from a ride-along or sky view: the ordinary camera and the 3D model take over again
   model.enabled = store.settings.model && !encPanel.isOpen;
+  document.body.classList.remove('sky-immersive'); // the phone's full-screen sky view puts the interface back
 });
 const watch = new Watchlist(sim, (sat) => select(sat), () => {
   labels.setPinned(watch.indices());
@@ -472,7 +473,8 @@ window.addEventListener('resize', () => (viewShift = -1));
  * moved up into the visible part — otherwise the selected object would sit behind the sheet.
  */
 function updateViewShift(): void {
-  const sheetOpen = isPhone() && (inspector.isOpen || encPanel.isOpen || openPanelName !== null);
+  const immersive = document.body.classList.contains('sky-immersive'); // every sheet is put away: the sky gets the whole screen
+  const sheetOpen = isPhone() && !immersive && (inspector.isOpen || encPanel.isOpen || openPanelName !== null);
   const shift = sheetOpen ? sheets.current : 0;
   if (shift === viewShift) return;
   viewShift = shift;
@@ -601,6 +603,44 @@ function skyView(): void {
   fp.enterGround(observer);
 }
 $('view-sky').addEventListener('click', skyView);
+
+/**
+ * The phone's sky button: hold the phone up and see what is overhead, with nothing else on
+ * the screen. Tapping it is the visitor asking for exactly that, so the browser's own
+ * location question (and, on an iPhone, the motion-sensor question) is put straight away;
+ * both have to be asked from inside the tap or the browser ignores them. The view opens once
+ * the location has been answered either way: refused, it shows the sky above the saved
+ * ground station instead and says so.
+ */
+function skyFromPhone(): void {
+  if (fp.mode === 'ground') return fp.exit();
+  const motion = fp.askMotionPermission();
+  const enter = (note: string | null) => {
+    setViewsMenu(false);
+    openPanel(null);
+    if (encPanel.isOpen) closeEncounter(true);
+    document.body.classList.add('sky-immersive');
+    fp.enterGround(observer);
+    void motion.then((allowed) => {
+      if (allowed && fp.mode === 'ground') fp.useMotion();
+    });
+    if (note) toast(note, 5000);
+  };
+  if (!navigator.geolocation) return enter(`This browser cannot share a location. Showing the sky above ${observer.name}.`);
+  setConsent('yes'); // pressing the button is the yes
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      store.set('siteName', 'My location');
+      store.set('siteLat', Math.round(position.coords.latitude * 100) / 100);
+      store.set('siteLon', Math.round(position.coords.longitude * 100) / 100);
+      store.set('siteMarker', true);
+      enter(null);
+    },
+    () => enter(`Location was not shared. Showing the sky above ${observer.name}.`),
+    { timeout: 10000, maximumAge: 600000 },
+  );
+}
+$('m-sky').addEventListener('click', skyFromPhone);
 
 // ---- close-approach view ------------------------------------------------------------------
 
@@ -994,6 +1034,7 @@ canvas.addEventListener('pointerdown', (event) => {
 });
 canvas.addEventListener('pointerup', (event) => {
   if (!catalog || Math.hypot(event.clientX - pointer.downX, event.clientY - pointer.downY) > 4) return; // it was a drag
+  if (document.body.classList.contains('sky-immersive')) return; // full-screen sky: a tap must not bring a panel up
   const index = cloud.pick(event.clientX, event.clientY, 12);
   if (index >= 0 && index !== selected?.index) select(catalog.sats[index]);
 });
