@@ -14,16 +14,25 @@
  * the ground that night tone is brighter than the globe's, otherwise a zoomed-in view of the
  * night side would be too dark to show any of the extra detail.
  *
- * Three things keep the loading from being noticed:
+ * WHICH tiles are shown depends only on WHERE THE CAMERA IS, never on which way it is
+ * looking: they form rings around the point on the ground straight below the camera — the
+ * sharpest level in the middle, then coarser and coarser levels reaching out to the horizon.
+ * (An earlier version chose tiles around the middle of the picture. Turning the camera around
+ * a satellite then swept that point across half a continent and every small movement
+ * swapped the whole set: the ground flickered.) With rings, turning the camera changes
+ * nothing, and moving it only adds tiles at the outer edge of each ring.
  *
- *   1. TWO LAYERS. Under the sharp tiles lies a "backdrop" of tiles two zoom levels coarser:
- *      sixteen times fewer pictures for the same area, so it arrives almost at once and
- *      reaches much further out. The sharp layer fades in over it, which looks like the
- *      picture coming into focus rather than squares popping in. The backdrop's outer rim
- *      fades into the globe, so there is no visible line where the detail stops.
- *   2. LOOKING AHEAD. While the camera is flying somewhere the tiles for its destination are
+ * Four things keep the loading from being noticed:
+ *
+ *   1. RINGS FADE AT THEIR RIM. Each level's outer edge fades out over the next coarser level
+ *      (the same picture, less sharp), and the coarsest fades into the globe. So no level
+ *      ends in a visible line, and a tile that arrives at the rim is still transparent there.
+ *   2. COARSE FIRST. The coarse levels are a handful of pictures and arrive almost at once;
+ *      the sharp level fades in over them, which looks like focusing, not like squares
+ *      popping in.
+ *   3. LOOKING AHEAD. While the camera is flying somewhere the tiles for its destination are
  *      fetched before it arrives, and while it follows a satellite the tiles ahead of it are.
- *   3. NOTHING IS REMOVED UNTIL ITS REPLACEMENT IS READY. Tiles of the previous view stay on
+ *   4. NOTHING IS REMOVED UNTIL ITS REPLACEMENT IS READY. Tiles of the previous view stay on
  *      screen until the new view's tiles have all arrived.
  *
  * Tiles are remembered in a Map keyed by "z/x/y" (a hash table again): asking "do I already
@@ -37,9 +46,10 @@ const SOURCE = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_Sh
 const NEAR_ZOOM = 5; // tiles are used once the view calls for at least this zoom; further out the globe's own image is as sharp
 const MAX_ZOOM = 8; // the finest level the service has
 const LOW_ZOOM = 2; // the coarsest level ever drawn
-const BACKDROP_STEP = 2; // the backdrop layer is this many zoom levels coarser than the sharp one
-const BACKDROP_REACH = 3; // … and reaches this many of its (large) tiles out from the centre
-const KEEP = 230; // tiles kept in memory
+const SHARP_REACH_MAX = 4; // the sharpest level reaches at most this many tiles out from the centre (9 × 9 tiles)
+const RING_REACH = 2; // every coarser level: 5 × 5 of its (larger) tiles
+const RIM = 0.72; // a level is solid out to this share of its radius, then fades to nothing at the edge
+const KEEP = 260; // tiles kept in memory
 const AT_ONCE = 16; // downloads in flight
 const LINGER = 2.5; // seconds a tile of the previous view may stay while the new view loads
 const MERCATOR_LIMIT = 85.0511; // the projection has no tiles beyond this latitude
@@ -59,13 +69,21 @@ interface Tile {
   z: number;
 }
 
-/** What a camera position is looking at. */
+/** What a camera position needs: rings of tiles around the point straight below it. */
 interface View {
-  centre: THREE.Vector3; // the ground point in the middle of the picture (unit vector, Earth frame)
+  centre: THREE.Vector3; // the point on the ground below the camera (unit vector, Earth frame)
   lat: number; // of that point, degrees
   lon: number;
-  zoom: number; // the tile zoom whose pixels match screen pixels there
-  kmPerPixel: number;
+  altitudeKm: number;
+  kmPerPixel: number; // how much ground one screen pixel covers, looking straight down
+  zoom: number; // the tile zoom whose pixels would match that exactly (a fraction, not yet rounded)
+}
+
+/** One ring: a zoom level and how many of its tiles it reaches out from the centre. */
+interface Ring {
+  z: number;
+  reach: number;
+  radius: number; // the angle from the centre it is certain to cover, radians
 }
 
 interface Pick {
@@ -146,15 +164,16 @@ const fragmentShader = /* glsl */ `
     // visible squares. softLights() below reads it through a smooth curve instead, turning
     // the squares into a glow; it is also dimmed a little near the ground so the sharper
     // detail underneath shows.
+    // (Sixteen texture reads: skipped entirely in daylight, where the lights are off anyway.)
+    float lightsOn = 1.0 - smoothstep(-0.14, 0.03, sun);
     vec3 lights = vec3(0.0);
-    if (uHasNight > 0.5) {
+    if (uHasNight > 0.5 && lightsOn > 0.002) {
       vec2 lonLat = vec2(0.5 + atan(-N.z, N.x) / 6.2831853, 0.5 + asin(clamp(N.y, -1.0, 1.0)) / 3.1415927);
       vec3 nightTex = softLights(lonLat);
       float brightness = max(nightTex.r, max(nightTex.g, nightTex.b));
       lights = nightTex * mix(vec3(1.36, 0.94, 0.54), vec3(1.16, 1.08, 0.92), smoothstep(0.25, 0.90, brightness)) * 1.55;
       lights *= mix(1.0, 0.62, uClose);
     }
-    float lightsOn = 1.0 - smoothstep(-0.14, 0.03, sun);
 
     vec3 color = mix(night, lit, day) + lights * lightsOn;
     // The outer rim of the covered area melts into the globe instead of ending in a line.
@@ -182,7 +201,9 @@ export class EarthTiles {
   private lastPlan = -Infinity;
   private lastCentre: THREE.Vector3 | null = null;
   private lastCentreAt = 0;
-  private speed = 0; // how fast the view is sweeping over the ground, km per real second (smoothed)
+  private speed = 0; // how fast the camera is passing over the ground, km per real second (smoothed)
+  private sharpest = 0; // the zoom level currently used for the middle ring (0 = none yet)
+  private timeRate = 1;
   private now = 0;
   private offline = false; // the service could not be reached: stop asking for a while
   private offlineSince = 0;
@@ -227,25 +248,23 @@ export class EarthTiles {
 
   /**
    * Call every frame. `sunDirection` is in scene coordinates. `ahead` says where the camera
-   * is flying to, if it is (asked a few times a second).
+   * is flying to, if it is (asked a few times a second). `timeRate` is how fast simulated
+   * time is running (1 = real time).
    */
-  update(camera: THREE.PerspectiveCamera, sunDirection: THREE.Vector3, realSeconds: number, dt: number, ahead?: () => Destination | null): void {
+  update(camera: THREE.PerspectiveCamera, sunDirection: THREE.Vector3, realSeconds: number, dt: number, ahead?: () => Destination | null, timeRate = 1): void {
     this.now = realSeconds;
+    this.timeRate = timeRate;
     const toEarth = this.earth.getWorldQuaternion(new THREE.Quaternion()).invert();
     // The Sun as seen from the turning Earth: undo the Earth's rotation.
     this.sun.value.copy(sunDirection).applyQuaternion(toEarth);
 
-    // From far away the tiles are partly see-through (60 %), so the globe's drifting clouds still
-    // show; close in (where those clouds are only a blur) they cover it completely.
     const eye = this.earth.worldToLocal(camera.position.clone());
     const altitude = eye.length() - EARTH_RADIUS;
     this.close.value = 1 - THREE.MathUtils.smoothstep(altitude, 1.5, 5);
-    // (Two layers lie on top of each other, so each one's share is chosen to give that total.)
-    this.cover.value = 1 - Math.sqrt(1 - THREE.MathUtils.lerp(0.6, 1, this.close.value));
     const lightsPicture = this.nightMap.value?.image as { width?: number; height?: number } | undefined;
     if (lightsPicture?.width && lightsPicture.height) this.nightTexel.value.set(1 / lightsPicture.width, 1 / lightsPicture.height);
-    // The rim fade is centred on the middle of the view, followed every frame so it glides.
-    if (altitude > 0) this.centre.value.copy(groundPoint(eye, camera.getWorldDirection(new THREE.Vector3()).applyQuaternion(toEarth))).normalize();
+    // The rings are centred on the point below the camera, followed every frame so they glide.
+    if (altitude > 0) this.centre.value.copy(eye).normalize();
 
     if (realSeconds - this.lastPlan > 0.25) {
       this.lastPlan = realSeconds;
@@ -270,83 +289,108 @@ export class EarthTiles {
     }
   }
 
-  /** What would a camera at `eye` looking along `forward` (both scene coordinates) see of the ground? */
-  private look(eyeWorld: THREE.Vector3, forwardWorld: THREE.Vector3, fov: number): View | null {
+  /** What does a camera at this position (scene coordinates) need? Null when it is too far away for tiles to help. */
+  private look(eyeWorld: THREE.Vector3, fov: number): View | null {
     const eye = this.earth.worldToLocal(eyeWorld.clone());
-    const altitude = eye.length() - EARTH_RADIUS; // scene units (1,000 km)
-    if (altitude > 6 || altitude <= 0) return null;
-    const forward = forwardWorld.clone().applyQuaternion(this.earth.getWorldQuaternion(new THREE.Quaternion()).invert());
-    const ground = groundPoint(eye, forward);
-    const range = eye.distanceTo(ground) * 1000; // km from the camera to that point
-    const lat = THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(ground.y / EARTH_RADIUS, -1, 1)));
-    const lon = THREE.MathUtils.radToDeg(Math.atan2(-ground.z, ground.x));
+    const altitudeKm = (eye.length() - EARTH_RADIUS) * 1000;
+    if (altitudeKm > 6000 || altitudeKm <= 0) return null;
+    const centre = eye.normalize();
+    const lat = THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(centre.y, -1, 1)));
+    const lon = THREE.MathUtils.radToDeg(Math.atan2(-centre.z, centre.x));
     if (Math.abs(lat) > MERCATOR_LIMIT - 1) return null;
-    // The zoom whose pixels are about the size of screen pixels at that range.
-    const kmPerPixel = (range * 2 * Math.tan(THREE.MathUtils.degToRad(fov / 2))) / window.innerHeight;
+    const kmPerPixel = (altitudeKm * 2 * Math.tan(THREE.MathUtils.degToRad(fov / 2))) / window.innerHeight;
     const kmPerTilePixelAtZoom0 = (40075 * Math.cos(THREE.MathUtils.degToRad(lat))) / 256;
-    const zoom = Math.min(MAX_ZOOM, Math.round(Math.log2(kmPerTilePixelAtZoom0 / kmPerPixel)));
-    if (zoom < NEAR_ZOOM) return null;
-    return { centre: ground.normalize(), lat, lon, zoom, kmPerPixel };
+    const zoom = Math.log2(kmPerTilePixelAtZoom0 / kmPerPixel);
+    if (zoom < NEAR_ZOOM - 0.5) return null;
+    return { centre, lat, lon, altitudeKm, kmPerPixel, zoom };
+  }
+
+  /**
+   * The rings for a view whose middle ring is at zoom `sharp`: that level out to the corners
+   * of the screen, then coarser levels, each reaching twice as far as the last useful one,
+   * until the horizon is covered.
+   */
+  private rings(view: View, sharp: number): Ring[] {
+    const tileKm = (40075 * Math.cos(THREE.MathUtils.degToRad(view.lat))) / 2 ** sharp;
+    const halfDiagonalKm = (view.kmPerPixel * Math.hypot(window.innerWidth, window.innerHeight)) / 2;
+    // The sharp level should be SOLID out to the screen's corners (seen straight down), so
+    // its faded rim is allowed for by dividing by RIM.
+    const sharpReach = THREE.MathUtils.clamp(Math.ceil(halfDiagonalKm / tileKm / RIM), RING_REACH, SHARP_REACH_MAX);
+    const horizon = Math.acos(6371 / (6371 + view.altitudeKm)); // angle from below the camera to the edge of the visible Earth
+    const rings: Ring[] = [{ z: sharp, reach: sharpReach, radius: this.certain(sharp, view.lat, sharpReach) }];
+    for (let z = sharp - 1; z >= LOW_ZOOM && rings[rings.length - 1].radius < horizon; z--) {
+      const radius = this.certain(z, view.lat, RING_REACH);
+      if (radius > rings[rings.length - 1].radius * 1.3) rings.push({ z, reach: RING_REACH, radius }); // skip a level that adds almost nothing
+    }
+    return rings;
   }
 
   /** Decide which tiles to show and which to fetch, and start loading the missing ones. */
   private plan(camera: THREE.PerspectiveCamera, destination: Destination | null, realSeconds: number): void {
     const picks: Pick[] = [];
-    const view = this.enabled ? this.look(camera.position, camera.getWorldDirection(new THREE.Vector3()), camera.fov) : null;
-    let coming: View | null = this.enabled && destination
-      ? this.look(destination.pos, destination.target.clone().sub(destination.pos).normalize(), camera.fov)
-      : null;
+    const view = this.enabled ? this.look(camera.position, camera.fov) : null;
+    let coming: View | null = this.enabled && destination ? this.look(destination.pos, camera.fov) : null;
+    let comingSharp = coming ? THREE.MathUtils.clamp(Math.round(coming.zoom), LOW_ZOOM + 1, MAX_ZOOM) : 0;
 
     if (view) {
-      // How fast is the view sweeping over the ground? (Following a satellite at 100× time is
-      // 760 km every second: far too fast for the finest tiles to arrive, or to be seen.)
+      // How fast is the camera passing over the ground? Smoothed, but dropped at once when the
+      // motion stops.
       const since = realSeconds - this.lastCentreAt;
       const stride = this.lastCentre ? view.centre.angleTo(this.lastCentre) : 0; // radians since the last plan
-      // Smoothed so that only SUSTAINED speed counts (not one quick drag), but dropped at once
-      // when the motion stops, so the view sharpens the moment the camera arrives.
       if (this.lastCentre && since > 0 && since < 1) {
         const speedNow = (stride * KM_PER_RADIAN) / since;
         this.speed = speedNow < this.speed ? speedNow : this.speed + (speedNow - this.speed) * Math.min(1, since / 1.5);
       } else this.speed = 0;
 
+      // The middle ring's level follows the camera's height, but only changes once the ideal
+      // level has clearly moved on — otherwise hovering between two levels would swap every
+      // tile back and forth.
+      if (this.sharpest === 0 || Math.abs(view.zoom - this.sharpest) > 0.65) this.sharpest = Math.round(view.zoom);
       const cosLat = Math.cos(THREE.MathUtils.degToRad(view.lat));
-      // Sharp layer: a tile should stay under the camera for at least a second and a half.
-      const speedZoom = this.speed > 1 ? Math.floor(Math.log2((40075 * cosLat) / (this.speed * 1.5))) : MAX_ZOOM;
-      const sharp = THREE.MathUtils.clamp(Math.min(view.zoom, speedZoom), LOW_ZOOM + 1, MAX_ZOOM);
-      const backdrop = Math.max(LOW_ZOOM, sharp - BACKDROP_STEP);
-      this.around(picks, backdrop, view, BACKDROP_REACH, 0, true);
-      this.around(picks, sharp, view, this.reachFor(view, sharp), 1, true);
+      // With time running fast, a followed satellite covers 760 km every second (at 100×): far
+      // too fast for the finest tiles to arrive, or to be seen. Then a tile should stay under
+      // the camera for at least a second and a half. This is NOT applied to the user's own
+      // dragging and turning: lowering the level for a moment there is exactly the blur-then-
+      // sharpen flicker this file exists to avoid.
+      const racing = this.timeRate >= 50 && this.speed > 1;
+      const speedZoom = racing ? Math.floor(Math.log2((40075 * cosLat) / (this.speed * 1.5))) : MAX_ZOOM;
+      const sharp = THREE.MathUtils.clamp(Math.min(this.sharpest, speedZoom), LOW_ZOOM + 1, MAX_ZOOM);
+      const rings = this.rings(view, sharp);
 
-      // Rim fade. Each layer is certain to cover a circle of `reach` tiles around the centre;
-      // it fades to nothing over the outer part of that circle. The sharp layer melts into
-      // the backdrop (the same picture, coarser) and the backdrop into the globe, so no layer
-      // ever ends in a visible line, however far towards the horizon the view is tilted.
-      const sharpReach = this.reachFor(view, sharp);
-      const sharpRim = this.certain(sharp, view.lat, sharpReach);
-      const backdropRim = this.certain(backdrop, view.lat, BACKDROP_REACH) * 0.95;
-      this.edge(sharp).value.set(sharpRim * 0.8, sharpRim);
-      this.edge(backdrop).value.set(backdropRim * 0.55, backdropRim);
+      // Coarsest first: those few pictures cover everything and arrive soonest.
+      rings.forEach((ring, k) => {
+        this.around(picks, ring.z, view, ring.reach, rings.length - 1 - k, true);
+        this.edge(ring.z).value.set(ring.radius * RIM, ring.radius);
+      });
+      // From far away the tiles are partly see-through (60 %), so the globe's drifting clouds
+      // still show; close in (where those clouds are only a blur) they cover it completely.
+      // Several rings lie on top of each other in the middle, so each one's share is chosen
+      // to give that total there.
+      this.cover.value = 1 - Math.pow(1 - THREE.MathUtils.lerp(0.6, 1, this.close.value), 1 / rings.length);
 
       // Not flying anywhere, but moving (following a satellite, or the slow drift): fetch the
-      // strip of ground the view will reach in the next few seconds.
+      // strip of ground the camera will be over in the next few seconds.
       if (!coming && this.lastCentre && since > 0 && since < 1 && stride > 1e-6) {
-        // … six seconds' worth of the last stride, but no further than just past the edge of what is shown
-        const lead = Math.min(6 / since, (0.6 * sharpRim) / stride);
+        // … six seconds' worth of the last stride, but no further than the middle ring reaches
+        const lead = Math.min(6 / since, (0.6 * rings[0].radius) / stride);
         const centre = view.centre.clone().addScaledVector(view.centre.clone().sub(this.lastCentre), lead).normalize();
         const lat = THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(centre.y, -1, 1)));
-        if (Math.abs(lat) < MERCATOR_LIMIT - 1) coming = { ...view, centre, lat, lon: THREE.MathUtils.radToDeg(Math.atan2(-centre.z, centre.x)), zoom: sharp };
+        if (Math.abs(lat) < MERCATOR_LIMIT - 1) {
+          coming = { ...view, centre, lat, lon: THREE.MathUtils.radToDeg(Math.atan2(-centre.z, centre.x)) };
+          comingSharp = sharp;
+        }
       }
       this.lastCentre = view.centre.clone();
       this.lastCentreAt = realSeconds;
     } else {
       this.lastCentre = null;
       this.speed = 0;
+      this.sharpest = 0;
     }
 
     if (coming) {
-      const sharp = Math.max(LOW_ZOOM + 1, coming.zoom);
-      this.around(picks, Math.max(LOW_ZOOM, sharp - BACKDROP_STEP), coming, 2, 2, false);
-      this.around(picks, sharp, coming, this.reachFor(coming, sharp), 3, false);
+      const rings = this.rings(coming, comingSharp);
+      rings.forEach((ring, k) => this.around(picks, ring.z, coming!, ring.reach, 10 + rings.length - 1 - k, false));
     }
 
     // One entry per tile (the two views overlap), most urgent first.
@@ -380,13 +424,6 @@ export class EarthTiles {
     this.evict();
   }
 
-  /** How many tiles out from the centre the screen reaches (to its corners) at zoom z. */
-  private reachFor(view: View, z: number): number {
-    const tileKm = (40075 * Math.cos(THREE.MathUtils.degToRad(view.lat))) / 2 ** z;
-    const halfDiagonalKm = (view.kmPerPixel * Math.hypot(window.innerWidth, window.innerHeight)) / 2;
-    return Math.min(5, Math.max(1, Math.ceil(halfDiagonalKm / tileKm)));
-  }
-
   /** Add the tiles of zoom z within `reach` tiles of a view's centre. */
   private around(picks: Pick[], z: number, view: View, reach: number, priority: number, visible: boolean): void {
     const n = 2 ** z;
@@ -412,7 +449,7 @@ export class EarthTiles {
   }
 
   /**
-   * The angle (radians) from the view's centre that `reach` tiles of zoom z are certain to
+   * The angle (radians) from the centre that `reach` tiles of zoom z are certain to
    * cover. Mercator tiles get smaller towards the poles, so the size is taken at the far edge.
    */
   private certain(z: number, lat: number, reach: number): number {
@@ -466,6 +503,12 @@ export class EarthTiles {
       fragmentShader,
       transparent: true,
       depthWrite: false,
+      // The patch lies only a few kilometres above the globe. With the camera a few metres from
+      // a satellite the depth buffer cannot tell the two apart at a distance, and without this
+      // nudge towards the camera the ground would flicker between the tile and the globe.
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -8,
     });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.visible = false;
@@ -552,17 +595,4 @@ export class EarthTiles {
       this.tiles.delete(key);
     }
   }
-}
-
-/**
- * The point on the ground in the middle of a view: where the ray from `eye` along `forward`
- * meets the sphere, or — if it misses (the horizon is centred) — the point straight below.
- * Earth-frame scene units.
- */
-function groundPoint(eye: THREE.Vector3, forward: THREE.Vector3): THREE.Vector3 {
-  const b = eye.dot(forward);
-  const disc = b * b - (eye.lengthSq() - EARTH_RADIUS * EARTH_RADIUS);
-  return disc > 0 && -b - Math.sqrt(disc) > 0
-    ? eye.clone().addScaledVector(forward, -b - Math.sqrt(disc))
-    : eye.clone().setLength(EARTH_RADIUS);
 }

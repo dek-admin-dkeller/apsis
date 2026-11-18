@@ -101,6 +101,8 @@ let encFocus: EncounterFocus = 'both'; // what the camera is centred on
 let encModelSize = 0; // scene units
 let encViewDistance = 0; // camera distance that frames both objects
 let encPairDistance = 0; // … before allowing for the screening cells
+let encTogether = false; // the open pair flies together (docked, in formation) rather than crossing
+let encAutoFrame = false; // the camera keeps both objects in view by itself (until the user zooms)
 
 // screening bookkeeping
 let screenSeq = 0;
@@ -613,6 +615,7 @@ function openEncounter(aIndex: number, bIndex: number): void {
   // the view (the gap spans roughly half the screen at the closest point).
   const nowKm = rangeKm(encounter.recA, encounter.recB, clock.time);
   const gapKm = approach.coMoving && Number.isFinite(nowKm) ? Math.max(nowKm, approach.missKm) : approach.missKm;
+  encTogether = approach.coMoving;
   encPairDistance = THREE.MathUtils.clamp(Math.max(gapKm, 0.3) * 2.6 * KM, 0.0004, 1.2);
   encViewDistance = encounterViewDistance();
   encModelSize = Math.max(gapKm * 0.32, 0.05) * KM; // a third of the gap: large, but they can never touch
@@ -633,6 +636,7 @@ function encounterViewDistance(): number {
 /** Centre the camera on one object of the pair (to zoom in and turn around it), or on both. */
 function focusEncounter(which: EncounterFocus, duration = 1.1): void {
   encFocus = which;
+  encAutoFrame = which === 'both';
   encPanel.setFocus(which);
   rig.follow = true;
   rig.flyToFocus(
@@ -1333,10 +1337,31 @@ function updateSelection(realSeconds: number): void {
   if (!uiHidden) inspector.frame(clock.time, realSeconds); // no point drawing charts nobody can see (autopilot)
 }
 
-function updateEncounter(realSeconds: number): void {
+// Zooming by hand means "I'll frame this myself": the automatic framing below lets go until
+// the pair is re-centred from the panel.
+canvas.addEventListener('wheel', () => (encAutoFrame = false), { passive: true });
+canvas.addEventListener('touchstart', (event) => {
+  if (event.touches.length > 1) encAutoFrame = false;
+}, { passive: true });
+
+function updateEncounter(realSeconds: number, dt: number): void {
   if (!encPanel.isOpen) return;
   encFrame = encViz.update(clock.time, realSeconds);
   if (!encFrame) return;
+
+  // Keep both objects in the picture. Time runs live, and two objects crossing at 10 km/s are
+  // 50 km apart five seconds after their closest point: with a fixed camera they would be out
+  // of the frame almost at once, leaving only lines. So the camera eases back as they
+  // separate — and comes in again when a replay brings them back together.
+  if (encFocus === 'both' && encAutoFrame && !rig.flying) {
+    const offset = kit.camera.position.clone().sub(kit.controls.target);
+    const have = offset.length();
+    const want = THREE.MathUtils.clamp(Math.max(encViewDistance, encFrame.rangeKm * KM * 1.5), 0.0004, 1.5);
+    if (have > 1e-9 && Math.abs(want - have) > have * 0.002) {
+      const next = have + (want - have) * Math.min(1, dt * 2.5);
+      kit.camera.position.copy(kit.controls.target).addScaledVector(offset, next / have);
+    }
+  }
   encPanel.frame(clock.time, realSeconds, encFrame.rangeKm, encFrame.midEci);
   encModels[0].enabled = encModels[1].enabled = store.settings.model;
   // Zoomed in on one object: its model speaks for itself, so drop the ring and the name tag over it.
@@ -1371,11 +1396,13 @@ function updateGrid(realSeconds: number): void {
   // alert distance.
   if (encPanel.isOpen && encFrame) {
     const toKm = (v: THREE.Vector3) => kit.eciGroup.worldToLocal(v.clone());
-    grid.update(screeningDistance, encFrame.midEci, -1, cloud.visible, { a: toKm(encFrame.a), b: toKm(encFrame.b), rangeKm: encFrame.rangeKm }, realSeconds);
+    grid.update(screeningDistance, encFrame.midEci, -1, cloud.visible, { a: toKm(encFrame.a), b: toKm(encFrame.b), rangeKm: encFrame.rangeKm, together: encTogether }, realSeconds);
     const where = grid.pairState === 'same' ? 'Both objects are in the same cell'
       : grid.pairState === 'neighbours' ? 'The two objects are in neighbouring cells (cyan and amber)'
       : 'The two objects are now more than one cell apart, so the search no longer pairs them';
-    $('grid-note').textContent = `${where}. Cells are ${alertDistance(screeningDistance)} wide; they turn red while the pair is closer than that.`;
+    $('grid-note').textContent = encTogether
+      ? `${where}. These two fly together, so they stay within one or two cells (${alertDistance(screeningDistance)} wide) all the time.`
+      : `${where}. Cells are ${alertDistance(screeningDistance)} wide; they turn red while the pair is closer than that.`;
     return;
   }
   // Centre on the selected object; otherwise on the low-orbit region the camera is looking at.
@@ -1521,12 +1548,12 @@ function step(now: number): void {
   else rig.update(dt);
   kit.camera.updateMatrixWorld();
   updateSelection(realSeconds);
-  updateEncounter(realSeconds);
+  updateEncounter(realSeconds, dt);
   labels.update(realSeconds, selected ? selected.index : -1, labelAvoid);
   updateSkyLabels();
   site.update(realSeconds);
   aurora.update(realSeconds, globe.sunDirection);
-  tiles.update(kit.camera, globe.sunDirection, realSeconds, dt, () => rig.destination);
+  tiles.update(kit.camera, globe.sunDirection, realSeconds, dt, () => rig.destination, clock.paused ? 0 : Math.abs(clock.speed));
   constView.update(clock.time, realSeconds, constMembers.length, (i, out) => sim.getPosition(constMembers[i], out));
   if (!uiHidden) constPanel.frame(realSeconds);
   if (!uiHidden) watch.frame(realSeconds);

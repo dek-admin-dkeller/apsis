@@ -10,7 +10,7 @@ import type { Satellite } from './types.ts';
 export type ModelKind =
   | 'starlink' | 'oneweb' | 'comsat' | 'geocomsat' | 'gnss'
   | 'smallsat' | 'cubesat'
-  | 'observer' | 'radarsat' | 'weather' | 'telescope'
+  | 'observer' | 'radarsat' | 'weather' | 'spinner' | 'telescope'
   | 'iss' | 'tiangong' | 'station'
   | 'dragon' | 'soyuz' | 'cygnus' | 'capsule'
   | 'rocketbody' | 'debris';
@@ -99,6 +99,8 @@ const SHAPES: [RegExp, ModelKind][] = [
   [/^STARLINK/, 'starlink'],
   [/^ONEWEB/, 'oneweb'],
   [/^(ICEYE|CAPELLA|UMBRA|TERRASAR|TANDEM|RADARSAT|RCM-|COSMO-SKYMED|CSG-|SAOCOM|SENTINEL-1|ALOS|RISAT|NISAR|PAZ\b|KOMPSAT-[56]|SAR-LUPE|SARAH|STRIX|QPS-SAR|NOVASAR|IRIDE-MS|LUTAN|HISEA|CONDOR)/, 'radarsat'],
+  // Spin-stabilised drums (must come before the general weather line, which would claim them).
+  [/^(FENGYUN 2|FY-2|METEOSAT-?\s?(8|9|10|11)\b)/, 'spinner'],
   [/^(NOAA|GOES|JPSS|SUOMI|METEOSAT|METOP|MSG|MTG|FENGYUN|FY-|HIMAWARI|METEOR-M|ELEKTRO|ARKTIKA|DMSP|INSAT-3D|GEO-KOMPSAT|YUNHAI|TOMORROW)/, 'weather'],
   [/^(ISS OBJECT|FLOCK|DOVE|LEMUR|ASTROCAST|SPACEBEE|FOSSASAT|TEVEL|AEROCUBE|KINEIS|CONNECTA|SATELIOT|CUBY|CENTAURI|GEOSCAN|NETSAT|NORSAT|TIANQI|SITRO|APRIZESAT|STARLING|HORS|SIDLOC|GNOMES|CYGFM|SKYKRAFT|LYNK|HAWK|KEPLER|SPIRE|CUBESAT)|CUBE|\b[1236]U\b/, 'cubesat'],
   [/^(IRIDIUM|GLOBALSTAR|ORBCOMM|O3B|KUIPER|QIANFAN|HULIANWANG|GONETS|GEESAT|CENTISPACE|SPACEMOBILE|BLUEWALKER|BLUEBIRD|SDA|PRAETORIAN|RASSVET)/, 'comsat'],
@@ -145,6 +147,7 @@ export const KIND_LABEL: Record<ModelKind, string> = {
   observer: 'Earth-imaging satellite',
   radarsat: 'Radar-imaging satellite',
   weather: 'Weather satellite',
+  spinner: 'Spin-stabilised weather satellite',
   telescope: 'Space telescope',
   iss: 'International Space Station',
   tiangong: 'Tiangong space station',

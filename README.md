@@ -209,7 +209,7 @@ src/
     geoOverlay.ts        coastlines and borders, latitude / longitude grid, day / night line
     sky.ts               Milky Way, real bright stars, constellation figures, planets, Sun, Moon
     satellites.ts        all objects as one THREE.Points draw call; GPU-side interpolation; picking
-    satModels.ts         procedural 3D models (20 kinds of spacecraft) and their cropped thumbnails
+    satModels.ts         procedural 3D models (21 kinds of spacecraft) and their cropped thumbnails
     cameraRig.ts         fly-to, object-centred focus camera, view presets
     firstPerson.ts       ride-along and sky-view cameras        siteMarker.ts   the ground-station dot
     constellation.ts     all orbits of a group + ground coverage map   aurora.ts   live aurora oval

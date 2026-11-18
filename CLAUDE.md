@@ -126,7 +126,7 @@ src/hashing/                SpatialHash, conjunction, lookahead, benchmark
 src/worker/                 sim.worker (+ SimClient, protocol, propagate), lookahead.worker
 src/render/                 scene (renderer, bloom, quality presets), globe (Earth shader), tiles (close-up ground:
                             NASA GIBS map tiles streamed in below ~6,000 km), geoOverlay (borders, grid, terminator), sky (Milky Way, stars, constellations, planets, Sun, Moon), aurora, satellites
-                            (the point cloud, colour modes, highlighting, picking), satModels (20 procedural models,
+                            (the point cloud, colour modes, highlighting, picking), satModels (21 procedural models,
                             previews, thumbnails), cameraRig (fly-to, object focus, Earth drift), firstPerson (ride-along,
                             sky view, phone motion), orbitLine, groundTrack, encounterViz (close-approach drawing),
                             conjunctionMarkers, gridViz, constellation (orbits + coverage map), siteMarker
@@ -195,28 +195,59 @@ an in-app yes plus the browser's own prompt, and stays in `localStorage`.
 
 ## Close-up ground (`render/tiles.ts`)
 
-- The globe texture is ~10 km per pixel. Below ~6,000 km altitude `EarthTiles.update()` picks a
-  web-map zoom level (5–8) whose pixels match screen pixels, and covers the centre of the view
-  (out to the screen corners, at most 11 × 11 tiles) with curved patches that are children of
-  `globe.earth`, lifted 0.09 % above the surface and lit with the same Sun term as the globe.
-- Tiles are alpha-blended over the globe: fully covering near the ground, 60 % from far away
-  (so the globe's clouds still show). They are drawn on the night side as well (the first
-  version faded them out there, which read as "not working" to anyone zooming in after dark):
-  the night tone equals the globe's from far away and rises to bright moonlight near the
-  ground, and the globe's city-lights texture (the same uniform objects, borrowed from the
-  Earth material) is added through a 16-tap cubic B-spline, because its real detail is ~20 km
-  and plain linear filtering shows as squares.
-- Loading is hidden three ways (see the header of `tiles.ts`): a BACKDROP layer two zoom
-  levels coarser under the sharp layer (arrives first, reaches further); both layers fade out
-  towards the rim of what they cover (`uEdge`, centred on `uCentre`), so no chunk edge shows
-  in tilted views; and tiles are fetched AHEAD — for `rig.destination` during a camera flight,
-  or along the direction of travel while following a satellite. Old tiles stay until the new
-  view is complete. At high ground speed (fast time while following) the sharp zoom is lowered.
-  Pictures are fetched with `fetch` + `createImageBitmap` (decoded off the main thread) and
-  stale downloads are aborted. `tiles.prewarm()` compiles the shader behind the loading screen.
-- `tiles.status` feeds About → "This device" (off / service not reachable / N tiles shown).
-- Tile cache is a `Map<"z/x/y", Tile>` with least-recently-used eviction (200 tiles), at most
-  8 downloads in flight, and a 30 s back-off if the service cannot be reached.
+- The globe texture is ~10 km per pixel. Below ~6,000 km altitude detailed map tiles (NASA
+  GIBS, zoom 2–8) are drawn as curved patches, children of `globe.earth`, lifted a few km
+  above the surface and lit like the globe.
+- **Which tiles are shown depends only on where the camera IS, never on where it looks.**
+  They form rings around the point straight below the camera: the sharpest level (chosen from
+  the camera's height, with hysteresis) out to the screen's corners, then coarser levels, each
+  reaching further, until the horizon is covered (`rings()`). An earlier version centred the
+  tiles on the middle of the picture; turning the camera around a satellite swept that point
+  across a continent and swapped every tile on each small move — the ground flickered. Do
+  not reintroduce view-direction-dependent selection.
+- Each level fades out towards its rim (`uEdge`, centred on `uCentre` = the sub-camera point)
+  over the coarser level beneath, and the coarsest into the globe, so no level ends in a line
+  and tiles arriving at the rim are still transparent. Coarse levels load first; old tiles
+  stay until the new set is complete; tiles are fetched ahead for `rig.destination` and along
+  the direction of travel.
+- The level is lowered for ground speed ONLY when simulated time runs at ≥ 50× (a followed
+  satellite then covers hundreds of km a second). Never for the user's own dragging: that
+  would be a blur-then-sharpen flicker.
+- Tile materials use `polygonOffset`: with the camera metres from a satellite model the near
+  plane is tiny and the depth buffer cannot separate a patch from the globe at a distance
+  (z-fighting) without it.
+- Blending: fully covering near the ground, 60 % in total from far away (so the globe's clouds
+  still show); several rings overlap in the middle, so each ring's share is computed to give
+  that total. On the night side the tone equals the globe's from far away and rises to bright
+  moonlight near the ground; the globe's city-lights texture (the same uniform objects,
+  borrowed from the Earth material) is added through a 16-tap cubic B-spline (skipped in
+  daylight), because its real detail is ~20 km and linear filtering shows as squares.
+- Pictures are fetched with `fetch` + `createImageBitmap` (decoded off the main thread), stale
+  downloads are aborted, `tiles.prewarm()` compiles the shader behind the loading screen, and
+  `tiles.status` feeds About → "This device". Cache: `Map<"z/x/y", Tile>`, least recently used
+  evicted beyond 260, at most 16 downloads in flight, 30 s back-off if the service is down.
+
+## Close-approach view details
+
+- `gridViz.ts` pair mode draws only the two objects' cells (cyan / amber, red while inside the
+  alert distance unless the pair flies together) plus a faint outline of A's 27-cell block.
+  Cells are fixed in space and the objects cross one about every second, so each lit cell
+  fades in and out (a short trail) instead of jumping; the other occupied cells are left out.
+- `updateEncounter()` in `main.ts` keeps both objects framed (`encAutoFrame`): the camera eases
+  back as they separate and in again during a replay; a manual zoom switches that off until
+  the pair is re-centred from the panel.
+
+## 3D models (`render/satModels.ts`)
+
+- 21 kinds (`ModelKind` in `data/describe.ts`), each a builder in `BUILDERS`, built once,
+  merged by material, normalised and cloned by `buildModel(kind)`. Materials are shared
+  (`makeMaterials()`): painted canvas textures, normal maps computed from painted height
+  fields, and a small painted environment map so foil and glass glint.
+- Brightness budget: the main view has bloom and a headlight, so pale paint stays ~0.75 grey
+  with high roughness and nothing large and flat is smoother than ~0.45, or it blows out.
+- Axes for builders: +X = direction of travel, +Y = away from Earth, Z = across the track.
+- `spinner` (Fengyun-2, Meteosat 8–11) is a spin-stabilised drum; add name patterns to
+  `SHAPES` in `describe.ts` before the general weather line.
 
 ## Thumbnails and the hover card
 

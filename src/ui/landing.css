@@ -19,7 +19,8 @@ html #landing {
   display: grid;
   grid-template-rows: auto 1fr auto;
   padding: clamp(18px, 3vw, 38px) clamp(20px, 5vw, 72px);
-  overflow-y: auto;
+  overflow: hidden auto; /* scrolls down on a short screen; never sideways */
+  overscroll-behavior: contain;
   background: radial-gradient(58% 64% at 74% 46%, #0c1627 0%, #05080f 72%);
   color: var(--ld-ink);
   font-family: var(--font-ui);
@@ -38,11 +39,15 @@ html.no-landing #landing { display: none; }
   align-items: center;
   gap: clamp(24px, 4vw, 72px);
   padding: clamp(16px, 4vh, 48px) 0;
+  /* The tilted drawing's corners must not add to the page's size either. `clip` rather than
+     `hidden`: it trims without letting this row shrink below its content on a short screen. */
+  overflow: clip;
+  overflow-clip-margin: 12px;
 }
 .ld-copy h1 {
   margin: 0;
   max-width: 13ch;
-  font: 600 clamp(36px, 4.7vw, 70px) / 1.03 var(--font-display);
+  font: 600 clamp(32px, min(4.7vw, 9vh), 70px) / 1.03 var(--font-display); /* also shrinks on a short window, so the page fits without scrolling */
   letter-spacing: -0.025em;
   text-wrap: balance;
 }
@@ -65,7 +70,7 @@ html.no-landing #landing { display: none; }
 .ld-status { margin: 0; font-size: 13.5px; color: var(--ld-soft); font-variant-numeric: tabular-nums; }
 
 /* ---- the orbit ---- */
-.ld-orbit { position: relative; justify-self: end; width: min(100%, 700px); aspect-ratio: 5 / 4; margin: 0; }
+.ld-orbit { position: relative; justify-self: end; width: min(100%, 700px, 78vh); aspect-ratio: 5 / 4; margin: 0; }
 .ld-turn { position: absolute; inset: 0; transform: rotate(-13deg); }
 .ld-turn svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .ld-turn ellipse { fill: none; stroke: rgba(232, 241, 251, 0.34); stroke-width: 1.2; vector-effect: non-scaling-stroke; }
@@ -81,7 +86,12 @@ html.no-landing #landing { display: none; }
   background: radial-gradient(circle at 34% 30%, #ffffff 0%, #dbe6f2 46%, #93a5bd 100%);
 }
 /* A box the size of the whole drawing, moved by percentages of itself: a transform-only
-   animation, so the browser can run it smoothly even while the tracker is loading. */
+   animation, so the browser can run it smoothly even while the tracker is loading.
+   That moving box swings well outside the drawing, and anything that sticks out of a
+   scrollable page makes the page longer — so it lives inside .ld-clip, which cuts it off at
+   the drawing's edge. Without that the page's scroll length changed as the satellite went
+   round. */
+.ld-clip { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 .ld-sat { position: absolute; inset: 0; animation: ld-kepler 18s linear infinite; will-change: transform; pointer-events: none; }
 .ld-sat i { position: absolute; left: -6px; top: -6px; width: 12px; height: 12px; border-radius: 50%; background: var(--ld-accent); box-shadow: 0 0 0 6px rgba(127, 227, 255, 0.13); }
 .ld-tag { position: absolute; top: 50%; font-size: 13px; line-height: 1.35; color: var(--ld-ink); white-space: nowrap; }
@@ -149,8 +159,8 @@ html.no-landing #landing { display: none; }
 .ld-foot dfn { font-style: italic; color: var(--ld-ink); }
 
 @media (max-width: 860px) {
-  .ld-main { grid-template-columns: 1fr; align-content: center; gap: 8px; padding: 8px 0 20px; }
-  .ld-orbit { order: -1; justify-self: center; width: min(92%, 400px); margin: 6px 0 22px; }
+  .ld-main { grid-template-columns: 1fr; align-content: center; gap: 8px; padding: 4px 0 14px; }
+  .ld-orbit { order: -1; justify-self: center; width: min(90%, 400px, 40vh); margin: 2px 0 16px; }
   .ld-copy h1 { max-width: 14ch; font-size: clamp(32px, 9.4vw, 46px); }
   .ld-go { flex-direction: column; align-items: stretch; gap: 10px; }
   .ld-button { width: 100%; height: 52px; }
