@@ -98,8 +98,17 @@ const MAP_SIZE: Partial<Record<BodyId, number>> = {
 };
 /** How big a body's dot is when the camera has come to rest beside it on the map: its radius over the distance. */
 export const MAP_REST = 1 / 8;
-/** …and in a place, the ordinary whole-body view. */
+/** …and in a place, the ordinary whole-body view (further back on a phone, whose screen is narrow). */
 export const PLACE_REST = 1 / 4.4;
+export const PLACE_REST_PHONE = 1 / 8.5;
+/**
+ * The craft named on the whole solar system. There are two dozen out between the planets, most
+ * of them dead and circling the Sun near the Earth's orbit; named and ringed all at once they
+ * bury the inner planets. The rest are dots until the camera comes near or one is chosen.
+ */
+/** …and of those, the ones whose path is drawn on the whole picture: the five leaving for good. */
+const LEAVING = new Set(['voyager-1', 'voyager-2', 'new-horizons', 'pioneer-10', 'pioneer-11']);
+const HEADLINE = new Set(['voyager-1', 'voyager-2', 'new-horizons', 'pioneer-10', 'pioneer-11', 'parker', 'europa-clipper', 'juice', 'lucy', 'psyche', 'bepicolombo']);
 
 // ---- maps shared by every view ---------------------------------------------------------------
 //
@@ -128,6 +137,8 @@ interface Item {
   /** The radius it was built with, and how much of that it is drawn at (see `place`, the map's dots). */
   base: number;
   scale: number;
+  /** On the map: a craft that is only a dot (no name, no path) until it is near or chosen. */
+  quiet: boolean;
 }
 
 interface Flight {
@@ -356,7 +367,7 @@ export class SpaceView {
   private addBody(body: Body, radius: number, centre: boolean, detail: 'full' | 'small' | 'none'): Item {
     const mesh = createBody(body.id, body.color, radius, centre ? this.segments : 64);
     this.content.add(mesh.mesh);
-    const item: Item = { target: { kind: 'body', body }, key: `body:${body.id}`, pos: new THREE.Vector3(), radius, tag: null, mesh, shown: true, centre, beside: 0, sharp: false, base: radius, scale: 1 };
+    const item: Item = { target: { kind: 'body', body }, key: `body:${body.id}`, pos: new THREE.Vector3(), radius, tag: null, mesh, shown: true, centre, beside: 0, sharp: false, base: radius, scale: 1, quiet: false };
     const map = this.where?.kind === 'system';
     if (!centre || map) item.tag = this.makeTag(item, body.name, body.kind === 'moon' && map ? 'is-minor' : 'is-body');
     this.items.push(item);
@@ -415,7 +426,7 @@ export class SpaceView {
   }
 
   private addCraft(craft: Craft): Item {
-    const item: Item = { target: { kind: 'craft', craft }, key: `craft:${craft.id}`, pos: new THREE.Vector3(), radius: 0, tag: null, mesh: null, shown: true, centre: false, beside: 0, sharp: false, base: 0, scale: 1 };
+    const item: Item = { target: { kind: 'craft', craft }, key: `craft:${craft.id}`, pos: new THREE.Vector3(), radius: 0, tag: null, mesh: null, shown: true, centre: false, beside: 0, sharp: false, base: 0, scale: 1, quiet: this.where?.kind === 'system' && !HEADLINE.has(craft.id) };
     item.tag = this.makeTag(item, craft.short, craft.passing ? 'is-craft is-rock' : craft.status === 'silent' ? 'is-craft is-silent' : 'is-craft');
     this.items.push(item);
     return item;
@@ -750,7 +761,8 @@ export class SpaceView {
     for (const { line, key, anchor } of this.lines) {
       if (anchor) line.position.copy(anchor.pos);
       const owner = this.items.find((item) => item.key === key);
-      line.visible = owner?.shown ?? true;
+      const pathless = map && owner?.target.kind === 'craft' && !LEAVING.has(owner.target.craft.id);
+      line.visible = (owner?.shown ?? true) && !(pathless && owner !== focusItem);
       (line.material as THREE.LineBasicMaterial).opacity = focusItem?.key === key ? 0.85 : map ? 0.26 : 0.32;
     }
     if (this.dots) {
@@ -872,7 +884,7 @@ export class SpaceView {
     // From the sunlit side, a little above and to one side, so the edge of night is in view.
     const side = new THREE.Vector3().crossVectors(UP, this.sunDir);
     if (side.lengthSq() < 1e-6) side.set(1, 0, 0);
-    return this.sunDir.clone().multiplyScalar(0.78).addScaledVector(side.normalize(), 0.55).addScaledVector(UP, 0.28).normalize().multiplyScalar(R * (phone ? 6 : 1 / PLACE_REST));
+    return this.sunDir.clone().multiplyScalar(0.78).addScaledVector(side.normalize(), 0.55).addScaledVector(UP, 0.28).normalize().multiplyScalar(R / (phone ? PLACE_REST_PHONE : PLACE_REST));
   }
 
   private homeCamera(): void {
@@ -916,7 +928,7 @@ export class SpaceView {
     this.limits();
     const map = this.where.kind === 'system';
     if (!item || item.centre) {
-      if (previous) this.fly(map ? this.homeOffset() : this.camera.position.clone().normalize().multiplyScalar(R / PLACE_REST), duration);
+      if (previous) this.fly(map ? this.homeOffset() : this.camera.position.clone().normalize().multiplyScalar(R / (this.host.isPhone() ? PLACE_REST_PHONE : PLACE_REST)), duration);
       return;
     }
     this.sharpen(item);
@@ -1083,6 +1095,7 @@ export class SpaceView {
       // gets one only once the camera has come near enough for it to be more than a speck.
       if (visible && disc > window.innerHeight * 0.3) visible = false;
       if (visible && item.beside > 0 && disc < 5 && item !== focusItem) visible = false;
+      if (visible && item.quiet && item !== focusItem && distance > 60) visible = false;
       const drop = disc + 12;
       const width = tag.textContent!.length * 6.5 + 16;
       if (visible && item !== focusItem && taken.some((box) => Math.abs(box.x - x) < (box.w + width) / 2 && Math.abs(box.y - (y + drop)) < 18)) visible = false;

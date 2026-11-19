@@ -30,7 +30,7 @@
 import '../space.css';
 import type * as THREE from 'three';
 import type { OtherView, SceneKit } from '../render/scene.ts';
-import { MAP_REST, PLACE_REST, SpaceView, targetKey, type Pose, type SpaceHost, type Target } from '../render/space/spaceView.ts';
+import { MAP_REST, PLACE_REST, PLACE_REST_PHONE, SpaceView, targetKey, type Pose, type SpaceHost, type Target } from '../render/space/spaceView.ts';
 import { BODIES, BODY_LIST } from '../space/bodies.ts';
 import { craftPosition, loadDeep } from '../space/deep.ts';
 import { watchDsn } from '../space/dsn.ts';
@@ -371,7 +371,7 @@ export class Places {
     }
     this.show(null);
     // Dive until the dot is nearly as big as the world will be at rest; the next scene carries on in.
-    const rest = to === 'place' && this.host.isPhone() ? 1 / 6 : PLACE_REST;
+    const rest = this.host.isPhone() ? PLACE_REST_PHONE : PLACE_REST;
     const now = this.map.apparent(key);
     const move = reduced() ? FADE : MOVE;
     this.map.surge(Math.min(0.95, now / (rest * 0.8)), move);
