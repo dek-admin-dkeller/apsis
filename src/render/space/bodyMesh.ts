@@ -78,7 +78,7 @@ const BODY_FRAGMENT = /* glsl */ `
   uniform vec3 uRing;         // inner radius, outer radius, how much light the densest part stops (0 = no rings)
   uniform sampler2D uNightMap;   // lights on the dark side (the Earth's cities)
   uniform float uUseNight;
-  uniform sampler2D uCloudMap;   // cloud cover in its alpha channel
+  uniform sampler2D uCloudMap;   // cloud cover in its grey level (textures/clouds.webp)
   uniform float uUseClouds;
   varying vec3 vNormalW;
   varying vec3 vPosW;
@@ -100,7 +100,7 @@ const BODY_FRAGMENT = /* glsl */ `
     float ndl = dot(n, uSunDir);
     float mu = max(dot(n, v), 0.0);
     vec3 albedo = mix(uColor, texture2D(uMap, vUv).rgb, uUseMap);
-    float cloud = texture2D(uCloudMap, vUv).a * uUseClouds;
+    float cloud = texture2D(uCloudMap, vUv).r * uUseClouds;
     albedo = mix(albedo, vec3(0.9), cloud * 0.92);
 
     // Dusty airless ground scatters light back, so its lit disc is nearly evenly bright with a

@@ -196,7 +196,7 @@ any script, with the tracker loading behind it. It is built to SHOW the tracker,
 it (the owner found a text-only page bland):
 - **Opening screen:** the LIVE globe shows through it as early as possible. `boot()` calls
   `landing.goLive()` (the page's backdrop fades, `is-live`) as soon as the Earth's day map and
-  water mask have arrived (`globeReady`, about 2 MB), not when everything has: the catalogue,
+  water mask have arrived (`globeReady`, about 0.6 MB: the 2048 day map and the greyscale mask), not when everything has: the catalogue,
   the first positions and the heavy textures (clouds, night lights, terrain) follow behind the
   page, the objects appearing when they are ready and the clouds and lights fading in
   (`render/globe.ts`, "Loading order"). `landing.ready()` then writes the status line and
@@ -806,6 +806,19 @@ it is used. So:
   back cell coordinates with the 2^16 offset already removed and `placeWatch.ts` removed it again,
   putting every cell 65 million km away. With a craft selected its own cell is amber and the
   27-cell block is outlined (`CELL` kinds), and `#watch-focus` says what shares that block.
+- **Speed pass** (measured in headless Chrome at 20 Mbit/s, fresh cache): the globe showed at
+  1.8 s (phone 2.2 s) and 11 MB had downloaded by 17 s; now 0.7 s on both, ready at 1.8 s, about
+  7 MB. How: `clouds.webp` (the 5 MB PNG's alpha as greyscale WebP q88, 1.5 MB, PSNR 41.7 dB
+  against the original; shaders read `.r`), the day map first at 2048 (`earth-blue-marble_m.jpg`,
+  preloaded) and the 4096 one swapped in at idle on a computer only (`sharpenDay` in globe.ts),
+  the water mask greyscale (430 → 200 kB), the Earth's `IMAGERY` base the 2048 copy (4096 as
+  `baseHigh`); a `_m` copy shares the full map's `_s` small copy (the regexes in spaceView,
+  worldStrip and check-deep know it). Auto quality now also steps UP: Balanced → High once, on a
+  computer holding ≥ 57 fps for six readings (~9 s), and back to Balanced if High drops it under
+  45 (`watchFrameRate` in main.ts).
+- **The hover card away from the Earth follows the pointer on every event** (`onHoverMove`): the
+  pick test is still throttled to 20 a second, and the card moved only with it (it looked like a
+  low frame rate).
 - **The time bar's offset is short** (`shortSpan` in `timeControls.ts`: "−3.0 d", "+8.4 mo",
   "+82 yr") and the words "… behind" are hidden while the bar is open (the date line already says
   it): far from the present they ran over the transport buttons.

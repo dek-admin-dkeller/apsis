@@ -131,7 +131,7 @@ export class Inspector {
   constructor(handlers: InspectorHandlers, getObserver: () => Observer) {
     this.handlers = handlers;
     this.getObserver = getObserver;
-    this.mapImage.src = './textures/earth-blue-marble.jpg';
+    this.mapImage.src = './textures/earth-blue-marble_m.jpg'; // a chart a few hundred pixels wide: the 2048 copy is plenty
     // On a phone the tabs pin themselves under the name (mobile.css), so the layout has to know
     // how tall the name is: it is one line or two, with the Wikipedia link under it.
     const head = this.root.querySelector<HTMLElement>('.insp-head')!;

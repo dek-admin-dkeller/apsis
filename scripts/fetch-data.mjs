@@ -43,7 +43,9 @@ const TEXTURES = [
   ['img/earth-night.jpg', 'earth-night.jpg'],
   ['img/earth-topology.png', 'earth-topology.png'],
   ['img/earth-water.png', 'earth-water.png'],
-  ['clouds/clouds.png', 'clouds.png'],
+  // (clouds: public/textures/clouds.webp is committed, made once from three-globe's clouds/clouds.png:
+  //  its alpha channel as a greyscale WebP, quality 88. earth-blue-marble_m.jpg is the day map at
+  //  2048 × 1024, and earth-water.png is stored greyscale. See "Loading order" in render/globe.ts.)
 ];
 
 const exists = (p) => access(p).then(() => true, () => false);

@@ -572,7 +572,7 @@ export class SpaceView {
   private smallFace(id: BodyId): string {
     const face = this.face(id);
     const plain = face.endsWith(GUESS_TAG) ? face.slice(0, -GUESS_TAG.length) : face;
-    return guessed(id, plain.replace(/\.(jpg|webp|png)$/, '_s.$1')).replace(GUESS_TAG + GUESS_TAG, GUESS_TAG);
+    return guessed(id, plain.replace(/(_m)?\.(jpg|webp|png)$/, '_s.$2')).replace(GUESS_TAG + GUESS_TAG, GUESS_TAG); // ("_m" copies share the full map's small copy)
   }
 
   /** "Fill in unseen ground" changed: every view gives those worlds their other map. */
@@ -638,7 +638,7 @@ export class SpaceView {
     if (body.id === 'earth' && this.kit.quality !== 'fast' && !this.host.isPhone()) {
       // The same two pictures the tracker's globe uses (already in the browser's cache).
       this.loadMap('textures/earth-night.jpg', (night) => {
-        this.loadMap('textures/clouds.png', (clouds) => {
+        this.loadMap('textures/clouds.webp', (clouds) => {
           if (night && clouds && here()) mesh.setExtras(night, clouds);
         });
       });

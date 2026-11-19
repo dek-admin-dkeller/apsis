@@ -2141,10 +2141,16 @@ function updatePlaceStatus(realSeconds: number): void {
 }
 
 // ---- frame-rate watchdog: in Auto quality, step down if the GPU cannot keep up ------------
+// …and UP on a machine that plainly can: Auto starts Balanced; a computer that holds ~60 fps for
+// about ten seconds is given High (sharper on a high-density screen, smoother edges). If High
+// then proves too much, it goes back to Balanced and does not try again in this visit. (Before
+// this, Auto only ever stepped down, so a strong machine never saw High unless chosen by hand.)
 
 let fpsFrames = 0;
 let fpsSince = performance.now();
 let slowStreak = 0;
+let fastStreak = 0;
+let triedHigh = false;
 let watchdogArmed = false; // only after the intro, so shader compilation does not count as "slow"
 
 function watchFrameRate(now: number): void {
@@ -2156,7 +2162,26 @@ function watchFrameRate(now: number): void {
   store.setFps(fps, kit.quality);
   // A browser throttles hidden / unfocused tabs to a few fps — that is not the GPU being slow.
   const trustworthy = document.hasFocus() || fps > 12;
-  if (!watchdogArmed || store.settings.quality !== 'auto' || kit.quality === 'fast' || !trustworthy || fps >= 40) {
+  const auto = watchdogArmed && store.settings.quality === 'auto' && trustworthy && !document.hidden;
+  // Up: Balanced → High, once, on a computer that has kept up for six readings in a row (~9 s).
+  if (auto && kit.quality === 'balanced' && !triedHigh && !isPhone() && fps >= 57) {
+    if (++fastStreak >= 6) {
+      fastStreak = 0;
+      triedHigh = true;
+      kit.setQuality('high');
+    }
+  } else {
+    fastStreak = 0;
+  }
+  // High proved too much: back to Balanced (not Fast: High was a try, not a need).
+  if (auto && kit.quality === 'high' && fps < 45) {
+    if (++slowStreak >= 2) {
+      slowStreak = 0;
+      kit.setQuality('balanced');
+    }
+    return;
+  }
+  if (!auto || kit.quality !== 'balanced' || fps >= 40) {
     slowStreak = 0;
     return;
   }

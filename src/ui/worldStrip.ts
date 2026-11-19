@@ -58,7 +58,7 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text 
 /** A world's small map (the copy the solar system draws it from), if it has one. */
 function smallMap(id: BodyId): string | null {
   const base = IMAGERY[id]?.base;
-  return base ? base.replace(/\.(jpg|webp|png)$/, '_s.$1') : null;
+  return base ? base.replace(/(_m)?\.(jpg|webp|png)$/, '_s.$2') : null; // (a "_m" copy shares its small copy with the full map)
 }
 
 const SYSTEM_SVG = '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="2.2"/><ellipse cx="10" cy="10" rx="8.2" ry="3.4"/><ellipse cx="10" cy="10" rx="5" ry="2"/></svg>';

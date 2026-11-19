@@ -166,6 +166,7 @@ export const WHATS_NEW: Update[] = [
       'The bell’s list is cleaner: spacecraft in contact folded into one row, a date column for what is coming, notifications as a switch.',
       'Launch climbs: a failed launch is shown as far as it got with its reported cause; the webcast link appears only when one is listed; pressing Live or Escape during a climb no longer leaves the camera stuck.',
       'The screening grid (G) now shows at every world and on the solar system, where its cells are millions of kilometres wide; select a craft to see its own cell, the 27 cells searched round it, and what shares them.',
+      'Faster to open: the globe appears in well under a second on a good connection, about 4 MB less is downloaded, and on a strong computer Auto quality now steps up to High by itself.',
       'Fixed: searching for something beyond Earth orbit (Wind, Webb) from another world now takes you straight to it; the camera turns round a lander (Surveyor, Apollo) with the horizon level; a rocket waiting on its pad no longer sinks into the ground; the time bar’s text no longer runs over its buttons far from the present.',
     ],
   },

@@ -463,7 +463,7 @@ check('the reference positions are from the same download as deep.json', referen
   let smalls = 0;
   /** The 256 px copy the solar-system view draws from: <name>_s.jpg beside the map. */
   const lookSmall = (id, path) => {
-    const copy = path.replace(/\.(jpg|png)$/, '_s.jpg');
+    const copy = path.replace(/(_m)?\.(jpg|png)$/, '_s.jpg'); // a "_m" copy (the Earth's 2048 map) shares the full map's
     try {
       const size = sizeOf(readFileSync(join(HERE, '../public', copy)));
       if (!size || size[0] !== 256 || size[1] !== 128) problems.push(`${id}: ${copy} is not 256 × 128`);

@@ -11,6 +11,13 @@
  * the terrain and the clouds, which are held back until the caller says the catalogue has
  * downloaded (they would otherwise share the connection with it). The night lights and the
  * clouds fade in when they arrive instead of appearing between one frame and the next.
+ *
+ * Sizes (a speed pass, Nov 2026): the first day map is a 2048-pixel copy (`_m`, 0.38 MB rather
+ * than 1.5 MB), so the globe shows sooner; on a computer the full 4096-pixel map replaces it in
+ * an idle moment once everything else is in (`sharpenDay`), and a phone keeps the 2048 one, which
+ * is all its screen can show of a whole globe (close up, the map tiles take over anyway). The
+ * clouds are only coverage, one channel: a greyscale WebP (1.5 MB, quality 88: the faint wisps kept) read from .r, not the 5 MB
+ * colour PNG it came from (whose alpha held the same thing). The water mask is greyscale too.
  */
 
 import * as THREE from 'three';
@@ -18,11 +25,11 @@ import { gstime, sunPos } from 'satellite.js';
 import { EARTH_RADIUS } from './scene.ts';
 
 const TEXTURES = {
-  uDay: ['earth-blue-marble.jpg', true],
+  uDay: ['earth-blue-marble_m.jpg', true], // the 4096 map follows on a computer (sharpenDay)
   uNight: ['earth-night.jpg', true],
   uTopo: ['earth-topology.png', false],
   uWater: ['earth-water.png', false],
-  uClouds: ['clouds.png', false],
+  uClouds: ['clouds.webp', false], // coverage in its grey level (.r)
 } as const; // [file, isColourData]
 
 /** What the first picture needs. Everything else can arrive while the visitor is already looking. */
@@ -207,8 +214,8 @@ const earthFragment = /* glsl */ `
     float cloud;
     float cloudSunward; // cloud cover a short way towards the sun = what shades this spot
     if (uHasClouds > 0.5) {
-      cloud = texture2D(uClouds, cloudUv + viewTangent * CLOUD_HEIGHT * tangentToUv).a;
-      cloudSunward = texture2D(uClouds, shadowUv, 1.5).a; // +1.5 mip levels = a soft-edged shadow
+      cloud = texture2D(uClouds, cloudUv + viewTangent * CLOUD_HEIGHT * tangentToUv).r;
+      cloudSunward = texture2D(uClouds, shadowUv, 1.5).r; // +1.5 mip levels = a soft-edged shadow
     } else if (uCloudFade > 0.0) { // the texture failed: made-up clouds (not while it is merely still loading)
       cloud = smoothstep(0.55, 0.75, fbm(unit * 4.0 + vec3(uCloudShift * 40.0, 0.0, 0.0))) * 0.7;
       cloudSunward = cloud * 0.6;
@@ -378,6 +385,26 @@ export function createGlobe(scene: THREE.Scene, onProgress: () => void, holdRest
   const essential = Promise.all(names.filter((name) => ESSENTIAL.has(name)).map(load)).then(() => undefined);
   const held = Promise.race([holdRest.catch(() => undefined), new Promise((resolve) => setTimeout(resolve, REST_WAIT_MS))]);
   const ready = Promise.all([essential, held]).then(() => Promise.all(names.filter((name) => !ESSENTIAL.has(name)).map(load))).then(() => undefined);
+  // On a computer, the full-size day map once everything else has arrived, in an idle moment
+  // (its decode and upload are a one-off cost better paid while nothing is moving).
+  const sharpenDay = (): void => {
+    const phone = window.matchMedia('(max-width: 760px), (pointer: coarse)').matches;
+    if (phone) return;
+    const idle = (run: () => void) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(run, { timeout: 8000 }) : setTimeout(run, 1500));
+    idle(() => {
+      loader.loadAsync('./textures/earth-blue-marble.jpg').then((texture) => {
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.anisotropy = 16;
+        texture.minFilter = THREE.LinearMipmapLinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+        const old = uniforms.uDay.value as THREE.Texture | null;
+        uniforms.uDay.value = texture;
+        old?.dispose();
+      }, () => undefined); // the 2048 map stays
+    });
+  };
+  void ready.then(sharpenDay);
 
   const earth = new THREE.Mesh(
     // 320 × 160 segments: the limb stays round (facets < half a pixel) from 300 km up.

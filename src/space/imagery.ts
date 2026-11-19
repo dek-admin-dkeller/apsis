@@ -63,7 +63,8 @@ export const IMAGERY: Partial<Record<BodyId, Imagery>> = {
     credit: 'NASA / JPL / USGS (Magellan radar); clouds: Solar System Scope (CC BY 4.0)',
   },
   // The Earth keeps the tracker's own textures (public/textures/); its close-up ground is render/tiles.ts.
-  earth: { base: 'textures/earth-blue-marble.jpg', credit: 'NASA Blue Marble' },
+  // (The 2048 copy, as the tracker's globe starts with; the 4096 one where the sharpest copy is drawn. Small copy: earth-blue-marble_s.jpg.)
+  earth: { base: 'textures/earth-blue-marble_m.jpg', baseHigh: 'textures/earth-blue-marble.jpg', credit: 'NASA Blue Marble' },
   moon: {
     base: `${DIR}moon.jpg`,
     baseHigh: `${DIR}moon-4k.jpg`,
