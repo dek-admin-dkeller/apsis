@@ -1,0 +1,46 @@
+/*
+ * The four "beyond Earth orbit" lists in the Objects panel's Activity tab: asteroid fly-bys
+ * (features/flybys.ts), fireballs (fireballs.ts), meteor showers (showers.ts) and the Deep
+ * Space Network (dsn.ts). They share one row, built on the ordinary .watch-list rows of
+ * style.css, in the shape the launches list already uses:
+ *
+ *     name ................................ the figure that matters
+ *     one quiet line of detail
+ *     when ............................... a second figure (optional)
+ *
+ * A row that can be chosen is a <button class="watch-pick bx-row">; one that cannot (a dish
+ * talking to a spacecraft) is a <div class="bx-row"> with the same layout.
+ */
+
+.bx-list { margin-top: 6px; }
+.bx-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 2px 10px; padding: 8px 6px; width: 100%; }
+div.bx-row { flex: 1; min-width: 0; }
+.bx-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: 12.5px; font-weight: 550; }
+/* Figures in the monospace face with tabular digits, so a column of them lines up. */
+.bx-fig { justify-self: end; font: 11px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--amber); white-space: nowrap; }
+.bx-fig.is-quiet { color: var(--muted); }
+.bx-sub { grid-column: 1 / -1; min-width: 0; font-size: 11.5px; line-height: 1.35; color: var(--muted); }
+.bx-when { min-width: 0; font-size: 11.5px; color: var(--text); opacity: 0.86; }
+.bx-when.is-wide { grid-column: 1 / -1; } /* a third line with no figure beside it */
+/* Something that has already happened (a fly-by earlier this week) steps back. */
+.bx-list li.is-past .bx-name, .bx-list li.is-past .bx-when { opacity: 0.55; }
+.bx-list li.is-past .bx-fig { color: var(--muted); }
+
+/* A small heading between two groups of rows ("Active now", "Coming next"; a network site). */
+.bx-head { margin: 12px 0 2px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.bx-head:first-child { margin-top: 2px; }
+.bx-credit { margin-top: 8px; }
+
+/* Which way a signal is going: an arrow lit while that direction is live. */
+.bx-arrows { justify-self: end; display: inline-flex; gap: 3px; font: 12px var(--font-mono); color: var(--line-strong); }
+.bx-arrows .is-live { color: var(--ok); }
+
+/* Phones: the same sizes as the other rows inside a sheet (see section 6 of mobile.css). */
+@media (max-width: 760px) {
+  .bx-row { gap: 3px 10px; padding: 10px 6px; }
+  .bx-name { font-size: 14.5px; }
+  .bx-sub, .bx-when { font-size: 13px; }
+  .bx-fig { font-size: 12.5px; }
+  .bx-arrows { font-size: 14px; }
+  .bx-head { font-size: 11.5px; }
+}

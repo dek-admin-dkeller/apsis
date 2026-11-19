@@ -31,8 +31,10 @@ Other commands:
 ```bash
 npm run bench        # brute force vs spatial hash in Node — prints a table for the report
 npm run build        # type-check + production build into dist/
-npm run check        # the feature checks: orbit changes, visible passes, the report, decay, the command bar
+npm run check        # the feature checks: orbit changes, visible passes, the report, decay, the command bar,
+                     # and the solar system against JPL Horizons (prints the worst errors)
 npm run fetch-radio  # refresh the SatNOGS radio records in public/data/radio.json (at most every 6 hours)
+npm run fetch-deep   # refresh public/data/deep.json: spacecraft beyond Earth orbit, fly-bys, fireballs (JPL; at most every 12 hours)
 npm run shots        # retake the home page's screenshots (needs Chrome and `npm run dev` running)
 ```
 
@@ -53,12 +55,16 @@ status line sit along the bottom.
 | Home | the logo (or `0`) closes everything and returns to the whole Earth at the present time |
 | Inspect an object | click a dot, or search by name / NORAD ID (press `/`; suggestions show a photo or a 3D-model thumbnail). The camera flies to the object and locks on: dragging now turns the view around **it**, not the Earth (`T` unlocks) |
 | Inspector tabs | **Live** telemetry, ground-track map, altitude chart · **Orbit** shape to scale, orbital elements, speed and sunlight charts · **Passes** over your ground station with a sky chart · **Record** owner, launch, size, a Wikipedia summary and the raw element record |
-| Objects panel (`O`) | three tabs. **Browse** is a page of controls: watchlist, notable objects, filters by type, orbit regime and altitude band, colour by type, orbit, altitude, owner, launch year, tilt or data age, labels, marker size. **Activity** and **Tools** are grids of tiles, one per feature (an icon, a name and a live figure where there is one): visible tonight, launches, orbit changes, newest, trains, lowest orbits; constellations, growth by year, the designer, the contact timeline, the benchmark, the walkthrough, the tour, the command bar. A tile opens its feature in place of the grid; the feature's title is the way back |
+| Objects panel (`O`) | three tabs. **Browse** is a page of controls: watchlist, notable objects, filters by type, orbit regime and altitude band, colour by type, orbit, altitude, owner, launch year, tilt or data age, labels, marker size. **Activity** and **Tools** are grids of tiles, one per feature (an icon, a name and a live figure where there is one): visible tonight, launches, orbit changes, newest, trains, lowest orbits, asteroid fly-bys, fireballs, meteor showers, deep space links; constellations, growth by year, the designer, the contact timeline, the benchmark, the walkthrough, the tour, the command bar. A tile opens its feature in place of the grid; the feature's title is the way back |
 | Command bar (`Ctrl` `K`, `Cmd` `K` on a Mac) | type an object ("iss", "hubble"), a place ("tokyo"), a time ("tomorrow 9 pm", "+90m", "now"), a speed ("100x", "pause") or an action ("monitor on", "launches", "sky view", "miles"). Each row says what it will do before you choose it. On a phone: menu → **Type a command** |
 | Visible tonight | the bright passes you could see with your own eyes in the next 24 hours from where you are (the satellite in sunlight, your sky dark), brightest first, with where to look. Pressing the button asks for your location if the ground station is still the built-in example. On a computer: Objects → Activity → Tonight. On a phone it lives in the sky view: the small faded eye beside the cross opens the list over the sky, and tapping a pass moves the clock to just before it |
 | Upcoming launches | Objects → Activity: what is due to go up next, who is launching it and from where, with a countdown; the pads are marked on the globe and a click flies to one |
 | Orbit changes | Objects → Activity: what differs between the two most recent downloads of the catalogue: orbits raised, lowered or tilted by more than drag and noise explain (possible manoeuvres), new objects, objects that are gone |
 | Space weather and re-entries | Objects → Activity → Lowest orbits: today's solar radio flux and geomagnetic activity from NOAA in plain words, and a rough "time left" beside each of the lowest objects |
+| Asteroid fly-bys | Objects → Activity: every asteroid coming within 7.5 million km of the Earth in the next two months, soonest first: when, how far (in km or miles, and in Moon-distances), a size range and its speed. The tile counts the next 30 days. Click one to move the clock to its closest approach |
+| Fireballs | Objects → Activity: the forty most recent bright meteors recorded by US Government sensors, with where each exploded, how high, and its energy in kilotons of TNT. While the list is open they are marked on the globe; click one to fly there |
+| Meteor showers | Objects → Activity: which of the twelve main annual showers are active (on the simulated clock) and which come next, with each one's peak time for the year, best hourly rate, parent comet and the constellation it comes from. Click one to move the clock to its peak |
+| Deep Space Network | Objects → Activity → *Deep space links*: NASA's live list of which dish at Goldstone, Madrid and Canberra is pointed at which spacecraft, which way signals are flowing, how far away the craft is and the round-trip light time. Refreshed each minute while it is open |
 | Growth by year | Objects → Tools: drag a slider from 1957 to today (or press Play) and the globe shows only what had been launched by that year, with a chart of what is still up from each year |
 | Radio, last heard, Doppler | inspector, Live tab: when a volunteer ground station last received the object and on which frequency. Passes tab: its listed transmitters and the Doppler shift of one of them as heard at your ground station right now |
 | Data age | inspector, Live tab: how old the object's orbital elements are, with a warning once they are stale, and its catalogue status. Objects → Browse → Colour by → **Data age** colours the whole catalogue the same way |
@@ -182,9 +188,9 @@ sampling every 0.2 s on a 4,000-object subset, the scan reported every crossing 
 
 The app is static files, so it runs on GitHub Pages. `.github/workflows/deploy.yml` builds
 and deploys on every push to `main`, and every 8 hours it first downloads fresh orbital data
-from CelesTrak (which asks for no more than one download every 2 hours) and fresh radio
-records from SatNOGS, and compares the new elements with the ones published before (the
-"Orbit changes" list). The refreshed data is published but not committed, so the repository
+from CelesTrak (which asks for no more than one download every 2 hours), fresh radio
+records from SatNOGS and fresh deep-space positions from JPL, and compares the new elements
+with the ones published before (the "Orbit changes" list). The refreshed data is published but not committed, so the repository
 stays small; if CelesTrak cannot be reached, the snapshot in the repository is published
 instead. A build started by a push downloads nothing from outside: it reads the data files
 back from the site as it is published and keeps them if they are newer than the repository's
@@ -238,11 +244,20 @@ src/
     firstPerson.ts       ride-along and sky-view cameras        siteMarker.ts   the ground-station dot
     constellation.ts     all orbits of a group + ground coverage map   aurora.ts   live aurora oval
     orbitLine.ts  groundTrack.ts  encounterViz.ts  conjunctionMarkers.ts  gridViz.ts  padMarkers.ts
+  space/                 beyond Earth orbit; one frame for all of it (ICRF, km, Unix ms):
+    types.ts             the shared shapes: Body, Craft, Motion, Flyby, Fireball, DsnLink, Imagery
+    bodies.ts            the Sun, planets and moons: radius, GM, day, year
+    ephem.ts             where each body is and how it is turned; Kepler's equation for ellipses and hyperbolas
+    deep.ts              loads public/data/deep.json; where each spacecraft is at any moment
+    imagery.ts           each body's map, its streamed tile layer and the picture credits
+    dsn.ts               NASA's live Deep Space Network feed           showers.ts   the annual meteor showers
   features/              later additions, each one file installed through the App interface (ui/app.ts):
     radio.ts             last heard, transmitters, Doppler            changes.ts   orbit changes and data age
     weather.ts           space weather and time-left estimates        launches.ts  upcoming launches and pads
     tonight.ts           passes visible tonight (+ tonightWords.ts)   report.ts    close-approach report and CSV (+ reportPage.ts)
     growth.ts            growth by year                               command.ts   the command bar (+ commandParse.ts)
+    flybys.ts            asteroid fly-bys                             fireballs.ts fireballs, marked on the globe
+    showers.ts           meteor showers                               dsn.ts       the Deep Space Network, live
   ui/
     inspector.ts         the selected object's four tabs          charts.ts   hand-drawn canvas charts
     monitor.ts           close-approach list (right now)          encounterPanel.ts   one pair in detail
@@ -264,11 +279,17 @@ src/
 scripts/
   fetch-data.mjs         one-time download of the element snapshot, catalogue facts and textures
   fetch-radio.mjs        SatNOGS radio records into public/data/radio.json
+  fetch-deep.mjs         spacecraft beyond Earth orbit, moons, fly-bys and fireballs into public/data/deep.json
+  deep-craft.mjs         the table of those spacecraft: names, aliases, launch dates, a sentence each
+  horizons.mjs           the one place that talks to JPL Horizons (one request at a time)
+  make-deep-fixture.mjs  downloads the reference positions the check compares against (run by hand, rarely)
+  build-space-maps.py    how every map in public/textures/space/ was made (run by hand; needs Python with Pillow)
   diff-elements.mjs      compares two element downloads and writes public/data/changes.json
   carry-over.mjs         push builds: keep the data the published site is already showing
   build-borders.mjs      turns the world-atlas map data into public/data/borders.bin
   bench.mjs              the benchmark in Node
   check-*.mjs  decay-check.mjs  test-command.mjs    the feature checks behind `npm run check`
+                         (check-deep.mjs: planets, moons, rotation and spacecraft against JPL Horizons)
   shots.mjs              retakes the home page's screenshots
 ```
 
@@ -346,6 +367,39 @@ two `Map<noradId, record>` tables that the orbit-change comparison joins, and th
   not replicas of individual spacecraft, and are drawn far larger than life so they are
   visible.
 - **Coastlines and borders** are Natural Earth data via the `world-atlas` package.
+- **Beyond Earth orbit, positions are computed, not downloaded live.** The planets come from
+  JPL's "approximate positions" elements, the Moon from a 70-term series, the other moons from
+  orbits fitted to twenty years of JPL positions. `npm run check` compares all of it with JPL
+  Horizons on twelve dates from 2024 to 2030: planets within 0.08° of direction and 0.1 % of
+  distance (Saturn is the worst), the Moon within 0.005°, the other moons within about 1°,
+  every pole and prime meridian within 0.02°. Outside 1800–2050 the planet table is not valid.
+- **Spacecraft beyond Earth orbit** (`public/data/deep.json`) are placed from
+  [JPL Horizons](https://ssd.jpl.nasa.gov/horizons/) when the site is built (every 8 hours):
+  an orbit about the body each one circles, a run of positions for the craft round the L1 and
+  L2 points, or a landing site. At the moment of the download they are exact. Afterwards an
+  orbit is carried forward by Kepler's equation: good for decades for the Voyagers, for
+  weeks on a cruise between planets (until the next engine burn or fly-by), and for orbiters
+  at the Moon, Mars and Jupiter within about a degree for a week, using turning rates
+  measured from Horizons. A sampled path is held at its last position beyond its end. Rovers
+  and landers are fixed at one place; several of the landers are long silent.
+- **Asteroid fly-bys and fireballs** are from NASA/JPL's Center for Near Earth Object Studies,
+  saved with the same build. A fly-by's distance is the nominal one and can shift as the
+  orbit is refined; sizes are estimated from brightness, so they are ranges. Fireball reports
+  are published weeks late and only for events the sensors happened to see.
+- **Meteor shower rates are the textbook best case** (dark sky, radiant overhead); a real
+  count is usually a third to a half. Peaks are computed from the Sun's longitude and are
+  good to an hour or two; a shower can still surprise.
+- **The Deep Space Network list** is NASA's own live feed (eyes.nasa.gov/dsn), read once when
+  the page starts and then each minute only while the list is open. It shows NASA's network
+  only: a craft talking to ESA's or China's dishes is not listed.
+- **Maps of other worlds** are NASA mosaics (public domain) where a surface has been mapped:
+  Mercury, Venus by radar, the Moon, Mars, Io, Europa, Ganymede, Callisto, Titan, Enceladus,
+  Triton, Pluto and Charon; close up, sharper tiles are streamed from NASA's Solar System
+  Treks. The Sun, Jupiter, Saturn and its rings, Uranus, Neptune and the clouds of Venus are
+  the "Solar System Scope" textures (CC BY 4.0), which are artist-finished from NASA imagery.
+  Titan's map is one infrared colour, tinted here; the unlit south of Pluto and Charon and
+  most of Triton's north were never seen and are black. On the gas giants longitude is not
+  tied to anything visible. `src/space/imagery.ts` lists the source and licence of every file.
 
 ## Limitations
 

@@ -41,6 +41,7 @@ export type PanelName = 'objects' | 'layers' | 'conj' | 'settings';
 export type SectionName =
   | 'watchlist' | 'notable' | 'type' | 'orbit' | 'appearance' // Browse
   | 'tonight' | 'launches' | 'changes' | 'newest' | 'trains' | 'lowest' // Activity
+  | 'flybys' | 'fireballs' | 'showers' | 'dsn' // Activity, beyond Earth orbit
   | 'constellations' | 'growth' | 'designer'; // Tools
 
 /**

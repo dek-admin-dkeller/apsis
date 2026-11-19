@@ -20,6 +20,8 @@
 //   spacecraft          within 1 % of Horizons' distance at the download moment; sampled paths
 //                       within 1,000 km wherever Horizons was asked between two samples
 //   fly-by paths        closest point within 3 % of the listed distance and an hour of the listed time
+//   meteor showers      the Sun's longitude within 0.05° at two published peak times
+//   maps                every bundled picture present, 2:1, at its stated width
 // Everything else printed (how far orbits drift in a day, a week, a month) is information.
 
 import { readFileSync } from 'node:fs';
@@ -320,7 +322,33 @@ check('the reference positions are from the same download as deep.json', referen
   check(`${balls.length} fireballs: places and energies sane, newest first`, balls.every((b, i) => Math.abs(b.latDeg) <= 90 && Math.abs(b.lonDeg) <= 180 && b.energyKt > 0 && (i === 0 || b.timeMs <= balls[i - 1].timeMs)));
 }
 
-// ── 4. The maps ─────────────────────────────────────────────────────────────────────────
+{
+  // Every code a craft says the Deep Space Network knows it by must have a readable name.
+  const { dsnKnown, dsnName } = await import('../src/space/dsn.ts');
+  const nameless = deep.craft.flatMap((craft) => craft.dsn.filter((code) => !dsnKnown(code)).map((code) => `${craft.id}: ${code}`));
+  check('every Deep Space Network code in deep.json has a readable name', nameless.length === 0 && dsnName('vgr1') === 'Voyager 1' && dsnName('ZZZ9') === 'ZZZ9', nameless.join(', '));
+}
+
+// ── 4. Meteor showers ───────────────────────────────────────────────────────────────────
+
+{
+  const { SHOWERS, activeShowers, nextShowers, showerPeak, solarLongitude } = await import('../src/space/showers.ts');
+  // Two anchors from the International Meteor Organization's 2025 calendar: the Perseids' peak
+  // (Sun at 140.0°) was given as 12 August 20h UT, the Geminids' (262.2°) as 14 December 08h UT.
+  const anchors = [['2025-08-12T20:00:00Z', 140.0], ['2025-12-14T08:00:00Z', 262.2]];
+  const off = Math.max(...anchors.map(([iso, lon]) => Math.abs(solarLongitude(Date.parse(iso)) - lon)));
+  // Each peak must land within a day and a half of its usual calendar date, in any year.
+  let slip = 0;
+  for (const shower of SHOWERS) for (const year of [2024, 2026, 2030]) slip = Math.max(slip, Math.abs(showerPeak(shower, year) - Date.UTC(year, shower.peak[0] - 1, shower.peak[1], 12)) / 86400000);
+  check('meteor showers: the Sun\'s longitude matches the published peaks, and every peak falls on its usual date', off < 0.05 && slip < 1.5, `Sun's longitude within ${off.toFixed(3)}° at two published peaks; peaks within ${slip.toFixed(2)} days of their calendar dates`);
+  const names = (list) => list.map((time) => time.shower.code).join(' ');
+  const november = Date.parse('2026-11-19T06:00:00Z'), january = Date.parse('2027-01-05T00:00:00Z');
+  check('meteor showers: active and next, across the turn of the year',
+    names(activeShowers(november)) === 'LEO NTA STA' && names(nextShowers(november, 3)) === 'GEM URS QUA' && names(activeShowers(january)) === 'QUA' && names(activeShowers(Date.parse('2026-06-15T00:00:00Z'))) === '',
+    `19 Nov 2026: ${names(activeShowers(november))} active, then ${names(nextShowers(november, 3))}; 5 Jan 2027: ${names(activeShowers(january))}`);
+}
+
+// ── 5. The maps ─────────────────────────────────────────────────────────────────────────
 
 {
   // Width and height straight from the file: a JPEG states them after its SOF marker

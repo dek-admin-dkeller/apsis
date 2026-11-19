@@ -2,7 +2,8 @@
 #
 #   push to main      → build and deploy what is in the repository, with the data the site
 #                       is already showing (scripts/carry-over.mjs; no outside download)
-#   every 8 hours     → first download fresh orbital data from CelesTrak, then build and deploy
+#   every 8 hours     → first download fresh orbital data from CelesTrak (and radio records from
+#                       SatNOGS, deep-space positions from JPL), then build and deploy
 #   "Run workflow"    → same as the schedule (use it to refresh the data by hand)
 #
 # The refreshed data is NOT committed back: it lives only in the published site, so the
@@ -57,7 +58,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
       # A push must not put the site back on the older snapshot stored in the repository: the
       # data files it is showing now are read back from the site itself and kept if they are
-      # newer. Nothing is downloaded from CelesTrak or SatNOGS here. Never fatal.
+      # newer. Nothing is downloaded from CelesTrak, SatNOGS or JPL here. Never fatal.
       - name: Keep the data the site is already showing
         if: github.event_name == 'push'
         run: node scripts/carry-over.mjs "${{ steps.site.outputs.url }}" || echo "Could not read the published data - building with the stored snapshot"
@@ -73,6 +74,12 @@ jobs:
       - name: Refresh radio records (SatNOGS volunteer network; at most 22 requests, never fatal)
         if: github.event_name != 'push'
         run: node scripts/fetch-radio.mjs || echo "SatNOGS unreachable - publishing the stored radio records"
+      # Spacecraft beyond Earth orbit, the moons' orbits, asteroid fly-bys and fireballs. About
+      # 90 requests to JPL, strictly one at a time; a craft that cannot be placed is skipped and
+      # an outage leaves the stored file in place.
+      - name: Refresh deep-space data (JPL Horizons and CNEOS; never fatal)
+        if: github.event_name != 'push'
+        run: node scripts/fetch-deep.mjs || echo "JPL unreachable - publishing the stored deep-space data"
       # GitHub switches off scheduled workflows in a repository that has had no activity for
       # 60 days (the site stays up; only this refresh would stop). Re-enabling the workflow
       # through the API on each scheduled run resets that timer.
