@@ -51,7 +51,9 @@ const VERTEX = /* glsl */ `
   varying vec3 vPosW;
   varying vec2 vUv;
   void main() {
-    vUv = uv;
+    // Maps are decoded off the main thread into bitmaps, which arrive the right way up (row 0 =
+    // north); a sphere's v runs from the south. So v is turned over here, once, for every map.
+    vUv = vec2(uv.x, 1.0 - uv.y);
     vNormalW = normalize(mat3(modelMatrix) * normal);
     vec4 world = modelMatrix * vec4(position, 1.0);
     vPosW = world.xyz;
