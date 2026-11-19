@@ -146,7 +146,6 @@ body:not(.away) #space-tags, body.ui-hidden #space-tags { display: none; }
   color: #fff;
   font: 500 13.5px var(--font-display);
   backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
   transition: background var(--fast), border-color var(--fast), transform 90ms ease;
 }
 .ph-enter:hover { background: rgba(255, 255, 255, 0.16); border-color: rgba(255, 255, 255, 0.55); }
@@ -209,7 +208,6 @@ body.ui-hidden #place-hud { display: none; }
     border-color: var(--m-edge, var(--line));
     background: var(--m-glass, var(--glass));
     backdrop-filter: var(--m-blur, var(--blur));
-    -webkit-backdrop-filter: var(--m-blur, var(--blur));
   }
   .path-seg { height: 24px; padding: 0 8px; font-size: 12.5px; }
   body.ui-rest .path { opacity: 0.28; transition: opacity 2.2s ease; }

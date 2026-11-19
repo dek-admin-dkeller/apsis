@@ -377,7 +377,6 @@
     background: none;
     border: 0;
     backdrop-filter: none;
-    -webkit-backdrop-filter: none;
     pointer-events: none;
   }
   .topbar > * { pointer-events: auto; }
@@ -390,7 +389,6 @@
     background: var(--m-glass);
     border: 1px solid var(--m-edge);
     backdrop-filter: var(--m-blur);
-    -webkit-backdrop-filter: var(--m-blur);
     box-shadow: var(--m-shadow);
   }
   .brand h1 { display: none; }
@@ -403,7 +401,6 @@
     background: var(--m-glass);
     border: 1px solid var(--m-edge);
     backdrop-filter: var(--m-blur);
-    -webkit-backdrop-filter: var(--m-blur);
     box-shadow: var(--m-shadow);
     font-size: 16px;
   }
@@ -419,7 +416,6 @@
     background: var(--m-glass);
     border: 1px solid var(--m-edge);
     backdrop-filter: var(--m-blur);
-    -webkit-backdrop-filter: var(--m-blur);
     box-shadow: var(--m-shadow);
   }
   #landing-open::before { content: 'i'; font: 600 16px var(--font-display); }
@@ -432,7 +428,6 @@
     background: var(--m-glass);
     border: 1px solid var(--m-edge);
     backdrop-filter: var(--m-blur);
-    -webkit-backdrop-filter: var(--m-blur);
     box-shadow: var(--m-shadow);
   }
   #suggestions li { min-height: 46px; padding: 5px 10px; border-radius: 14px; gap: 12px; font-size: 14.5px; }
@@ -469,7 +464,6 @@
     background: var(--m-glass);
     border: 1px solid var(--m-edge);
     backdrop-filter: var(--m-blur);
-    -webkit-backdrop-filter: var(--m-blur);
     color: var(--text);
     font-size: 13px;
     white-space: nowrap;
@@ -496,7 +490,6 @@
     background: var(--m-glass);
     border: 1px solid var(--m-edge);
     backdrop-filter: var(--m-blur);
-    -webkit-backdrop-filter: var(--m-blur);
     box-shadow: var(--m-shadow);
     color: var(--text);
   }
@@ -521,7 +514,6 @@
     border-radius: 32px;
     background: var(--m-glass);
     backdrop-filter: var(--m-blur);
-    -webkit-backdrop-filter: var(--m-blur);
     box-shadow: var(--m-shadow);
   }
   .rail-view { display: none; } /* views are the chips at the top */
@@ -540,7 +532,6 @@
     border-radius: 28px;
     background: var(--m-glass);
     backdrop-filter: var(--m-blur);
-    -webkit-backdrop-filter: var(--m-blur);
     box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.55);
     animation: sheet-up 420ms var(--m-ease);
   }
@@ -592,7 +583,6 @@
     border: 1px solid var(--m-edge);
     background: var(--m-glass);
     backdrop-filter: var(--m-blur);
-    -webkit-backdrop-filter: var(--m-blur);
     box-shadow: var(--m-shadow);
   }
   body.quiet-ui .timebar:not(.is-open) { padding: 5px 12px; border-radius: 22px; }
@@ -610,8 +600,8 @@
 
   /* ---------- things over the globe ---------- */
 
-  #toast { bottom: calc(var(--status) + 64px); border-radius: 18px; padding: 10px 16px; font-size: 13.5px; background: var(--m-glass); backdrop-filter: var(--m-blur); -webkit-backdrop-filter: var(--m-blur); border: 1px solid var(--m-edge); }
-  #loc-ask { bottom: calc(var(--status) + 10px); border-radius: 24px; padding: 18px; background: var(--m-glass); backdrop-filter: var(--m-blur); -webkit-backdrop-filter: var(--m-blur); border: 1px solid var(--m-edge); }
+  #toast { bottom: calc(var(--status) + 64px); border-radius: 18px; padding: 10px 16px; font-size: 13.5px; background: var(--m-glass); backdrop-filter: var(--m-blur); border: 1px solid var(--m-edge); }
+  #loc-ask { bottom: calc(var(--status) + 10px); border-radius: 24px; padding: 18px; background: var(--m-glass); backdrop-filter: var(--m-blur); border: 1px solid var(--m-edge); }
   #loc-ask h2 { font-size: 17px; }
   #loc-ask p { font-size: 14px; }
 
@@ -665,7 +655,6 @@
     background: var(--m-glass);
     border: 1px solid var(--m-edge);
     backdrop-filter: var(--m-blur);
-    -webkit-backdrop-filter: var(--m-blur);
     box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
     pointer-events: auto;
     animation: menu-in 160ms ease-out;
@@ -789,7 +778,6 @@
     min-height: 56px;
     background: var(--m-solid);
     backdrop-filter: var(--m-blur);
-    -webkit-backdrop-filter: var(--m-blur);
   }
   #inspector > .insp-hero { flex: none; height: 138px; margin: 2px 12px 0; border-radius: 16px; }
   #inspector > .acts { flex: none; padding: 10px 12px 2px; gap: 6px; }
@@ -802,7 +790,6 @@
     flex: none;
     background: var(--m-solid);
     backdrop-filter: var(--m-blur);
-    -webkit-backdrop-filter: var(--m-blur);
   }
   #inspector > .tabs button { min-height: 40px; }
   #inspector > .insp-body { flex: none; min-height: auto; overflow: visible; padding-top: 10px; }
@@ -843,7 +830,7 @@
   }
 
   /* Tucked away, the header's words would be cut in half: only the grip stays. */
-  :root.sheet-tucked .dock > .panel > :is(.panel-head, .insp-head) { background: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  :root.sheet-tucked .dock > .panel > :is(.panel-head, .insp-head) { background: none; backdrop-filter: none; }
   :root.sheet-tucked .dock > .panel > :is(.panel-head, .insp-head) > * { visibility: hidden; }
   :root.sheet-tucked .dock > .panel > :is(.panel-head, .insp-head)::before { top: 9px; }
 

@@ -98,7 +98,6 @@ body.ui-hidden #hud > *, body.ui-hidden .dock > * { pointer-events: none; }
   border: 1px solid var(--line);
   border-radius: var(--radius);
   backdrop-filter: var(--blur);
-  -webkit-backdrop-filter: var(--blur);
   box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
 }
 .panel-head {
@@ -154,7 +153,6 @@ body.ui-hidden #hud > *, body.ui-hidden .dock > * { pointer-events: none; }
   background: var(--solid);
   border-bottom: 1px solid var(--line);
   backdrop-filter: var(--blur);
-  -webkit-backdrop-filter: var(--blur);
 }
 .brand { display: flex; align-items: center; gap: 8px; flex: none; }
 .brand-sub { padding-left: 10px; margin-left: 2px; border-left: 1px solid var(--line-strong); font-size: 11.5px; color: var(--muted); white-space: nowrap; }
@@ -263,7 +261,6 @@ body.ui-hidden #hud > *, body.ui-hidden .dock > * { pointer-events: none; }
   background: var(--solid);
   border-right: 1px solid var(--line);
   backdrop-filter: var(--blur);
-  -webkit-backdrop-filter: var(--blur);
 }
 .rail-btn {
   position: relative;
@@ -1102,7 +1099,7 @@ label.act:has(input:focus-visible) { outline: 2px solid var(--cyan); outline-off
 /* ================================================================ overlays */
 
 .overlay { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; background: rgba(2, 4, 10, 0.68); padding: 16px; }
-.overlay > .panel { background: var(--solid-strong); backdrop-filter: none; -webkit-backdrop-filter: none; animation: overlay-in 160ms ease-out; }
+.overlay > .panel { background: var(--solid-strong); backdrop-filter: none; animation: overlay-in 160ms ease-out; }
 @keyframes overlay-in { from { opacity: 0; transform: translateY(8px); } }
 
 /* ---------- How it works ---------- */
@@ -1529,7 +1526,6 @@ details[data-feature]:has(> div:empty) { display: none; }
   border-color: rgba(255, 255, 255, 0.07);
   background: rgba(9, 13, 21, 0.58); /* quiet: the globe stays visible through it */
   backdrop-filter: blur(14px) saturate(1.2);
-  -webkit-backdrop-filter: blur(14px) saturate(1.2);
   white-space: normal;
   transform: translate(18px, -50%);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
