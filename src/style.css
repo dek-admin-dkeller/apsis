@@ -204,7 +204,8 @@ body.ui-hidden #hud > *, body.ui-hidden .dock > * { pointer-events: none; }
 #suggestions li.is-active { background: rgba(127, 227, 255, 0.12); }
 #suggestions .sug-icon { flex: none; display: grid; place-items: center; width: 30px; height: 30px; color: var(--muted); }
 #suggestions .sug-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-#suggestions .sug-head { padding: 9px 8px 3px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); cursor: default; }
+/* Written like the group headings in the panels (.group-label): plain words, not spaced capitals. */
+#suggestions .sug-head { padding: 9px 8px 3px; font-size: 11px; font-weight: 600; color: var(--muted); cursor: default; }
 #suggestions .sug-head:first-child { padding-top: 5px; }
 #suggestions .empty { color: var(--muted); cursor: default; white-space: normal; line-height: 1.45; padding: 8px; }
 /* Nothing typed yet: what can be typed, written as it would be typed. */
