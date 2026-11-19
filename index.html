@@ -190,9 +190,8 @@
     <div id="range-tag" class="is-hidden"></div>
     <div id="tooltip" class="is-hidden"></div>
 
-    <!-- Beyond Earth orbit (src/ui/places.ts): name tags over the other scene, and the curtain it changes behind -->
+    <!-- Beyond Earth orbit (src/ui/places.ts): name tags over the other scenes -->
     <div id="space-tags"></div>
-    <div id="space-fade"></div>
 
     <div id="hud" class="hud-hidden">
       <!-- ============ top bar ============ -->
@@ -213,6 +212,8 @@
           <kbd class="search-key">/</kbd>
           <ul id="suggestions" role="listbox"></ul>
         </div>
+        <!-- Where the visitor is, while away from the tracker. -->
+        <p id="place-name"></p>
         <dl class="readouts">
           <!-- One count. "of 19,572" appears only while a filter is hiding something. -->
           <div id="readout-objects" class="is-all"><dt>Objects</dt><dd><span id="visible-count">0</span><span class="readout-of"> of <span id="stat-tracked">0</span></span></dd></div>
@@ -341,8 +342,7 @@
         </button>
       </nav>
 
-      <!-- ============ away from the tracker: the list of places, and the card about the one on screen ============ -->
-      <nav id="place-rail" class="is-hidden" aria-label="Places"></nav>
+      <!-- ============ away from the tracker: the card about the body or craft being looked at ============ -->
       <section class="panel is-hidden" id="place-card" aria-live="polite">
         <header class="pc-head">
           <div class="pc-title"><h2 id="pc-name"></h2><p id="pc-kind"></p></div>
@@ -353,6 +353,11 @@
 
       <!-- ============ left dock: one tool panel at a time ============ -->
       <aside class="dock dock-left">
+        <!-- At another world the rail's "Objects" button opens this instead: what is there (src/ui/places.ts). -->
+        <section class="panel is-hidden" id="panel-here">
+          <header class="panel-head"><h2 id="here-title"></h2><button class="icon-btn" data-close-panel aria-label="Close panel">×</button></header>
+          <div class="panel-body" id="here-body"></div>
+        </section>
         <!-- Objects -->
         <section class="panel is-hidden" id="panel-objects">
           <header class="panel-head"><h2>Objects</h2><button class="icon-btn" data-close-panel aria-label="Close panel">×</button></header>
@@ -534,14 +539,14 @@
                 <span>Station</span>
               </label>
             </div>
-            <h3 class="group-label">Sky</h3>
-            <div class="layer-tiles">
-              <label class="layer-tile" title="Real bright stars and the Milky Way">
+            <h3 class="group-label" data-everywhere>Sky</h3>
+            <div class="layer-tiles" data-everywhere>
+              <label class="layer-tile" data-everywhere title="Real bright stars and the Milky Way">
                 <input type="checkbox" data-setting="stars" />
                 <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3l1.7 4.6 4.6 1.7-4.6 1.7L10 15.6 8.3 11 3.7 9.3l4.6-1.7z" /><circle cx="15.8" cy="15" r="0.8" /></svg>
                 <span>Stars</span>
               </label>
-              <label class="layer-tile" title="The constellation figures">
+              <label class="layer-tile" data-everywhere title="The constellation figures">
                 <input type="checkbox" data-setting="constellations" />
                 <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 14.5l4-8 5 3.5 3.5-5.5M13 10l-1 6" /><circle cx="4" cy="14.5" r="1.3" /><circle cx="8" cy="6.5" r="1.3" /><circle cx="13" cy="10" r="1.3" /><circle cx="16.5" cy="4.5" r="1.3" /><circle cx="12" cy="16" r="1.3" /></svg>
                 <span>Constellations</span>

@@ -1,30 +1,40 @@
 /**
  * Places: leaving the tracker for the rest of the solar system, and coming back.
  *
- * The tracker is one place among many. This module owns the others: it switches the picture
- * to the scene in render/space/spaceView.ts, and draws the three pieces of interface that
- * exist only while the visitor is away from the tracker:
+ * There are three kinds of picture, and the visitor moves between them by zooming:
  *
- *   the place rail  where the tool rail was (a strip along the bottom on a phone): the map of
- *                   the solar system, then every body that can be visited, as small lit discs.
- *                   Choosing the Earth is the way back to the tracker.
- *   the card        facts about the body or spacecraft being looked at: how far it is from the
- *                   Earth right now, how long its signal takes, who is in orbit there.
- *   name tags       over the picture, one per body and craft (made by the view itself).
+ *   the tracker        the Earth with everything in orbit round it (the rest of the app)
+ *   a place            another body, close up and at true scale, with its moons and spacecraft
+ *   the solar system   every planet on its orbit; the camera either beside one body's dot or
+ *                      drawn back to the whole picture
  *
- * While away, <body> carries `away`; space.css hides the tracker's own controls with it.
- * main.ts asks `away` before doing any Earth-only work, and never needs to know more.
+ * Going out, the camera pulls back from the world on screen, what belongs to that world fades
+ * away, and what is left is that same world as a dot on the solar system, still in the middle
+ * of the screen, still lit and turned the same way under the same stars. Going in is the
+ * reverse: click a planet and the camera goes up to its dot; go on (click it again, zoom in,
+ * or the button on its card) and the camera carries on in while that world's moons and
+ * spacecraft appear round it. There is no cut and no menu of planets: the picture is the menu.
+ *
+ * How the join is hidden: each kind of picture is a scene of its own (the tracker's, and two
+ * SpaceViews), and for the half second of a change two of them are drawn at once and
+ * dissolved (SceneKit.blend) while the incoming scene's camera is held in the same position
+ * relative to the body as the outgoing one's (SpaceView's "pose"). Both pictures then show
+ * the same body, the same size, under the same sky; only its surroundings differ.
+ *
+ * This module also draws what is on screen only while away from the tracker: the card about
+ * the body or craft being looked at, and the list of what is at a place (the tool rail's
+ * "Objects" button opens it there). <body> carries `away` while the tracker is not the
+ * picture, and `on-map` on the solar system; space.css hides the tracker's own controls.
  */
 
 import '../space.css';
 import type * as THREE from 'three';
-import type { SceneKit } from '../render/scene.ts';
-import { SpaceView, targetKey, type Target, type Where } from '../render/space/spaceView.ts';
+import type { OtherView, SceneKit } from '../render/scene.ts';
+import { MAP_REST, PLACE_REST, SpaceView, targetKey, type Pose, type SpaceHost, type Target } from '../render/space/spaceView.ts';
 import { BODIES, BODY_LIST } from '../space/bodies.ts';
 import { craftPosition, loadDeep } from '../space/deep.ts';
 import { watchDsn } from '../space/dsn.ts';
 import { bodyRelative } from '../space/ephem.ts';
-import { IMAGERY } from '../space/imagery.ts';
 import type { Body, BodyId, Craft, DsnLink, Flyby, Motion, Vec } from '../space/types.ts';
 import type { SearchHit } from './app.ts';
 import { $, fmt, fmtInt, fmtKm, fmtKmS, lengthUnit, lengthValue } from './dom.ts';
@@ -32,8 +42,8 @@ import { clockStamp, duration } from './inspector.ts';
 
 export interface PlacesHost {
   kit: SceneKit;
-  /** The stars and Milky Way for the second scene (Sky.backdrop()). */
-  backdrop: THREE.Group;
+  /** A copy of the stars and Milky Way for another scene (Sky.backdrop()); called once per view. */
+  backdrop(): THREE.Group;
   time(): number;
   isPhone(): boolean;
   drift(): boolean;
@@ -41,23 +51,50 @@ export interface PlacesHost {
   match(query: string, ...texts: string[]): number;
   /** Move the clock. */
   jumpTo(timeMs: number): void;
-  /** The tracker's camera pulls straight back from the Earth, gathering speed, for `seconds`. */
-  pullBack(seconds: number): void;
-  /** How big the Earth looks in the tracker right now: its radius over the camera's distance. */
-  apparent(): number;
-  /**
-   * About to leave the tracker (true) or just back in it (false): close panels, restart the
-   * simulation … On the way back, `apparent` is how big the Earth looked where the visitor
-   * came from, so the tracker can open with it the same size.
-   */
-  onAway(away: boolean, apparent?: number): void;
   toast(text: string): void;
+
+  // ---- the tracker's side of a change of scene -------------------------------------------------
+  /** The tracker's scene, for a dissolve into it. */
+  trackerView(): OtherView;
+  /** Where the tracker's camera is relative to the Earth. */
+  trackerPose(): Pose;
+  /** Hold the tracker's camera at a pose (every frame of a dissolve into it), or give it back with null. */
+  holdTracker(pose: Pose | null): void;
+  /** The tracker's camera moves away from the Earth by `factor`, gathering speed, over `seconds`. */
+  surge(factor: number, seconds: number): void;
+  /** …or carries on from wherever it is to the whole-Earth view, slowing down. */
+  settle(seconds: number): void;
+  /** About to leave the tracker: put its panels, selection and special views away. */
+  leaving(): void;
+  /** The tracker has stopped being drawn at all (true), or is about to be drawn again (false). */
+  onAway(away: boolean): void;
+}
+
+type Spot = 'tracker' | 'place' | 'map';
+type Destination =
+  | { kind: 'tracker' }
+  | { kind: 'map'; focus?: Target | null }
+  | { kind: 'place'; body: BodyId; focus?: Target | null };
+
+interface Mix {
+  from: Spot;
+  to: Spot;
+  keyFrom: string | null;
+  keyTo: string | null;
+  start: number;
+  seconds: number;
+  done: () => void;
 }
 
 const LIGHT_KM_S = 299792.458;
 const AU = 149597870.7;
 const MOON_KM = 384400;
 const DAY = 86400000;
+const FADE = 0.5; // seconds two scenes are on screen together
+const MOVE = 0.95; // seconds the camera travels before a scene has changed
+
+const wait = (seconds: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+const reduced = (): boolean => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /**
  * An asteroid passing the Earth, dressed as a craft (see Craft.passing) so that the views can
@@ -103,10 +140,8 @@ function spanText(days: number): string {
 
 const kindText = (body: Body): string =>
   body.kind === 'star' ? 'Star' : body.kind === 'planet' ? 'Planet' : body.kind === 'dwarf' ? 'Dwarf planet' : `Moon of ${BODIES[body.parent!].name}`;
-
+const theName = (body: Body): string => `${body.id === 'sun' || body.id === 'moon' ? 'the ' : ''}${body.name}`;
 const wikiLink = (title: string): string => `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}`;
-
-const reduced = (): boolean => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = ''): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
@@ -117,194 +152,101 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text 
 
 export class Places {
   private readonly host: PlacesHost;
-  private readonly view: SpaceView;
-  private readonly rail = $('place-rail');
+  private readonly place: SpaceView;
+  private readonly map: SpaceView;
   private readonly card = $('place-card');
-  private readonly fade = $('space-fade');
+  private readonly here = $('panel-here');
+  private spot: Spot = 'tracker';
+  private trackerOn = true; // the tracker's scene is being drawn (alone, or as one side of a change)
+  private mix: Mix | null = null;
+  private busy = false;
   private crafts: Craft[] = [];
   private shown: Target | null = null; // what the card is about
   private links: DsnLink[] = [];
   private stopDsn: (() => void) | null = null;
   private liveAt = 0;
   private live: (() => void) | null = null; // refreshes the card's moving numbers
-  private switching = false;
 
   constructor(host: PlacesHost) {
     this.host = host;
-    this.view = new SpaceView(host.kit, host.backdrop, {
+    const side = (view: () => SpaceView): SpaceHost => ({
       tags: $('space-tags'),
-      onPick: (target) => this.pick(target),
+      onPick: (target) => this.pick(view(), target),
       onOpen: (target) => this.open(target),
+      onOut: () => this.openSystem(),
       isPhone: host.isPhone,
       drift: host.drift,
     });
-    this.buildRail();
-    $('pc-close').addEventListener('click', () => {
-      // Closing the card of a craft also stops following it; closing a body's card just puts the card away.
-      if (this.shown?.kind === 'craft' && this.view.where) this.view.setFocus(null, host.time());
-      this.show(null);
-    });
-    for (const button of document.querySelectorAll<HTMLElement>('[data-places-open]')) button.addEventListener('click', () => this.go({ kind: 'system' }));
+    this.place = new SpaceView(host.kit, host.backdrop(), side(() => this.place));
+    this.map = new SpaceView(host.kit, host.backdrop(), side(() => this.map));
+    $('pc-close').addEventListener('click', () => this.closeCard());
+    for (const button of document.querySelectorAll<HTMLElement>('[data-places-open]')) button.addEventListener('click', () => this.openSystem());
     void loadDeep().then((deep) => {
       if (!deep) return;
       this.crafts = [...deep.craft, ...deep.flybys.map(rockCraft).filter((rock): rock is Craft => rock !== null)];
-      this.view.setCraft(this.crafts, host.time());
+      this.place.setCraft(this.crafts, host.time());
+      this.map.setCraft(this.crafts, host.time());
+      if (this.spot === 'place') this.fillHere();
     });
   }
 
   // ---- state the rest of the program may ask about ---------------------------------------------
 
-  /** Is something other than the tracker on screen? */
+  /** Is the tracker out of the picture altogether (so none of its work needs doing)? */
   get away(): boolean {
-    return this.view.active;
+    return !this.trackerOn;
+  }
+  /** Is the tracker NOT what the visitor is looking at and using (it may still be fading in or out)? */
+  get elsewhere(): boolean {
+    return this.spot !== 'tracker';
+  }
+  /** Does update() need calling this frame? */
+  get active(): boolean {
+    return this.spot !== 'tracker' || this.mix !== null;
+  }
+  /** At a place, as opposed to on the solar system: the tool rail is on screen there. */
+  get atPlace(): boolean {
+    return this.spot === 'place';
   }
   get drifting(): boolean {
-    return this.view.drifting;
-  }
-  /** Is the card open (the idle fade waits while something is being read)? */
-  get reading(): boolean {
-    return !this.card.classList.contains('is-hidden');
+    return this.spot === 'place' ? this.place.drifting : this.spot === 'map' ? this.map.drifting : false;
   }
 
-  // ---- going places ----------------------------------------------------------------------------
-
-  /** Show the map or a place (fading through black), optionally looking at one thing there. */
-  go(where: Where, focus: Target | null = null): void {
-    if (this.switching) return;
-    if (where.kind === 'place' && where.body === 'earth' && !focus) return this.home();
-    const current = this.view.where;
-    const same = current !== null && current.kind === where.kind && (where.kind === 'system' || (current as { body: BodyId }).body === where.body);
-    if (same) {
-      this.view.setFocus(focus, this.host.time());
-      this.show(focus ?? this.defaultTarget(where));
-      return;
-    }
-    // The move starts in the scene the visitor is in and finishes in the next one. Towards a
-    // body from the map it is a dive at that body's dot; any other way it is a pull back.
-    const diving = current?.kind === 'system' && where.kind === 'place' && !focus;
-    const from: BodyId = current?.kind === 'place' ? current.body : 'earth';
-    this.through(diving ? where.body : null, (apparent) => {
-      if (!this.view.active) {
-        this.host.onAway(true);
-        document.body.classList.add('away');
-        this.rail.classList.remove('is-hidden');
-        this.stopDsn = watchDsn((links) => {
-          this.links = links;
-          this.markLinked();
-        });
-      }
-      this.view.enter(where, this.host.time(), focus, true, apparent);
-      // Out to the map: it opens right beside the world just left and draws back from it.
-      if (where.kind === 'system' && !focus && !reduced()) this.view.emergeFrom(from, apparent);
-      this.markLinked();
-      this.markRail();
-      this.show(focus ?? this.defaultTarget(where));
-    });
+  private view(spot: Spot): SpaceView {
+    return spot === 'map' ? this.map : this.place;
   }
-
-  /** Back to the tracker. */
-  home(): void {
-    if (!this.view.active || this.switching) return;
-    const fromMap = this.view.where?.kind === 'system';
-    this.through(fromMap ? 'earth' : null, (apparent) => this.leaveNow(fromMap ? apparent : 0));
-  }
-
-  /** Escape: stop looking at one thing; from a place, out to the map; from the map, back to the tracker. */
-  back(): void {
-    const where = this.view.where;
-    if (!where) return;
-    if (this.view.focus && !(where.kind === 'place' && this.view.focus.kind === 'body' && this.view.focus.body.id === where.body)) this.pick(null);
-    else if (where.kind === 'place') this.go({ kind: 'system' });
-    else this.home();
-  }
-
-  /** The same, at once and without the fade (the logo's "put everything back"). */
-  leaveNow(apparent = 0): void {
-    if (!this.view.active) return;
-    this.view.leave();
-    this.stopDsn?.();
-    this.stopDsn = null;
-    document.body.classList.remove('away');
-    this.rail.classList.add('is-hidden');
-    this.show(null);
-    this.host.onAway(false, apparent);
-  }
-
-  /** Look at one craft, wherever it is: in its body's place, or on the map if it is out between the planets. */
-  showCraft(craft: Craft): void {
-    const target: Target = { kind: 'craft', craft };
-    // An asteroid can only be shown around its pass: go to a little before its closest moment.
-    if (craft.passing && Math.abs(this.host.time() - craft.passing.timeMs) > 2 * DAY) this.host.jumpTo(craft.passing.timeMs - 40 * 60000);
-    if (craft.centre === 'sun' && !this.nearSun(craft)) this.go({ kind: 'system' }, target);
-    else this.go({ kind: 'place', body: craft.centre }, target);
-  }
-
-  private nearSun(craft: Craft): boolean {
-    const p = craftPosition(craft, this.host.time()).pos;
-    return Math.hypot(p[0], p[1], p[2]) < 1.1 * AU;
-  }
-
-  /** What the card shows when nothing in particular is selected: the place itself; on the map, nothing. */
-  private defaultTarget(where: Where): Target | null {
-    return where.kind === 'place' ? { kind: 'body', body: BODIES[where.body] } : null;
-  }
-
-  /**
-   * Change the scene as one camera move. The camera sets off in the scene on screen (a dive at
-   * `towards` on the map, otherwise a pull straight back), gathering speed; at its fastest the
-   * picture dips to black for a moment, the scene is changed behind that, and the new scene
-   * opens with its camera already moving and settling into place. With "reduce motion" set in
-   * the system, only the dip.
-   */
-  private through(towards: BodyId | null, change: (apparent: number) => void): void {
-    this.switching = true;
-    const still = reduced();
-    const lead = still ? 0 : 430; // how long the camera travels before the dip begins
-    if (!still) {
-      if (!this.view.active) this.host.pullBack(0.7);
-      else if (towards) this.view.diveTo(towards, 0.7);
-      else this.view.pullBack(0.7);
-    }
-    setTimeout(() => this.fade.classList.add('is-on'), lead);
-    setTimeout(() => {
-      try {
-        // How big the thing in the middle looks at this moment (0 = unknown: use the usual distance).
-        const apparent = still ? 0 : this.view.active ? (towards || this.view.where?.kind === 'place' ? this.view.apparentOf(towards ?? undefined) : 0) : this.host.apparent();
-        change(apparent);
-      } finally {
-        // Two frames, so the new scene has been drawn once before the curtain lifts.
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-          this.fade.classList.remove('is-on');
-          this.switching = false;
-        }));
-      }
-    }, lead + 240);
-  }
-
-  /** A click on something in the picture (or on nothing). */
-  private pick(target: Target | null): void {
-    const where = this.view.where;
-    if (!where) return;
-    this.view.setFocus(target, this.host.time());
-    this.show(target ?? this.defaultTarget(where));
-  }
-
-  /** A double-click: go to that body; a craft is simply looked at. */
-  private open(target: Target): void {
-    if (target.kind === 'craft') return this.pick(target);
-    if (target.body.id === 'earth') return this.home();
-    if (target.body.visitable) this.go({ kind: 'place', body: target.body.id });
-    else this.pick(target);
+  private get current(): SpaceView | null {
+    return this.spot === 'tracker' ? null : this.view(this.spot);
   }
 
   // ---- every frame -----------------------------------------------------------------------------
+  //
+  // Two halves, because in a dissolve one camera follows another and the leader must move
+  // first: lead() moves the cameras that move themselves (and, when the tracker is the scene
+  // coming in, tells it where to be); main.ts then moves the tracker's own camera; follow()
+  // puts the scene that is coming in where the tracker's camera now is, and sets the dissolve.
 
-  update(dt: number, tMs: number, realSeconds: number): void {
-    this.view.update(dt, tMs, realSeconds);
+  lead(dt: number, tMs: number, realSeconds: number): void {
+    const mix = this.mix;
+    if (this.spot !== 'tracker') this.view(this.spot).update(dt, tMs, realSeconds);
+    if (mix && mix.from !== 'tracker') {
+      const pose = this.view(mix.from).pose(mix.keyFrom);
+      if (pose && mix.to === 'tracker') this.host.holdTracker(pose);
+      else if (pose) this.view(mix.to).update(dt, tMs, realSeconds, { key: mix.keyTo, pose });
+    }
     if (this.live && realSeconds - this.liveAt > 0.5) {
       this.liveAt = realSeconds;
       this.live();
     }
+  }
+
+  follow(dt: number, tMs: number, realSeconds: number): void {
+    const mix = this.mix;
+    if (!mix) return;
+    if (mix.from === 'tracker') this.view(mix.to).update(dt, tMs, realSeconds, { key: mix.keyTo, pose: this.host.trackerPose() });
+    const t = Math.min(1, (performance.now() - mix.start) / (mix.seconds * 1000));
+    this.host.kit.blend(mix.to === 'tracker' ? this.host.trackerView() : this.view(mix.to).view, t * t * (3 - 2 * t));
+    if (t >= 1) mix.done();
   }
 
   /** Units or clock changed in Settings: redraw the card. */
@@ -312,49 +254,330 @@ export class Places {
     if (this.shown) this.show(this.shown);
   }
 
-  // ---- the place rail --------------------------------------------------------------------------
+  /** The Layers switches for the sky apply everywhere. */
+  setSky(stars: boolean, figures: boolean): void {
+    this.place.setSky(stars, figures);
+    this.map.setSky(stars, figures);
+  }
 
-  private buildRail(): void {
-    const map = el('button', 'pr-item pr-map');
-    map.type = 'button';
-    map.dataset.place = 'system';
-    map.title = 'The solar system';
-    map.innerHTML = '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="1.8"/><ellipse cx="10" cy="10" rx="8.2" ry="3.4"/><ellipse cx="10" cy="10" rx="5" ry="2"/><circle cx="16.6" cy="8" r="1"/></svg><span>System</span>';
-    map.addEventListener('click', () => this.go({ kind: 'system' }));
-    this.rail.append(map);
-    for (const body of BODY_LIST) {
-      if (!body.visitable) continue;
-      const item = el('button', body.kind === 'moon' ? 'pr-item is-moon' : 'pr-item');
-      item.type = 'button';
-      item.dataset.place = body.id;
-      item.title = body.id === 'earth' ? 'Earth: back to the live tracker' : body.name;
-      const disc = el('i', `pr-disc pr-${body.id}`);
-      const [r, g, b] = body.color.map((c) => Math.round(c * 255));
-      disc.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
-      const picture = IMAGERY[body.id]?.base.replace(/\.(jpg|webp|png)$/, '_s.$1');
-      if (picture) disc.style.backgroundImage = `url("${picture}")`;
-      item.append(disc, el('span', '', body.name));
-      item.addEventListener('click', () => this.go({ kind: 'place', body: body.id }));
-      this.rail.append(item);
+  // ---- changing scene --------------------------------------------------------------------------
+
+  /**
+   * Dissolve from the scene on screen to another one, the incoming camera held to the outgoing
+   * one, then make the new scene the one on screen.
+   */
+  private async dissolve(to: Spot, keyFrom: string | null, keyTo: string | null, seconds: number): Promise<void> {
+    const from = this.spot;
+    await new Promise<void>((done) => (this.mix = { from, to, keyFrom, keyTo, start: performance.now(), seconds, done }));
+    this.mix = null;
+    const { kit } = this.host;
+    kit.blend(null);
+    if (from !== 'tracker') this.view(from).setLive(false);
+    if (to === 'tracker') {
+      kit.show();
+      this.host.holdTracker(null);
+    } else {
+      const view = this.view(to);
+      kit.show(view.scene, view.camera, view.controls.target);
+      view.setLive(true);
+    }
+    this.spot = to;
+    if (from === 'tracker') {
+      this.trackerOn = false;
+      this.host.onAway(true);
+    }
+    if (from === 'place') this.place.clear(); // the map is kept; a place is rebuilt when next visited
+    this.chrome();
+  }
+
+  /** What is on screen besides the picture follows where the visitor is. */
+  private chrome(): void {
+    const away = this.spot !== 'tracker';
+    document.body.classList.toggle('away', away);
+    document.body.classList.toggle('on-map', this.spot === 'map');
+    this.here.classList.add('is-hidden');
+    const where = this.spot === 'place' ? this.place.where : null;
+    $('place-name').textContent = this.spot === 'map' ? 'Solar system' : where?.kind === 'place' ? BODIES[where.body].name : '';
+    if (away && !this.stopDsn) {
+      this.stopDsn = watchDsn((links) => {
+        this.links = links;
+        this.markLinked();
+      });
+    } else if (!away) {
+      this.stopDsn?.();
+      this.stopDsn = null;
+      this.show(null);
+    }
+    if (this.spot === 'place') this.fillHere();
+    this.markLinked();
+  }
+
+  /** The body the visitor is at: the place's, or the Earth in the tracker. */
+  private get hereBody(): BodyId {
+    const where = this.place.where;
+    return this.spot === 'place' && where?.kind === 'place' ? where.body : 'earth';
+  }
+
+  /** Out of the tracker or a place to the solar system, coming to rest beside the world just left. */
+  private async toMap(): Promise<void> {
+    const body = this.hereBody;
+    const t = this.host.time();
+    if (this.spot === 'tracker') this.host.leaving();
+    this.show(null);
+    if (!this.map.where) this.map.build({ kind: 'system' }, t);
+    const key = this.map.keyFor(body);
+    if (!key) return;
+    const dot: Target = { kind: 'body', body: BODIES[key.slice(5) as BodyId] };
+    this.map.setFocus(dot, t, 0); // also gives the dot its full map, so the two pictures match
+    // Pull back until the world is a little bigger than its dot will be at rest; the map then
+    // carries the same movement on to rest.
+    const now = this.spot === 'tracker' ? 1 / this.host.trackerPose().rel.length() : this.place.apparent(null);
+    const rest = Math.min(MAP_REST, now / 1.6);
+    const move = reduced() ? FADE : MOVE;
+    const factor = Math.max(1.05, now / (rest * 1.3));
+    if (this.spot === 'tracker') this.host.surge(factor, move);
+    else this.place.surge(factor, move);
+    await wait(move - FADE);
+    await this.dissolve('map', null, key, FADE);
+    this.map.settle(key, Math.min(rest, this.map.apparent(key) / 1.15), 1.7);
+    this.show(dot);
+  }
+
+  /** On the solar system: bring the camera up to one body's dot (and wait until it is there). */
+  private async toDot(body: BodyId): Promise<Target | null> {
+    const key = this.map.keyFor(body);
+    if (!key) return null;
+    const dot: Target = { kind: 'body', body: BODIES[key.slice(5) as BodyId] };
+    if (this.map.focus && targetKey(this.map.focus) === key && !this.map.flying) return dot;
+    const already = this.map.focus !== null && targetKey(this.map.focus) === key;
+    if (!already) this.map.setFocus(dot, this.host.time(), 1.5);
+    this.show(dot);
+    await wait(already ? 0.6 : 1.5);
+    return dot;
+  }
+
+  /** From beside a body's dot on the solar system, on in to that body (or, the Earth, to the tracker). */
+  private async fromMap(body: BodyId): Promise<void> {
+    const dot = await this.toDot(body);
+    if (!dot || dot.kind !== 'body' || dot.body.id !== body) return;
+    const key = targetKey(dot);
+    const t = this.host.time();
+    const to: Spot = body === 'earth' ? 'tracker' : 'place';
+    if (to === 'tracker') {
+      this.trackerOn = true;
+      this.host.onAway(false); // the simulation starts again now, so the satellites are there when the picture is
+    } else {
+      this.place.build({ kind: 'place', body }, t);
+    }
+    this.show(null);
+    // Dive until the dot is nearly as big as the world will be at rest; the next scene carries on in.
+    const rest = to === 'place' && this.host.isPhone() ? 1 / 6 : PLACE_REST;
+    const now = this.map.apparent(key);
+    const move = reduced() ? FADE : MOVE;
+    this.map.surge(Math.min(0.95, now / (rest * 0.8)), move);
+    await wait(move - FADE);
+    await this.dissolve(to, key, null, FADE);
+    if (to === 'tracker') {
+      this.host.settle(2);
+    } else {
+      this.place.settle(null, Math.max(rest, this.place.apparent(null) * 1.12), 1.9);
+      if (!this.host.isPhone()) this.show({ kind: 'body', body: BODIES[body] });
     }
   }
 
-  private markRail(): void {
-    const where = this.view.where;
-    const on = where ? (where.kind === 'system' ? 'system' : where.body) : '';
-    for (const item of this.rail.querySelectorAll<HTMLElement>('.pr-item')) {
-      const active = item.dataset.place === on;
-      item.classList.toggle('is-on', active);
-      if (active) item.scrollIntoView({ block: 'nearest', inline: 'center' });
+  /**
+   * Between the tracker and the Earth as a place (the far view that holds what is beyond
+   * Earth orbit: Webb, the asteroids): the same world in the same position, so only a dissolve.
+   */
+  private async acrossEarth(to: 'tracker' | 'place'): Promise<void> {
+    if (to === 'place') {
+      this.host.leaving();
+      this.place.build({ kind: 'place', body: 'earth' }, this.host.time());
+      await this.dissolve('place', null, null, FADE);
+    } else {
+      this.show(null);
+      if (this.place.focus) {
+        this.place.setFocus(null, this.host.time(), 1.4); // come back to the Earth first
+        await wait(1.4);
+      }
+      this.trackerOn = true;
+      this.host.onAway(false);
+      await wait(0.25); // a few frames for the first positions
+      await this.dissolve('tracker', null, null, FADE);
+      this.host.settle(1.6);
     }
+  }
+
+  /** Go somewhere, by whatever chain of moves gets there from here. One journey at a time. */
+  private async travel(to: Destination): Promise<void> {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      if (to.kind === 'map') {
+        if (this.spot !== 'map') await this.toMap();
+        if (to.focus !== undefined) this.pick(this.map, to.focus);
+      } else if (to.kind === 'tracker') {
+        if (this.spot === 'tracker') return;
+        if (this.spot === 'place' && this.hereBody === 'earth') await this.acrossEarth('tracker');
+        else {
+          if (this.spot !== 'map') await this.toMap();
+          await this.fromMap('earth');
+        }
+      } else {
+        const there = this.spot === 'place' && this.hereBody === to.body;
+        if (!there) {
+          if (to.body === 'earth' && this.spot === 'tracker') await this.acrossEarth('place');
+          else {
+            if (this.spot !== 'map') await this.toMap();
+            await this.fromMap(to.body);
+          }
+        }
+        if (this.spot === 'place' && to.focus) this.pick(this.place, to.focus);
+      }
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  // ---- what the visitor can ask for --------------------------------------------------------------
+
+  /** The "System" button, zooming out past the edge of a place, Escape: one step outwards. */
+  openSystem(): void {
+    if (this.spot === 'map') this.pick(this.map, null);
+    else void this.travel({ kind: 'map' });
+  }
+
+  /** Escape: stop looking at one thing; from a place, out to the solar system; from there, out to all of it, then home. */
+  back(): void {
+    if (this.busy) return;
+    if (this.spot === 'place' && this.place.focus) this.pick(this.place, null);
+    else if (this.spot === 'place') void this.travel({ kind: 'map' });
+    else if (this.spot === 'map' && this.map.focus) this.pick(this.map, null);
+    else if (this.spot === 'map') void this.travel({ kind: 'tracker' });
+  }
+
+  /** Back to the tracker at once, no journey (the logo's "put everything back"). */
+  leaveNow(): void {
+    if (this.spot === 'tracker' && !this.mix) return;
+    this.mix?.done();
+    this.mix = null;
+    const { kit } = this.host;
+    kit.blend(null);
+    kit.show();
+    this.place.setLive(false);
+    this.map.setLive(false);
+    this.place.clear();
+    this.spot = 'tracker';
+    this.host.holdTracker(null);
+    if (!this.trackerOn) {
+      this.trackerOn = true;
+      this.host.onAway(false);
+    }
+    this.chrome();
+  }
+
+  /** Go to a body: its place, or for the Earth the tracker. */
+  goBody(body: BodyId): void {
+    if (body === 'earth') void this.travel({ kind: 'tracker' });
+    else if (BODIES[body].visitable) void this.travel({ kind: 'place', body });
+    else void this.travel({ kind: 'place', body: BODIES[body].parent!, focus: { kind: 'body', body: BODIES[body] } });
+  }
+
+  /** Look at one craft, wherever it is: in its body's place, or on the solar system if it is out between the planets. */
+  showCraft(craft: Craft): void {
+    const target: Target = { kind: 'craft', craft };
+    // An asteroid can only be shown around its pass: go to a little before its closest moment.
+    if (craft.passing && Math.abs(this.host.time() - craft.passing.timeMs) > 2 * DAY) this.host.jumpTo(craft.passing.timeMs - 40 * 60000);
+    if (craft.centre === 'sun' && !this.nearSun(craft)) void this.travel({ kind: 'map', focus: target });
+    else void this.travel({ kind: 'place', body: craft.centre, focus: target });
+  }
+
+  private nearSun(craft: Craft): boolean {
+    const p = craftPosition(craft, this.host.time()).pos;
+    return Math.hypot(p[0], p[1], p[2]) < 1.1 * AU;
+  }
+
+  /** A click on something in a view (or on nothing): look at it, and show its card. */
+  private pick(view: SpaceView, target: Target | null): void {
+    if (!view.where || (this.busy && view !== this.view(this.spot))) return;
+    view.setFocus(target, this.host.time());
+    if (target) this.show(target);
+    else if (view === this.place && !this.host.isPhone()) this.show({ kind: 'body', body: BODIES[this.hereBody] });
+    else this.show(null);
+  }
+
+  /** "Go there": a second click on what is being looked at, or zooming all the way in on it. */
+  private open(target: Target): void {
+    if (target.kind === 'craft') return;
+    if (this.spot === 'place' && target.body.id === this.hereBody) return;
+    this.goBody(target.body.id);
+  }
+
+  private closeCard(): void {
+    // Closing the card of something being followed also lets go of it.
+    const view = this.current;
+    if (view?.focus) this.pick(view, null);
+    this.show(null);
   }
 
   /** Craft that a Deep Space Network dish is talking to right now get a small live mark on their tag. */
   private markLinked(): void {
     const names = new Set(this.links.filter((link) => link.up || link.down).map((link) => link.craft.toUpperCase()));
     const linked = new Set(this.crafts.filter((craft) => craft.dsn.some((name) => names.has(name.toUpperCase()))).map((craft) => `craft:${craft.id}`));
-    this.view.setLinked(linked);
+    this.place.setLinked(linked);
+    this.map.setLinked(linked);
     if (this.shown?.kind === 'craft') this.refreshLive();
+  }
+
+  // ---- the list of what is here (the rail's "Objects" button, at a place) ------------------------
+
+  /** Open or close the list; true if it is now open. */
+  toggleHere(open?: boolean): boolean {
+    const show = open ?? this.here.classList.contains('is-hidden');
+    this.here.classList.toggle('is-hidden', !show || this.spot !== 'place');
+    return show && this.spot === 'place';
+  }
+
+  private fillHere(): void {
+    const body = BODIES[this.hereBody];
+    $('here-title').textContent = body.name;
+    const into = $('here-body');
+    into.replaceChildren();
+    this.lists(body, into);
+    if (!into.hasChildNodes()) into.append(el('p', 'note', 'Nothing in orbit here that is still being tracked.'));
+  }
+
+  /** The spacecraft, passing asteroids and moons of a body, as lists that take the visitor to each. */
+  private lists(body: Body, into: HTMLElement): void {
+    const crafts = this.crafts.filter((craft) => craft.centre === body.id && !craft.passing && (body.id !== 'sun' || this.nearSun(craft)));
+    if (crafts.length > 0) into.append(el('h3', 'pc-label', body.id === 'earth' ? 'Beyond Earth orbit' : 'Spacecraft'), this.craftList(crafts));
+    const rocks = this.crafts.filter((craft) => craft.centre === body.id && craft.passing && Math.abs(craft.passing.timeMs - this.host.time()) < 3 * DAY);
+    if (rocks.length > 0) into.append(el('h3', 'pc-label', 'Asteroids passing'), this.craftList(rocks));
+    const moons = BODY_LIST.filter((other) => other.parent === body.id && other.kind === 'moon');
+    if (moons.length > 0) {
+      const row = el('div', 'pc-chips');
+      for (const moon of moons) {
+        const chip = el('button', 'pc-chip', moon.name);
+        chip.type = 'button';
+        chip.addEventListener('click', () => this.goBody(moon.id));
+        row.append(chip);
+      }
+      into.append(el('h3', 'pc-label', moons.length === 1 ? 'Moon' : 'Moons'), row);
+    }
+  }
+
+  private craftList(crafts: Craft[]): HTMLElement {
+    const list = el('ul', 'pc-list');
+    for (const craft of crafts) {
+      const row = el('li');
+      const button = el('button', craft.status === 'silent' ? 'is-silent' : '');
+      button.type = 'button';
+      button.append(el('b', '', craft.short), el('span', '', craft.passing ? `${fmt(craft.passing.distanceKm / MOON_KM, 1)} × the Moon’s distance` : craft.role));
+      button.addEventListener('click', () => this.showCraft(craft));
+      row.append(button);
+      list.append(row);
+    }
+    return list;
   }
 
   // ---- the card --------------------------------------------------------------------------------
@@ -364,9 +587,9 @@ export class Places {
     this.live = null;
     this.card.classList.toggle('is-hidden', !target);
     // Keep what is being looked at clear of the card: above it on a phone, beside it on a computer.
-    if (!target) this.view.setShift(0, 0);
-    else if (this.host.isPhone()) this.view.setShift(0, 0.17);
-    else this.view.setShift(0.07, 0);
+    const shift: [number, number] = !target ? [0, 0] : this.host.isPhone() ? [0, 0.17] : [0.07, 0];
+    this.place.setShift(...shift);
+    this.map.setShift(...shift);
     if (!target) return;
     const body = $('pc-body');
     body.replaceChildren();
@@ -394,10 +617,22 @@ export class Places {
   }
 
   private bodyCard(body: Body, into: HTMLElement): void {
-    const where = this.view.where;
-    const here = where?.kind === 'place' && where.body === body.id;
+    const here = this.spot === 'place' && this.hereBody === body.id;
     $('pc-name').textContent = body.name;
     $('pc-kind').textContent = kindText(body);
+
+    // The way in comes first: on the solar system that is what the card is mostly for.
+    if (!here && (body.id === 'earth' || body.visitable)) {
+      const go = el('button', 'btn pc-go', body.id === 'earth' ? 'Open the live tracker' : `Go to ${theName(body)}`);
+      go.type = 'button';
+      go.addEventListener('click', () => this.goBody(body.id));
+      into.append(go);
+    } else if (here && body.id === 'earth') {
+      const go = el('button', 'btn pc-go', 'Open the live tracker');
+      go.type = 'button';
+      go.addEventListener('click', () => this.goBody('earth'));
+      into.append(go);
+    }
 
     const distance = el('span'), light = el('span');
     const rows: [string, HTMLElement | string][] = [];
@@ -414,58 +649,8 @@ export class Places {
       distance.textContent = farText(km);
       light.textContent = duration((km / LIGHT_KM_S) * 1000);
     };
-
-    if (!here) {
-      const go = el('button', 'btn pc-go', body.id === 'earth' ? 'Open the live tracker' : `Go to ${body.id === 'sun' || body.id === 'moon' ? 'the ' : ''}${body.name}`);
-      go.type = 'button';
-      if (body.id === 'earth') go.addEventListener('click', () => this.home());
-      else if (body.visitable) go.addEventListener('click', () => this.go({ kind: 'place', body: body.id }));
-      else go.remove();
-      if (body.id === 'earth' || body.visitable) into.append(go);
-    } else if (body.id === 'earth') {
-      const go = el('button', 'btn pc-go', 'Open the live tracker');
-      go.type = 'button';
-      go.addEventListener('click', () => this.home());
-      into.append(go);
-    }
-
-    const crafts = this.crafts.filter((craft) => craft.centre === body.id && !craft.passing && (body.id !== 'sun' || this.nearSun(craft)));
-    if (crafts.length > 0) {
-      into.append(el('h3', 'pc-label', body.id === 'earth' ? 'Beyond Earth orbit' : `Spacecraft here`));
-      into.append(this.craftList(crafts));
-    }
-    const rocks = this.crafts.filter((craft) => craft.centre === body.id && craft.passing && Math.abs(craft.passing.timeMs - this.host.time()) < 3 * DAY);
-    if (rocks.length > 0) {
-      into.append(el('h3', 'pc-label', 'Asteroids passing'));
-      into.append(this.craftList(rocks));
-    }
-    const moons = BODY_LIST.filter((other) => other.parent === body.id && other.kind === 'moon');
-    if (moons.length > 0) {
-      into.append(el('h3', 'pc-label', moons.length === 1 ? 'Moon' : 'Moons'));
-      const row = el('div', 'pc-chips');
-      for (const moon of moons) {
-        const chip = el('button', 'pc-chip', moon.name);
-        chip.type = 'button';
-        chip.addEventListener('click', () => (moon.visitable ? this.go({ kind: 'place', body: moon.id }) : this.pick({ kind: 'body', body: moon })));
-        row.append(chip);
-      }
-      into.append(row);
-    }
+    this.lists(body, into);
     into.append(el('p', 'pc-blurb', body.blurb), this.wiki(body.wiki));
-  }
-
-  private craftList(crafts: Craft[]): HTMLElement {
-    const list = el('ul', 'pc-list');
-    for (const craft of crafts) {
-      const row = el('li');
-      const button = el('button', craft.status === 'silent' ? 'is-silent' : '');
-      button.type = 'button';
-      button.append(el('b', '', craft.short), el('span', '', craft.passing ? `${fmt(craft.passing.distanceKm / MOON_KM, 1)} × the Moon’s distance` : craft.role));
-      button.addEventListener('click', () => this.showCraft(craft));
-      row.append(button);
-      list.append(row);
-    }
-    return list;
   }
 
   private craftCard(craft: Craft, into: HTMLElement): void {
@@ -511,14 +696,6 @@ export class Places {
         ? `In contact now · ${link.site} ${link.dish} ${link.up && link.down ? 'sending and receiving' : link.down ? 'receiving' : 'sending'}`
         : craft.status === 'silent' ? 'No longer answering' : '';
     };
-
-    const where = this.view.where;
-    if (where?.kind === 'place') {
-      const back = el('button', 'link pc-back', `Back to ${centre.id === 'sun' || centre.id === 'moon' ? 'the ' : ''}${centre.name}`);
-      back.type = 'button';
-      back.addEventListener('click', () => this.pick(null));
-      into.append(back);
-    }
     into.append(el('p', 'pc-blurb', craft.blurb));
     if (craft.wiki) into.append(this.wiki(craft.wiki));
   }
@@ -537,17 +714,11 @@ export class Places {
   search(query: string): SearchHit[] {
     const hits: SearchHit[] = [];
     const system = this.host.match(query, 'solar system', 'planets', 'the solar system', 'map of the solar system');
-    if (system > 0) hits.push({ title: 'The solar system', note: 'Map', group: 'Beyond Earth orbit', score: system, run: () => this.go({ kind: 'system' }) });
+    if (system > 0) hits.push({ title: 'The solar system', note: 'Every planet, where it is now', group: 'Beyond Earth orbit', score: system, run: () => void this.travel({ kind: 'map', focus: null }) });
     for (const body of BODY_LIST) {
       const score = this.host.match(query, body.name, ...(body.id === 'moon' ? ['the moon', 'luna'] : body.id === 'sun' ? ['the sun'] : []));
       if (score <= 0 || body.id === 'earth') continue;
-      hits.push({
-        title: body.name,
-        note: kindText(body),
-        group: 'Beyond Earth orbit',
-        score,
-        run: () => (body.visitable ? this.go({ kind: 'place', body: body.id }) : this.go({ kind: 'place', body: body.parent! }, { kind: 'body', body })),
-      });
+      hits.push({ title: body.name, note: kindText(body), group: 'Beyond Earth orbit', score, run: () => this.goBody(body.id) });
     }
     for (const craft of this.crafts) {
       const score = this.host.match(query, craft.name, craft.short, ...craft.aliases);
@@ -558,27 +729,23 @@ export class Places {
 
   /** What to add to a share link so that it opens here: `place=mars`, `craft=webb`. */
   linkParams(q: URLSearchParams): void {
-    const where = this.view.where;
-    if (!where) return;
-    q.set('place', where.kind === 'system' ? 'system' : where.body);
-    if (this.view.focus?.kind === 'craft') q.set('craft', this.view.focus.craft.id);
+    if (this.spot === 'tracker') return;
+    q.set('place', this.spot === 'map' ? 'system' : this.hereBody);
+    const focus = this.current?.focus;
+    if (focus?.kind === 'craft') q.set('craft', focus.craft.id);
+    else if (focus?.kind === 'body' && this.spot === 'map') q.set('at', focus.body.id);
   }
 
   /** Open what a share link describes. False if it says nothing about places. */
   async applyLink(q: URLSearchParams): Promise<boolean> {
-    const place = q.get('place'), craftId = q.get('craft');
+    const place = q.get('place'), craftId = q.get('craft'), at = q.get('at');
     if (!place && !craftId) return false;
     const deep = await loadDeep();
-    const craft = deep?.craft.find((candidate) => candidate.id === craftId);
+    const craft = deep?.craft.find((candidate) => candidate.id === craftId) ?? this.crafts.find((candidate) => candidate.id === craftId);
     if (craft) this.showCraft(craft);
-    else if (place === 'system') this.go({ kind: 'system' });
-    else if (place && place in BODIES && BODIES[place as BodyId].visitable && place !== 'earth') this.go({ kind: 'place', body: place as BodyId });
+    else if (place === 'system') void this.travel({ kind: 'map', focus: at && at in BODIES ? { kind: 'body', body: BODIES[at as BodyId] } : null });
+    else if (place && place in BODIES && place !== 'earth') this.goBody(place as BodyId);
     else return false;
     return true;
-  }
-
-  /** The key of what the card shows (for tests and for deciding whether a card is open). */
-  get showing(): string {
-    return this.shown ? targetKey(this.shown) : '';
   }
 }

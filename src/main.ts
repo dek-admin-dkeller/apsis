@@ -40,6 +40,7 @@ import { createScene, EARTH_RADIUS, EARTH_RADIUS_KM, KM } from './render/scene.t
 import { SiteMarker } from './render/siteMarker.ts';
 import { createSky } from './render/sky.ts';
 import { Places } from './ui/places.ts';
+import type { Pose } from './render/space/spaceView.ts';
 import { EarthTiles } from './render/tiles.ts';
 import { TOGETHER_KM_S } from './hashing/conjunction.ts';
 import { AheadPanel } from './ui/ahead.ts';
@@ -203,24 +204,36 @@ const markers = new ConjunctionMarkers(kit, sim);
 const encViz = new EncounterViz(kit);
 const grid = new GridViz(kit, sim);
 const rig = new CameraRig(kit);
-// Everything beyond Earth orbit (the Moon, the planets, Webb, the Voyagers) is a second scene
-// with its own controls; `places.away` says whether that scene is the one on screen.
+// Everything beyond Earth orbit (the Moon, the planets, Webb, the Voyagers) is drawn by scenes
+// of its own (ui/places.ts). `places.elsewhere` says the visitor is in one of them;
+// `places.away` that the tracker is not being drawn at all, so none of its work needs doing.
+// While one scene dissolves into another, the camera of the scene coming in is held where the
+// other one's is; when that scene is the tracker, the pose to hold is kept here.
+let heldPose: Pose | null = null;
 const places = new Places({
   kit,
-  backdrop: sky.backdrop(),
+  backdrop: () => sky.backdrop(),
   time: () => clock.time,
   isPhone: () => isPhone(),
   drift: () => store.settings.earthDrift,
   match: roughMatch,
   jumpTo: (timeMs) => jumpTo(timeMs),
-  pullBack: (seconds) => {
-    // Straight back from the Earth, as far as the tracker's camera may go.
-    rig.follow = false;
-    rig.flyToView(kit.camera.position.clone().setLength(Math.min(kit.camera.position.length() * 7, 400)), ORIGIN.clone(), seconds, easeIn);
-  },
-  apparent: () => EARTH_RADIUS / Math.max(kit.camera.position.length(), 1e-6),
-  onAway: (away, apparent) => setAway(away, apparent),
   toast: (text) => toast(text),
+  trackerView: () => ({ scene: kit.scene, camera: kit.camera, target: kit.controls.target }),
+  trackerPose: () => ({ rel: kit.camera.position.clone().divideScalar(EARTH_RADIUS), quat: kit.camera.quaternion.clone() }),
+  holdTracker: (pose) => (heldPose = pose),
+  surge: (factor, seconds) => {
+    // Straight back from the Earth (as far as the tracker's camera may go), gathering speed.
+    rig.follow = false;
+    rig.flyToView(kit.camera.position.clone().setLength(Math.min(kit.camera.position.length() * factor, 410)), ORIGIN.clone(), seconds, easeIn);
+  },
+  settle: (seconds) => {
+    // Carry on in from wherever the camera is to the whole-Earth distance, on the side it is on.
+    rig.follow = false;
+    rig.flyToView(kit.camera.position.clone().setLength(homeView().length()), ORIGIN.clone(), seconds, easeOut);
+  },
+  leaving: () => leaveTracker(),
+  onAway: (away) => setAway(away),
 });
 const model = new SatelliteModel(kit);
 const encModels = [new SatelliteModel(kit, false), new SatelliteModel(kit, false)]; // the two objects of a close approach
@@ -354,6 +367,7 @@ function applySettings(s: Settings, changed: keyof Settings | null): void {
   // Units and clock: the formatting helpers in ui/dom.ts read these, so every panel follows.
   setUnits(s.units);
   setClockZone(s.clockZone);
+  places.setSky(s.stars, s.constellations);
   if (changed === null || changed === 'units') $('d-label').textContent = alertDistance(screeningDistance);
   if (changed === 'units' || changed === 'clockZone') {
     // Panels that only redraw when something happens are told to redraw now.
@@ -522,7 +536,9 @@ function openPanel(name: PanelName | null): void {
   for (const button of document.querySelectorAll<HTMLElement>('.rail-btn')) {
     const on = button.dataset.panel === name;
     button.classList.toggle('is-on', on);
-    $(`panel-${button.dataset.panel}`).classList.toggle('is-hidden', !on);
+    // At another world "Objects" is the list of what is there, not the Earth's catalogue.
+    if (button.dataset.panel === 'objects' && places.atPlace) places.toggleHere(on);
+    else $(`panel-${button.dataset.panel}`).classList.toggle('is-hidden', !on);
   }
 }
 const togglePanel = (name: PanelName) => openPanel(openPanelName === name ? null : name);
@@ -1200,7 +1216,7 @@ const tooltip = $('tooltip');
 const pointer = { x: 0, y: 0, dirty: false, downX: 0, downY: 0 };
 
 canvas.addEventListener('pointermove', (event) => {
-  if (places.away) return; // another scene is on screen: there is nothing of the tracker's under the pointer
+  if (places.elsewhere) return; // another scene is on screen: there is nothing of the tracker's under the pointer
   pointer.x = event.clientX;
   pointer.y = event.clientY;
   pointer.dirty = event.buttons === 0; // no hover test while dragging
@@ -1212,7 +1228,7 @@ canvas.addEventListener('pointerdown', (event) => {
   pointer.downY = event.clientY;
 });
 canvas.addEventListener('pointerup', (event) => {
-  if (!catalog || places.away || Math.hypot(event.clientX - pointer.downX, event.clientY - pointer.downY) > 4) return; // it was a drag
+  if (!catalog || places.elsewhere || Math.hypot(event.clientX - pointer.downX, event.clientY - pointer.downY) > 4) return; // it was a drag
   if (document.body.classList.contains('sky-immersive')) return; // full-screen sky: a tap must not bring a panel up
   const index = cloud.pick(event.clientX, event.clientY, 12);
   if (index >= 0 && index !== selected?.index) select(catalog.sats[index]);
@@ -1311,7 +1327,7 @@ for (const button of document.querySelectorAll<HTMLElement>('[data-view]')) {
 function shareUrl(): string {
   const q = new URLSearchParams();
   const enc = encPanel.encounter;
-  if (places.away) {
+  if (places.elsewhere) {
     places.linkParams(q);
     if (Math.abs(clock.time - Date.now()) > 60000) q.set('t', String(Math.round(clock.time / 1000)));
   } else if (enc) {
@@ -1474,31 +1490,29 @@ cinema.onChange = () => {
 
 // ---- home: the logo puts everything back the way it started ---------------------------------
 
+/** About to leave the tracker for somewhere else (ui/places.ts): everything of the tracker's is put away. */
+function leaveTracker(): void {
+  if (cinema.isPlaying) cinema.stop();
+  if (fp.mode !== 'off') fp.exit();
+  closeEncounter(true);
+  if (selected) select(null);
+  openPanel(null);
+  setViewsMenu(false);
+  sheets.reset();
+  setResting(false);
+}
+
 /**
- * Leaving the tracker for another place, or coming back from one (ui/places.ts calls this).
- * On the way out everything of the tracker's is put away; while away the simulation is not
- * kept up (see step()), so on the way back it starts again from fresh positions.
+ * The tracker has stopped being drawn (true) or is about to be drawn again (false). While it
+ * is not drawn the simulation is not kept up (see step()), so on the way back it starts again
+ * from fresh positions.
  */
-function setAway(away: boolean, apparent = 0): void {
-  if (away) {
-    if (cinema.isPlaying) cinema.stop();
-    if (fp.mode !== 'off') fp.exit();
-    closeEncounter(true);
-    if (selected) select(null);
-    openPanel(null);
-    setViewsMenu(false);
-    sheets.reset();
-  } else {
+function setAway(away: boolean): void {
+  if (!away) {
     jumpTo(clock.time, true);
     viewKey = '';
-    // Arriving: the Earth comes up out of the distance, the camera already moving and settling
-    // into the whole-Earth view (the second half of the move that began where the visitor was).
-    const home = homeView();
-    rig.follow = false;
-    kit.camera.position.copy(home).setLength(apparent > 0 ? THREE.MathUtils.clamp(EARTH_RADIUS / apparent, home.length() * 2, 400) : 170);
-    kit.controls.target.set(0, 0, 0);
-    rig.flyToView(home, ORIGIN.clone(), 2.4, easeOut);
   }
+  openPanel(null);
   setResting(false);
 }
 
@@ -1512,6 +1526,16 @@ function roughMatch(query: string, ...texts: string[]): number {
     best = Math.max(best, t === q ? 1 : t.startsWith(q) ? 0.8 : t.includes(q) ? 0.5 : 0);
   }
   return best;
+}
+
+/** Put the tracker's camera exactly where another scene's camera is, relative to the Earth (see heldPose). */
+function holdCamera(pose: Pose): void {
+  const camera = kit.camera;
+  camera.position.copy(pose.rel).multiplyScalar(EARTH_RADIUS);
+  camera.quaternion.copy(pose.quat);
+  camera.up.set(0, 1, 0).applyQuaternion(pose.quat);
+  // What it is looking at: the point straight ahead, as far away as the Earth.
+  kit.controls.target.copy(camera.position).add(new THREE.Vector3(0, 0, -1).applyQuaternion(pose.quat).multiplyScalar(camera.position.length()));
 }
 
 function goHome(): void {
@@ -1547,7 +1571,7 @@ window.addEventListener('keydown', (event) => {
   if (el instanceof HTMLInputElement && el.type !== 'checkbox' && el.type !== 'range') return; // typing in a field
   if (event.metaKey || event.ctrlKey || event.altKey) return;
   // Away from the tracker, only the keys that mean something everywhere: time, picture, home, search.
-  if (places.away && !['0', 'r', '[', ']', 'n', 'p', 'm', 'f', 'h', '/', ' ', 'escape', '?'].includes(event.key.toLowerCase())) return;
+  if (places.elsewhere && !['0', 'r', '[', ']', 'n', 'p', 'm', 'f', 'h', '/', ' ', 'escape', '?'].includes(event.key.toLowerCase())) return;
   switch (event.key.toLowerCase()) {
     case '0': goHome(); break;
     case '1': preset(1); break;
@@ -1592,7 +1616,7 @@ window.addEventListener('keydown', (event) => {
       else if (shareDialog.isOpen) shareDialog.close();
       else if (fp.mode !== 'off') fp.exit();
       else if (document.body.classList.contains('ui-hidden')) document.body.classList.remove('ui-hidden');
-      else if (places.away) places.back();
+      else if (places.elsewhere) places.back();
       else if (encPanel.isOpen) closeEncounter();
       else if (selected) select(null);
       else openPanel(null);
@@ -1638,6 +1662,11 @@ function updateSelection(realSeconds: number): void {
 // Zooming by hand means "I'll frame this myself": the automatic framing below lets go until
 // the pair is re-centred from the panel.
 canvas.addEventListener('wheel', () => (encAutoFrame = false), { passive: true });
+// Zooming out past the furthest the tracker goes carries on out to the solar system.
+canvas.addEventListener('wheel', (event) => {
+  if (event.deltaY <= 0 || places.elsewhere || landing.showing || rig.flying || rig.focused || fp.mode !== 'off') return;
+  if (kit.controls.target.lengthSq() < 1 && kit.camera.position.length() > kit.controls.maxDistance * 0.985) places.openSystem();
+}, { passive: true });
 canvas.addEventListener('touchstart', (event) => {
   if (event.touches.length > 1) encAutoFrame = false;
 }, { passive: true });
@@ -1815,8 +1844,8 @@ function setResting(on: boolean): void {
   document.body.classList.toggle('ui-rest', on);
 }
 function updateRest(now: number): void {
-  if (places.away) {
-    const calm = places.drifting && now - lastTouchMs > 4000 && !landing.showing && !timeBar.classList.contains('is-open') &&
+  if (places.elsewhere) {
+    const calm = places.drifting && now - lastTouchMs > 4000 && !landing.showing && openPanelName === null && !timeBar.classList.contains('is-open') &&
       viewsMenu.classList.contains('is-hidden') && document.activeElement?.id !== 'search' &&
       !document.querySelector('.overlay:not(.is-hidden), .tool-menu:not(.is-hidden)');
     if (calm !== resting) setResting(calm);
@@ -1868,7 +1897,8 @@ function step(now: number): void {
     // Somewhere else in the solar system. Nothing of the Earth's is on screen, so none of its
     // machinery runs: no propagation, no screening, no globe. Only the clock, which is shared.
     sky.update(new Date(clock.time), globe.sunDirection, realSeconds); // keeps the shared star material's pixel size and twinkle current
-    places.update(dt, clock.time, realSeconds);
+    places.lead(dt, clock.time, realSeconds);
+    places.follow(dt, clock.time, realSeconds);
     updateRest(now);
     timeControls.render();
     updateTimeChip();
@@ -1881,6 +1911,9 @@ function step(now: number): void {
     watchFrameRate(now);
     return;
   }
+  // The tracker is being drawn; if another scene is on screen with it (one is dissolving into
+  // the other), that scene's own camera moves first — the tracker's may have to follow it.
+  if (places.active) places.lead(dt, clock.time, realSeconds);
   sim.update(clock.time, clock.paused ? 0 : clock.speed); // snapshot bookkeeping + interpolation factor
   cloud.update();
   const date = new Date(clock.time);
@@ -1892,7 +1925,8 @@ function step(now: number): void {
   if (encPanel.isOpen) encFrame = encViz.update(clock.time, realSeconds); // before the camera follows it
   updateViewShift(dt);
   // One of two things drives the camera: a first-person view, or the ordinary rig.
-  if (fp.mode !== 'off') fp.update(dt, clock.time, selScene ? { position: selScene, velocity: selVelocity } : null);
+  if (heldPose) holdCamera(heldPose);
+  else if (fp.mode !== 'off') fp.update(dt, clock.time, selScene ? { position: selScene, velocity: selVelocity } : null);
   else rig.update(dt);
   updateRest(now);
   kit.camera.updateMatrixWorld();
@@ -1922,6 +1956,7 @@ function step(now: number): void {
   // scrolled past that, nobody can see the globe: draw it only now and then (often enough to
   // keep textures and shaders warm) and leave the GPU to the page.
   frameCount++;
+  if (places.active) places.follow(dt, clock.time, realSeconds); // …and the scene coming in follows the tracker's camera
   if (!landing.showing || landing.heroInView || frameCount % 15 === 0) kit.render();
   if (wantShot) {
     wantShot = false;

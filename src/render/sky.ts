@@ -1025,7 +1025,11 @@ export function createSky(kit: SceneKit): Sky {
       const points = new THREE.Points(stars.geometry, stars.material);
       points.renderOrder = stars.renderOrder;
       points.frustumCulled = false;
-      group.add(far, points);
+      // The constellation figures too; children 0 and 1 are the Milky Way and the stars, 2 the figures.
+      const lines = new THREE.LineSegments(figures.geometry, figures.material);
+      lines.renderOrder = figures.renderOrder;
+      lines.frustumCulled = false;
+      group.add(far, points, lines);
       return group;
     },
     setStars(on) {

@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { FullScreenQuad, Pass } from 'three/examples/jsm/postprocessing/Pass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
@@ -30,6 +31,62 @@ const QUALITY: Record<Quality, { maxPixelRatio: number; samples: number }> = {
   fast: { maxPixelRatio: 1, samples: 0 },
 };
 
+/** Another scene and the camera to draw it with; `target` is what that camera looks at (for its near plane). */
+export interface OtherView {
+  scene: THREE.Scene;
+  camera: THREE.PerspectiveCamera;
+  target: THREE.Vector3;
+}
+
+/**
+ * A dissolve from the scene being drawn to another one. While it is switched on, the other
+ * scene is drawn into a buffer of its own and the two pictures are mixed, before bloom, so the
+ * glow belongs to the mixed picture. Used for the move between the tracker, a planet and the
+ * solar-system map: both scenes show the same world at the same size and under the same stars
+ * for those few frames, so what the eye sees is satellites fading away, not one picture
+ * replacing another. It costs a second scene render only while a dissolve is running.
+ */
+class Dissolve extends Pass {
+  other: OtherView | null = null;
+  amount = 0;
+  private buffer: THREE.WebGLRenderTarget | null = null;
+  private readonly material = new THREE.ShaderMaterial({
+    uniforms: { tFrom: { value: null }, tTo: { value: null }, uAmount: { value: 0 } },
+    vertexShader: /* glsl */ `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform sampler2D tFrom;
+      uniform sampler2D tTo;
+      uniform float uAmount;
+      varying vec2 vUv;
+      void main() {
+        gl_FragColor = vec4(mix(texture2D(tFrom, vUv).rgb, texture2D(tTo, vUv).rgb, clamp(uAmount, 0.0, 1.0)), 1.0);
+      }`,
+  });
+  private readonly quad = new FullScreenQuad(this.material);
+
+  render(renderer: THREE.WebGLRenderer, writeBuffer: THREE.WebGLRenderTarget, readBuffer: THREE.WebGLRenderTarget): void {
+    const other = this.other;
+    if (!other) return;
+    // The second picture is made exactly like the first: same size, same anti-aliasing.
+    if (!this.buffer || this.buffer.width !== readBuffer.width || this.buffer.height !== readBuffer.height || this.buffer.samples !== readBuffer.samples) {
+      this.buffer?.dispose();
+      this.buffer = new THREE.WebGLRenderTarget(readBuffer.width, readBuffer.height, { type: THREE.HalfFloatType, samples: readBuffer.samples });
+    }
+    renderer.setRenderTarget(this.buffer);
+    renderer.render(other.scene, other.camera);
+    this.material.uniforms.tFrom.value = readBuffer.texture;
+    this.material.uniforms.tTo.value = this.buffer.texture;
+    this.material.uniforms.uAmount.value = this.amount;
+    renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
+    this.quad.render(renderer);
+  }
+}
+
 export interface SceneKit {
   renderer: THREE.WebGLRenderer;
   scene: THREE.Scene;
@@ -47,6 +104,12 @@ export interface SceneKit {
    * the near-plane rule in render(). Call with no arguments to go back to the tracker's scene.
    */
   show(scene?: THREE.Scene, camera?: THREE.PerspectiveCamera, target?: THREE.Vector3): void;
+  /**
+   * Dissolve towards another scene: `amount` 0 is all of the scene being shown, 1 all of the
+   * other. Call it every frame while the dissolve runs, then show() the other scene and call
+   * this with null.
+   */
+  blend(other: OtherView | null, amount?: number): void;
   render(): void;
 }
 
@@ -79,6 +142,18 @@ export function createScene(canvas: HTMLCanvasElement): SceneKit {
   const renderPass = new RenderPass(scene, camera);
   composer.addPass(renderPass);
   let shown: { camera: THREE.PerspectiveCamera; target: THREE.Vector3 } = { camera, target: controls.target };
+  const dissolve = new Dissolve();
+  dissolve.enabled = false;
+  composer.addPass(dissolve);
+  // Keep a camera's near plane proportional to how far it is from what it looks at, so depth
+  // precision stays good both for a whole world and when the camera sits 50 km from a satellite.
+  const tuneNear = (eye: THREE.PerspectiveCamera, target: THREE.Vector3): void => {
+    const near = THREE.MathUtils.clamp(eye.position.distanceTo(target) * 0.02, 0.000004, 0.5);
+    if (Math.abs(near - eye.near) > near * 0.05) {
+      eye.near = near;
+      eye.updateProjectionMatrix();
+    }
+  };
   // Safety net. The bloom pass blurs the picture at many sizes, so ONE invalid pixel (a NaN
   // from some shader on some graphics driver) would spread until the whole screen is black.
   // This pass replaces any non-finite or absurd pixel with black before bloom ever sees it:
@@ -136,15 +211,15 @@ export function createScene(canvas: HTMLCanvasElement): SceneKit {
       shown = { camera: otherCamera ?? camera, target: target ?? controls.target };
     },
 
+    blend(other, amount = 0) {
+      dissolve.other = other;
+      dissolve.amount = amount;
+      dissolve.enabled = other !== null && amount > 0;
+    },
+
     render() {
-      // Keep the near plane proportional to the zoom level so depth precision stays good
-      // both for the whole-Earth view and when the camera sits 50 km from a satellite.
-      const eye = shown.camera;
-      const near = THREE.MathUtils.clamp(eye.position.distanceTo(shown.target) * 0.02, 0.000004, 0.5);
-      if (Math.abs(near - eye.near) > near * 0.05) {
-        eye.near = near;
-        eye.updateProjectionMatrix();
-      }
+      tuneNear(shown.camera, shown.target);
+      if (dissolve.enabled && dissolve.other) tuneNear(dissolve.other.camera, dissolve.other.target);
       composer.render();
     },
   };
