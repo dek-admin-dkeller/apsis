@@ -26,6 +26,7 @@ import type { App, SearchHit, SearchProvider } from './app.ts';
 import { $, fmtInt } from './dom.ts';
 import { buildKeywordIndex, findDescribed, findTopics, type KeywordIndex } from './searchIndex.ts';
 import { normalize, withoutVerb } from './searchMatch.ts';
+import { SearchBrowse } from './searchBrowse.ts';
 import { ObjectFinder } from './searchObjects.ts';
 import { thumbnail } from './thumb.ts';
 
@@ -87,6 +88,8 @@ export class Search {
   private rows: Row[] = [];
   private active = -1; // the highlighted row, -1 for none
   private filtered = false; // a type chosen here is hiding everything else
+  /** Stepping through the objects of a chosen type, one at a time (ui/searchBrowse.ts). */
+  private readonly browse: SearchBrowse;
 
   /**
    * @param providers the live list behind `app.addSearch`: sources registered later are asked too.
@@ -94,6 +97,8 @@ export class Search {
   constructor(app: App, providers: SearchProvider[]) {
     this.app = app;
     this.providers = providers;
+    this.browse = new SearchBrowse(app);
+    this.browse.onDone = () => this.showEverything();
     const { input, list } = this;
 
     input.addEventListener('input', () => this.update());
@@ -394,9 +399,11 @@ export class Search {
     this.chip.classList.remove('is-hidden');
     this.input.style.paddingRight = `${this.chip.offsetWidth + 10}px`; // the text must not run under the chip
     this.input.parentElement!.classList.add('has-filter');
+    this.browse.start(label, members); // and step through them, one at a time
   }
 
   private showEverything(): void {
+    this.browse.close();
     if (!this.filtered) return;
     this.filtered = false;
     this.app.setFilter('search', null);

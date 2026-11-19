@@ -54,7 +54,7 @@ export const FEATURES: FeatureGroup[] = [
       { name: 'Names and a hover card', text: 'Names appear as you zoom in. Point at any dot for a picture, what it is and who runs it.' },
       { name: 'Colour and filter', text: 'Colour the dots by type, orbit, height, owner, launch year or tilt, and hide what you do not need.' },
       { name: 'Search', text: 'One field finds an object by name, nickname or number, a place, a time or an action, and forgives a misspelling. Press / or Ctrl K.', fresh: true },
-      { name: 'Search by type', text: 'Type “telescope”, “weather” or “chinese radar” and choose the type: only those objects stay on the globe until you clear it.', fresh: true },
+      { name: 'Search by type', text: 'Type “spacex”, “telescope” or “chinese radar” and choose the type: only those objects stay on the globe, and you step through them one at a time with their 3D models (‹ ›, the arrow keys, or a swipe on a phone). Done leaves you on the one you stopped at.', fresh: true },
       { name: 'The sky behind', text: 'Real stars, constellations, the planets, the Moon, and tonight’s aurora over the poles.' },
       { name: 'Views and time', text: 'Whole Earth, low orbit, the geostationary ring, Earth with the Moon. Pause time, run it backwards, or up to a thousand times faster.' },
       { name: 'Growth by year', text: 'Drag a slider from 1957 to today and see what is still up there from each year.', fresh: true },
@@ -97,7 +97,8 @@ export const FEATURES: FeatureGroup[] = [
       { name: 'The solar system', text: 'Zoom out, or press Escape, and the satellites fade away, leaving the Earth among the planets, each on the right side of the Sun for today’s date.', fresh: true },
       { name: 'Autoplay', text: 'Press play on the solar system and sit back: a hands-free trip from the Sun out to Pluto, stopping at each world with a line about it. Any key or click stops it where it is.', fresh: true },
       { name: 'Other worlds', text: 'Click a planet or a moon, then go in: the Moon, Mars, Jupiter and its four big moons, Saturn and its rings, out to Pluto, each lit and turning as it is right now.', fresh: true },
-      { name: 'Thirty-five moons', text: 'Every moon that is round or well known, from Phobos to Pluto’s Hydra, each where it really is today. Twenty-one are mapped from NASA’s pictures and open to visit; what no camera has seen is left blank rather than made up.', fresh: true },
+      { name: 'Thirty-five moons', text: 'Every moon that is round or well known, from Phobos to Pluto’s Hydra, each where it really is today. Twenty-one are mapped from NASA’s pictures and open to visit.', fresh: true },
+      { name: 'Unseen sides', text: 'Parts of Pluto, Charon, Triton and Uranus’s moons have never been photographed. They are filled in with an educated guess made from each world’s own photographed terrain, and each world’s card says what is real; one switch shows them as a plain tone instead.', fresh: true },
       { name: 'Spacecraft out there', text: 'The Webb telescope, the orbiters and rovers at Mars, Juno, the Voyagers: fifty craft placed from NASA’s own trajectory data, with how far away each is and how long its signal takes.', fresh: true },
       { name: 'In contact now', text: 'A green mark on any craft that one of NASA’s deep-space dishes is talking to this minute.', fresh: true },
       { name: 'Asteroids passing', text: 'Follow a near-Earth asteroid along its real path as it goes past.', fresh: true },
@@ -122,7 +123,7 @@ export const FEATURES: FeatureGroup[] = [
       { name: 'Share', text: 'A link or QR code that reopens exactly what you are looking at.' },
       { name: 'Visible tonight', text: 'The bright passes you could see with your own eyes in the next 24 hours from where you are, and where to look. On a phone it opens inside the sky view.', fresh: true },
       { name: 'Upcoming launches', text: 'What is due to launch next, with a countdown and the pads marked on the globe.', fresh: true },
-      { name: 'Watch a launch climb', text: 'A rocket rising from its pad to orbit on the globe, live as it launches: an estimated path from the pad, the time and the target orbit, with its height, speed and stages, the booster flying back to land, and a link to the webcast. Preview any upcoming launch, replay a recent one, share the moment, and see the real objects once tracking has caught up.', fresh: true },
+      { name: 'Watch a launch climb', text: 'A rocket rising from its pad to orbit on the globe, live as it launches: an estimated path from the pad, the time and the target orbit, with its height, speed and stages, the booster flying back to land, and the webcast when one is listed. Preview any upcoming launch, replay a recent one, share the moment, and see the real objects once tracking has caught up. A launch that failed is shown as far as it got, with the reported cause.', fresh: true },
       { name: 'New launches', text: 'What went up in the last three days stands out: brighter dots and a “New” name, until the novelty wears off.', fresh: true },
       { name: 'Orbit changes', text: 'Which satellites have raised or lowered their orbits since the data was last refreshed, and what is new or gone.', fresh: true },
       { name: 'Space weather and re-entries', text: 'How active the Sun is today, and roughly how long the lowest objects have left.', fresh: true },
@@ -141,7 +142,7 @@ export const FEATURES: FeatureGroup[] = [
     summary: 'The same tracker, made for a small screen and for pointing at the sky.',
     items: [
       { name: 'Hold it up to the sky', text: 'The sky button fills the screen with what is overhead in the direction the phone is pointing. Tap anything for a small card saying what it is.', fresh: true },
-      { name: 'A strip of worlds', text: 'On the solar system and at other worlds, a row of little globes above the tab bar: tap one to fly there, tap again to go in.', fresh: true },
+      { name: 'One pill between worlds', text: 'A small “‹ Earth ›” pill above the tab bar: tap it for the whole solar system, swipe it (or tap ‹ ›) for the next world, swipe it up for every world at once. A two-finger tap on the picture goes up a level.', fresh: true },
       { name: 'Built around the globe', text: 'Few controls on screen, and panels you can drag out of the way.' },
     ],
   },
@@ -155,6 +156,18 @@ export interface Update {
 }
 
 export const WHATS_NEW: Update[] = [
+  {
+    date: '2026-11-20',
+    title: 'Flip through what you search, and a simpler phone',
+    items: [
+      'Search a type (“spacex”, “weather”, “telescope”) and step through every object of it one at a time, each with its 3D model: ‹ › or the arrow keys, a swipe on a phone. Done shows everything again and leaves you on the one you stopped at.',
+      'On a phone, one small pill above the tab bar replaces the strip of planets and the path at the top: tap it for the whole solar system, swipe it for the next world, swipe it up for all of them. A two-finger tap goes up a level.',
+      'The never-photographed parts of Pluto, Charon, Triton and Uranus’s moons are filled in with an educated guess made from each world’s own terrain (a switch in Layers turns it off), and each world’s card says which part no one has seen.',
+      'The bell’s list is cleaner: spacecraft in contact folded into one row, a date column for what is coming, notifications as a switch.',
+      'Launch climbs: a failed launch is shown as far as it got with its reported cause; the webcast link appears only when one is listed; pressing Live or Escape during a climb no longer leaves the camera stuck.',
+      'Fixed: searching for something beyond Earth orbit (Wind, Webb) from another world now takes you straight to it; the camera turns round a lander (Surveyor, Apollo) with the horizon level; a rocket waiting on its pad no longer sinks into the ground; the time bar’s text no longer runs over its buttons far from the present.',
+    ],
+  },
   {
     date: '2026-11-19',
     title: '49 more models, one for nearly everything out there',

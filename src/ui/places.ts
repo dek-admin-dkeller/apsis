@@ -36,7 +36,7 @@ import { BODIES, BODY_LIST } from '../space/bodies.ts';
 import { craftPeriodMs, craftPosition, loadDeep } from '../space/deep.ts';
 import { DSN_NOW_URL, watchDsn } from '../space/dsn.ts';
 import { bodyAxes, bodyPosition, bodyRelative } from '../space/ephem.ts';
-import { IMAGERY } from '../space/imagery.ts';
+import { IMAGERY, UNSEEN } from '../space/imagery.ts';
 import { loadRovers, onRoversRefresh, roverPath } from '../space/rovers.ts';
 import { SITES } from '../space/sites.ts';
 import type { Body, BodyId, Craft, DeepData, DsnLink, Flyby, Motion, Site, Vec } from '../space/types.ts';
@@ -222,6 +222,8 @@ export class Places {
   private trackerOn = true; // the tracker's scene is being drawn (alone, or as one side of a change)
   private mix: Mix | null = null;
   private busy = false;
+  /** A journey asked for while another was under way (a search typed mid-move): run when that one ends. */
+  private queued: Destination | null = null;
   private crafts: Craft[] = [];
   private shown: Target | null = null; // what the card is about
   private links: DsnLink[] = [];
@@ -399,6 +401,13 @@ export class Places {
   setSharpGround(on: boolean): void {
     this.place.setSharpGround(on);
   }
+
+  /** The Layers switch "Unseen sides": the never-photographed parts of a few worlds guessed, or one plain tone. */
+  setGuessUnseen(on: boolean): void {
+    this.guessUnseen = on;
+    SpaceView.setGuessUnseen(on);
+  }
+  private guessUnseen = true;
 
   // ---- changing scene --------------------------------------------------------------------------
   //
@@ -580,7 +589,8 @@ export class Places {
    * Choosing the world you are at puts its usual view back.
    */
   goWorld(id: BodyId | 'system'): void {
-    if (this.busy) return;
+    // (During a journey the next one is queued by travel(), so a quick second swipe is not lost.)
+    if (this.busy && this.spot === 'map') return;
     if (id === 'system') return this.spot === 'map' ? this.pick(this.map, null) : this.openSystem();
     const body = BODIES[id];
     if (this.spot === 'map') {
@@ -678,13 +688,17 @@ export class Places {
     }, 1700);
   }
 
-  /** From beside a body's dot on the solar system, on in to that body (or, the Earth, to the tracker). */
-  private async fromMap(body: BodyId): Promise<void> {
+  /**
+   * From beside a body's dot on the solar system, on in to that body. For the Earth that is the
+   * tracker, unless `farEarth`: the Earth as a place, the far view that holds Webb, Wind and the
+   * passing asteroids (going to the tracker and then across lost what the visitor had asked for).
+   */
+  private async fromMap(body: BodyId, farEarth = false): Promise<void> {
     const dot = await this.toDot(body);
     if (!dot || dot.kind !== 'body' || dot.body.id !== body) return;
     window.clearTimeout(this.prepareTimer);
     const key = targetKey(dot);
-    const to: Spot = body === 'earth' ? 'tracker' : 'place';
+    const to: Spot = body === 'earth' && !farEarth ? 'tracker' : 'place';
     if (to === 'tracker') {
       this.trackerOn = true;
       this.host.onAway(false); // the simulation starts again now, so the satellites are there when the picture is
@@ -735,7 +749,10 @@ export class Places {
 
   /** Go somewhere, by whatever chain of moves gets there from here. One journey at a time. */
   private async travel(to: Destination): Promise<void> {
-    if (this.busy) return;
+    if (this.busy) {
+      this.queued = to; // the latest wish wins, and is carried out once the camera is free
+      return;
+    }
     this.busy = true;
     try {
       if (to.kind === 'map') {
@@ -754,13 +771,16 @@ export class Places {
           if (to.body === 'earth' && this.spot === 'tracker') await this.acrossEarth('place');
           else {
             if (this.spot !== 'map') await this.toMap();
-            await this.fromMap(to.body);
+            await this.fromMap(to.body, true);
           }
         }
-        if (this.spot === 'place' && to.focus) this.pick(this.place, to.focus);
+        if (this.spot === 'place' && this.hereBody === to.body && to.focus) this.pick(this.place, to.focus);
       }
     } finally {
       this.busy = false;
+      const next = this.queued;
+      this.queued = null;
+      if (next) void this.travel(next);
     }
   }
 
@@ -828,6 +848,7 @@ export class Places {
 
   /** To the tracker at once, with no journey (only for when the page itself is being reset). */
   leaveNow(): void {
+    this.queued = null;
     if (this.spot === 'tracker' && !this.mix) return;
     this.mix?.done();
     this.mix = null;
@@ -1215,6 +1236,13 @@ export class Places {
         if (body.air) rows.push(['Air', body.air]);
         if (body.discovered) rows.push(['Found by', body.discovered]);
         into.append(this.facts(rows));
+        // Part of it never photographed: say so, and what the picture shows there.
+        const unseen = UNSEEN[body.id];
+        if (unseen) {
+          into.append(el('p', 'pc-unseen', `${unseen} No one has seen that part: ${this.guessUnseen
+            ? 'it is drawn as an educated guess made from the photographed side (the Layers switch “Unseen sides” shows it as a plain tone instead).'
+            : 'it is drawn in one plain tone (the Layers switch “Unseen sides” fills it in with an educated guess).'}`));
+        }
       }],
       ['About', (into) => about(into, body.blurb)],
     ];

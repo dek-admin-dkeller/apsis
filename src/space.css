@@ -15,7 +15,7 @@
 
 /* ---------- what does not apply away from the Earth ---------- */
 
-body.away :is(.readouts, .dock-right, #labels, #reticle, #range-tag, #locate-top, #m-sky, #m-system, #panel-objects) { display: none !important; }
+body.away :is(.readouts, .dock-right, #labels, #reticle, #range-tag, #locate-top, #m-sky, #panel-objects) { display: none !important; }
 body.away .rail :is([data-view], #view-sky) { display: none; }
 /* Each place has views of its own in the rail's View group: the Earth's, another world's, the solar system's. */
 body:not(.away) :is([data-place-view], .m-views-place), body.on-map :is([data-place-view], .m-views-place) { display: none; }
@@ -274,3 +274,6 @@ body.away .search.has-filter input { padding-right: 10px !important; }
   body.away .timebar.is-open #speeds button:not(.here-only), body.away:not(.quiet-ui) .timebar #speeds button:not(.here-only) { flex: 1 1 0; min-width: 0; padding: 0 2px; }
   body.away .timebar.is-open .transport, body.away:not(.quiet-ui) .timebar .transport { justify-self: center; }
 }
+
+/* A world part of which no camera has photographed: one quiet line under its facts (ui/places.ts). */
+.pc-unseen { margin: 10px 2px 0; font-size: 11.5px; line-height: 1.45; color: var(--muted); }

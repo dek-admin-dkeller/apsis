@@ -188,7 +188,8 @@ export class TimeControls {
     // How far the simulation is from the real present.
     const offset = this.clock.time - Date.now();
     const live = Math.abs(offset) < 5000 && !this.clock.paused && this.clock.speed === 1;
-    $('clock-offset').textContent = Math.abs(offset) < 5000 ? '' : `${offset > 0 ? '+' : '−'}${duration(offset)}`;
+    // Short, so it never grows enough to push the buttons beside it ("−3.0 d", "+8.4 mo", "−12 yr").
+    $('clock-offset').textContent = Math.abs(offset) < 5000 ? '' : `${offset > 0 ? '+' : '−'}${shortSpan(offset)}`;
     // Not the present: the clock itself says so (amber), wherever on the bar the eye lands.
     this.play.closest<HTMLElement>('.timebar')!.classList.toggle('is-shifted', Math.abs(offset) >= 5000);
     const now = $('now');
@@ -231,6 +232,26 @@ export function clockBehind(offset: number, paused: boolean, speed: number): str
   const parts: string[] = [];
   if (paused) parts.push('paused');
   else if (speed !== 1) parts.push(speed < 0 ? 'running backwards' : speedText(Math.abs(speed)).replace(' a second', '/s'));
-  if (Math.abs(offset) >= 5000) parts.push(`${duration(offset)} ${offset < 0 ? 'behind' : 'ahead'}`);
+  if (Math.abs(offset) >= 5000) parts.push(`${spanWords(offset)} ${offset < 0 ? 'behind' : 'ahead'}`);
   return parts.join(' · ');
+}
+
+/** A time span in at most about six characters, for the clock's offset from the present. */
+function shortSpan(ms: number): string {
+  const s = Math.abs(ms) / 1000;
+  if (s < 90) return `${Math.round(s)} s`;
+  if (s < 5400) return `${Math.round(s / 60)} min`;
+  if (s < 48 * 3600) return `${(s / 3600).toFixed(1)} h`;
+  if (s < 60 * 86400) return `${(s / 86400).toFixed(1)} d`;
+  if (s < 2 * 365.25 * 86400) return `${(s / (30.44 * 86400)).toFixed(1)} mo`;
+  const years = s / (365.25 * 86400);
+  return `${years < 100 ? years.toFixed(1) : Math.round(years)} yr`;
+}
+
+/** The same in words for "… behind": minutes and hours as `duration` says them, then months and years. */
+function spanWords(ms: number): string {
+  const days = Math.abs(ms) / 86400000;
+  if (days < 60) return duration(ms);
+  if (days < 730) return `${(days / 30.44).toFixed(1)} months`;
+  return `${(days / 365.25).toFixed(1)} years`;
 }

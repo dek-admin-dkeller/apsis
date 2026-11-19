@@ -42,7 +42,7 @@ import { isModelKind, type ModelKind } from '../../data/describe.ts';
 import { BODIES, BODY_LIST } from '../../space/bodies.ts';
 import { craftPeriodMs, craftPosition } from '../../space/deep.ts';
 import { bodyAxes, bodyPosition, bodyRelative } from '../../space/ephem.ts';
-import { IMAGERY } from '../../space/imagery.ts';
+import { IMAGERY, UNSEEN } from '../../space/imagery.ts';
 import { loadRovers, onRoversRefresh, roverPath } from '../../space/rovers.ts';
 import type { Body, BodyId, Craft, Vec } from '../../space/types.ts';
 import { easeIn, easeOut } from '../cameraRig.ts';
@@ -155,6 +155,36 @@ const HEADLINE = new Set(['voyager-1', 'voyager-2', 'new-horizons', 'pioneer-10'
 const MAPS = new Map<string, THREE.Texture>();
 const WAITING = new Map<string, ((texture: THREE.Texture | null) => void)[]>();
 const VIEWS: SpaceView[] = [];
+/**
+ * Fill in the parts of a world no camera has seen (Settings → "Fill in unseen ground"): such a
+ * map is asked for as "<file>?guess" and goes through worker/unseen.worker.ts once it is decoded.
+ */
+let GUESS = true;
+const GUESS_TAG = '?guess';
+const guessed = (id: BodyId, address: string): string => (GUESS && UNSEEN[id] ? address + GUESS_TAG : address);
+let guessWorker: Worker | null = null;
+let guessId = 0;
+const guessWaiting = new Map<number, (bitmap: ImageBitmap) => void>();
+/** The map with its unseen parts filled in, worked out off the main thread (the map as it is where that cannot be done). */
+function fillUnseen(bitmap: ImageBitmap): Promise<ImageBitmap> {
+  if (typeof OffscreenCanvas === 'undefined') return Promise.resolve(bitmap);
+  try {
+    if (!guessWorker) {
+      guessWorker = new Worker(new URL('../../worker/unseen.worker.ts', import.meta.url), { type: 'module' });
+      guessWorker.onmessage = (event: MessageEvent<{ id: number; bitmap: ImageBitmap }>) => {
+        guessWaiting.get(event.data.id)?.(event.data.bitmap);
+        guessWaiting.delete(event.data.id);
+      };
+    }
+  } catch {
+    return Promise.resolve(bitmap);
+  }
+  const id = ++guessId;
+  return new Promise((resolve) => {
+    guessWaiting.set(id, resolve);
+    guessWorker!.postMessage({ id, bitmap }, [bitmap]);
+  });
+}
 let WARM: THREE.WebGLRenderTarget | null = null; // the tiny buffer views are drawn into ahead of time (see prewarm)
 /** Run something when the browser next has a moment (or soon, where it cannot say). */
 const idle = (run: () => void): void => {
@@ -230,6 +260,7 @@ export class SpaceView {
   private modelKind: ModelKind = 'probe';
   private dots: THREE.Points | null = null;
   private lines: { line: THREE.Line; key: string; anchor: Item | null }[] = [];
+  private readonly localUp = new THREE.Vector3();
   private flight: Flight | null = null;
   private live = false; // on screen and taking input
   private idle = 0;
@@ -511,7 +542,7 @@ export class SpaceView {
       // camera goes up to is given the full one then. If there is no small copy, the full one.
       const imagery = IMAGERY[body.id];
       if (imagery) {
-        this.loadMap(this.face(body.id).replace(/\.(jpg|webp|png)$/, '_s.$1'), (texture) => {
+        this.loadMap(this.smallFace(body.id), (texture) => {
           if (texture && this.items.includes(item) && !item.sharp) mesh.setMap(texture);
           else if (!texture) this.sharpen(item);
         });
@@ -526,7 +557,36 @@ export class SpaceView {
    */
   private face(id: BodyId): string {
     const imagery = IMAGERY[id]!;
-    return imagery.clouds && id !== 'earth' && !this.surface ? imagery.clouds : imagery.base;
+    return imagery.clouds && id !== 'earth' && !this.surface ? imagery.clouds : guessed(id, imagery.base);
+  }
+
+  /** The small copy of that picture, which the solar system starts every body on. */
+  private smallFace(id: BodyId): string {
+    const face = this.face(id);
+    const plain = face.endsWith(GUESS_TAG) ? face.slice(0, -GUESS_TAG.length) : face;
+    return guessed(id, plain.replace(/\.(jpg|webp|png)$/, '_s.$1')).replace(GUESS_TAG + GUESS_TAG, GUESS_TAG);
+  }
+
+  /** "Fill in unseen ground" changed: every view gives those worlds their other map. */
+  static setGuessUnseen(on: boolean): void {
+    if (GUESS === on) return;
+    GUESS = on;
+    for (const view of VIEWS) view.refreshUnseen();
+  }
+
+  private refreshUnseen(): void {
+    for (const item of this.items) {
+      if (item.target.kind !== 'body' || !item.mesh || !UNSEEN[item.target.body.id]) continue;
+      const mesh = item.mesh, id = item.target.body.id;
+      if (item.sharp) {
+        item.sharp = false;
+        this.sharpen(item);
+      } else {
+        this.loadMap(this.smallFace(id), (texture) => {
+          if (texture && this.items.includes(item) && !item.sharp) mesh.setMap(texture);
+        });
+      }
+    }
   }
 
   /** Show the ground of cloud-covered worlds instead of their clouds (or the clouds again). */
@@ -560,8 +620,8 @@ export class SpaceView {
     this.loadMap(face, (texture) => {
       if (texture && here() && !haveBest && this.face(body.id) === face) mesh.setMap(texture);
     });
-    if (best && face === imagery.base) {
-      this.loadMap(best, (texture) => {
+    if (best && face === guessed(body.id, imagery.base)) {
+      this.loadMap(guessed(body.id, best), (texture) => {
         if (!texture || !here()) return;
         haveBest = true;
         mesh.setMap(texture);
@@ -893,14 +953,17 @@ export class SpaceView {
       });
     };
     // Decoded off the main thread where the browser can (as render/tiles.ts does); otherwise the ordinary way.
+    const guess = address.endsWith(GUESS_TAG);
+    const file = guess ? address.slice(0, -GUESS_TAG.length) : address;
     if (typeof createImageBitmap === 'function') {
-      fetch(address)
+      fetch(file)
         .then((response) => (response.ok ? response.blob() : Promise.reject(new Error(String(response.status)))))
         .then((blob) => createImageBitmap(blob))
+        .then((bitmap) => (guess ? fillUnseen(bitmap) : bitmap))
         .then((bitmap) => keep(new THREE.Texture(bitmap as unknown as HTMLImageElement)))
         .catch(() => done(null));
     } else {
-      new THREE.TextureLoader().load(address, keep, undefined, () => done(null));
+      new THREE.TextureLoader().load(file, keep, undefined, () => done(null)); // (no guess without image bitmaps)
     }
   }
 
@@ -1661,10 +1724,19 @@ export class SpaceView {
     // A view that was entered mid-move starts with the camera tilted the way it was in the
     // scene before (the stars must not jump); it comes upright gently. OrbitControls keeps a
     // rotation derived from camera.up that it only works out once, so that is refreshed too.
-    if (camera.up.distanceToSquared(UP) > 1e-8) {
-      camera.up.lerp(UP, 1 - Math.exp(-dt * 2.4)).normalize();
-      if (camera.up.distanceToSquared(UP) < 1e-6) camera.up.copy(UP);
+    //
+    // Something standing on the ground (a lander, a rover, a landing site) is looked at with ITS
+    // vertical as "up": turning the view then goes round it like walking round it, with the
+    // horizon level, and the camera cannot swing below the ground. Round the body's pole instead
+    // (the owner, at Surveyor: "the camera axis is not aligned", the view swung through the Moon).
+    const grounded = this.where?.kind === 'place' && focusItem && !focusItem.centre && focusItem.target.kind === 'craft' && focusItem.target.craft.motion.type === 'surface' && focusItem.pos.lengthSq() > 1e-6;
+    const wantUp = grounded ? this.localUp.copy(focusItem!.pos).normalize() : UP;
+    if (camera.up.distanceToSquared(wantUp) > 1e-8) {
+      camera.up.lerp(wantUp, 1 - Math.exp(-dt * (grounded ? 4 : 2.4))).normalize();
+      if (camera.up.distanceToSquared(wantUp) < 1e-6) camera.up.copy(wantUp);
     }
+    controls.maxPolarAngle = grounded ? Math.PI / 2 - 0.06 : Math.PI;
+    controls.minPolarAngle = grounded ? 0.08 : 0; // straight overhead the view has no heading and flips (as it did over the Station)
     const internals = controls as unknown as { _quat: THREE.Quaternion; _quatInverse: THREE.Quaternion };
     internals._quat.setFromUnitVectors(camera.up, UP);
     internals._quatInverse.copy(internals._quat).invert();

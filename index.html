@@ -301,10 +301,6 @@
         <button id="m-sky" aria-label="Sky view: hold your phone up to see what is overhead">
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2.5 15.5c2.3-2.4 4.8-3.6 7.5-3.6s5.2 1.2 7.5 3.6" /><path d="M10 2.6l1 2.5 2.5 1-2.5 1-1 2.5-1-2.5-2.5-1 2.5-1z" /><circle cx="4.6" cy="8.2" r="0.6" /><circle cx="15.6" cy="9.4" r="0.6" /></svg>
         </button>
-        <!-- Out to the solar system (in the tracker; elsewhere the strip of worlds takes over). -->
-        <button id="m-system" aria-label="Solar system: the planets and the way to other worlds">
-          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="2.2" /><ellipse cx="10" cy="10" rx="8.2" ry="3.4" /><ellipse cx="10" cy="10" rx="5" ry="2" /></svg>
-        </button>
         <button id="m-views-open" aria-label="Views and more" aria-expanded="false">
           <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="4.5" cy="10" r="1.3" /><circle cx="10" cy="10" r="1.3" /><circle cx="15.5" cy="10" r="1.3" /></svg>
           <span id="m-live-dot" class="bell-dot is-hidden"></span>
@@ -723,6 +719,11 @@
                 <input type="checkbox" data-setting="roverPaths" />
                 <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 16.5c2.5-1 2-4.5 4.5-5s3 2.5 5.5 1.5 1.5-5 4-6.5" stroke-dasharray="2.2 1.6" /><circle cx="17" cy="6.5" r="1.6" /></svg>
                 <span>Rover paths</span>
+              </label>
+              <label class="layer-tile" title="Parts of a few worlds were never photographed (Pluto's south, the north of Triton and of Uranus's moons). On: filled in with an educated guess made from that world's own photographed terrain. Off: one plain tone.">
+                <input type="checkbox" data-setting="guessUnseen" />
+                <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" /><path d="M10 3a7 7 0 0 0 0 14z" fill="currentColor" stroke="none" opacity="0.35" /><path d="M10 3v14" stroke-dasharray="1.6 1.6" /></svg>
+                <span>Unseen sides</span>
               </label>
               <label class="layer-tile is-wide" title="On the solar system, name every spacecraft and draw every path, not only the well-known ones">
                 <input type="checkbox" data-setting="spaceAllCraft" />

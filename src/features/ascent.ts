@@ -8,8 +8,12 @@
  *     generic launcher; the upper stage alone after staging) climbs along that path with a
  *     glow while an engine burns, and the part already flown is drawn brighter;
  *   - a card beside it says what it is, T+ time, height, speed and the last event, that the
- *     path is an estimate and why, with "Follow" (the camera stays with it) and "Watch live"
- *     (the webcast the service lists, else a search for one).
+ *     path is an estimate and why, with "Follow" (the camera stays with it) and, only when the
+ *     service lists one, a small link to the webcast (its recording, for a launch in the past);
+ *   - a launch that FAILED is drawn as far as it got when the service's words say when it was
+ *     lost (then a burst, and nothing beyond); when they do not, the climb is not flown at all
+ *     and the card says where it failed is not published. A partial failure flies, and says so.
+ * Escape closes the card (App.onEscape); leaving the climb's time (Live, a jump) lets the camera go.
  * It all follows the SIMULATED clock, so any launch in the list can be watched again or ahead
  * of time: "Watch the climb" (launches section, the bell) moves the clock to just before
  * lift-off when it is not already in the window.
@@ -22,11 +26,25 @@ import * as THREE from 'three';
 import { planAscent, ascentSpanS, ascentState, boosterState, type Ascent } from '../data/ascent.ts';
 import { rocketKind, type ModelKind } from '../data/describe.ts';
 import { loadLaunches, type Launch } from '../data/launches.ts';
-import { buildModel } from '../render/satModels.ts';
+import { buildModel, modelBase } from '../render/satModels.ts';
 import type { App } from '../ui/app.ts';
 import { fmtKm, fmtKmS } from '../ui/dom.ts';
 
 const BEFORE_MS = 60 * 60000; // the planned path appears an hour before lift-off
+const R_KM = 6371;
+/**
+ * The ground as drawn close up: the sharp map tiles are patches lifted 3–8 km above the globe
+ * (render/tiles.ts), so a rocket on the pad at true height 0 stood half inside them (the owner
+ * saw a Falcon 9 "glitched into the ground"). Anything lower than this is drawn at this height.
+ */
+const GROUND_KM = 8;
+/** A position at least GROUND_KM above the globe. */
+function aboveGround(pos: [number, number, number]): [number, number, number] {
+  const r = Math.hypot(pos[0], pos[1], pos[2]);
+  if (r >= R_KM + GROUND_KM || r === 0) return pos;
+  const k = (R_KM + GROUND_KM) / r;
+  return [pos[0] * k, pos[1] * k, pos[2] * k];
+}
 const POINTS = 360;
 
 /** A model, or the plain rocket stage if that kind cannot be built: a missing model must not stop the drawing. */
@@ -42,9 +60,10 @@ function rocketModel(kind: ModelKind): THREE.Object3D {
     // A spent stage is built lying along +X, nose forward: stand it along the direction of flight (+Y here).
     model.rotation.z = Math.PI / 2;
   } else {
-    // Rockets are built standing on their engine bells (render/rocketModels.ts: lowest point −0.5
-    // once normalised): lift by half, so the holder's origin is the base and it stands ON the pad.
-    model.position.y = 0.5;
+    // Rockets are built standing on their engine bells: lift each by its own lowest point (about
+    // half its height once normalised, but not exactly for every rocket), so the holder's origin
+    // is the base and it stands ON the pad.
+    model.position.y = -modelBase(kind);
   }
   return model;
 }
@@ -97,6 +116,19 @@ interface Flight {
   /** "Now tracked: …": the real objects of this launch, once they are in the catalogue. */
   real: HTMLElement;
   realFor: string;
+  /** Lost in flight: the seconds after lift-off it was lost (null: not published, so nothing is flown). */
+  lostAtS: number | null | undefined;
+  failReason: string;
+  burst: THREE.Sprite | null;
+  /** Escape closed this card: the rocket stays, its card does not (until it is chosen again). */
+  dismissed: boolean;
+}
+
+/** The moment a full failure was lost: from the service's words, else after staging if they say the upper stage. */
+function lostAt(launch: Launch, ascent: Ascent): number | null | undefined {
+  const failure = launch.failure;
+  if (!failure || failure.partial) return undefined; // flew (a partial failure reaches some orbit)
+  return failure.atS !== null ? Math.min(failure.atS, ascent.burnS) : null;
 }
 
 let watchHandler: ((launch: Launch) => boolean) | null = null;
@@ -125,7 +157,7 @@ export function installAscent(app: App): void {
     for (let i = 0; i < POINTS; i++) {
       const x = i / (POINTS - 1);
       const t = x < 0.4 ? (x / 0.4) * ascent.burnS : ascent.burnS + ((x - 0.4) / 0.6) * (span - ascent.burnS);
-      positions.set(ascentState(ascent, ascent.liftoffMs + t * 1000).pos, i * 3);
+      positions.set(aboveGround(ascentState(ascent, ascent.liftoffMs + t * 1000).pos), i * 3);
     }
     const line = (opacity: number, color: number) => {
       const geometry = new THREE.BufferGeometry();
@@ -151,21 +183,36 @@ export function installAscent(app: App): void {
     head.append(el('b', '', `${launch.rocket}`), el('span', '', launch.mission));
     const live = el('div', 'at-live');
     const stage = el('div', 'at-stage');
+    const lost = lostAt(launch, ascent);
+    const failure = launch.failure;
     const note = el('div', 'at-note', `Estimated path, from the pad and ${ascent.basis}. The real orbit arrives with the next tracking data.`);
+    const fail = el('div', 'at-fail');
+    if (failure) {
+      const what = failure.partial ? 'Partial failure' : 'Launch failure';
+      // (When it was lost comes from the reason's own words, so it is not said twice.)
+      const when = failure.partial || lost != null ? '' : ' Where in the climb it was lost is not published, so the climb is not drawn.';
+      fail.textContent = `${what}.${failure.reason ? ` ${failure.reason.length > 180 ? `${failure.reason.slice(0, 177)}…` : failure.reason}` : ' The cause has not been published yet.'}${when}`;
+      if (!failure.partial) note.textContent = lost != null ? `Estimated path up to the moment it was lost, from the pad and ${ascent.basis}.` : `The planned path (faint), from the pad and ${ascent.basis}.`;
+    }
     const buttons = el('div', 'at-buttons');
     const follow = el('button', '', 'Follow');
     follow.type = 'button';
     follow.addEventListener('click', () => startFollowing(launch.id));
-    const watch = el('a', '', 'Watch live ↗');
-    watch.href = launch.webcast ?? `https://www.youtube.com/results?search_query=${encodeURIComponent(`${launch.rocket} ${launch.mission} launch`)}`;
-    watch.target = '_blank';
-    watch.rel = 'noopener noreferrer';
-    watch.title = launch.webcast ? 'The webcast Launch Library lists for this launch' : 'No webcast is listed yet: search for one';
-    buttons.append(follow, watch);
+    buttons.append(follow);
+    // A webcast only when the service lists one (a recording, once the launch is over): no
+    // made-up search link, and a quiet link rather than a second button.
+    if (launch.webcast) {
+      const cast = el('a', 'at-cast', launch.netMs < Date.now() - 2 * 3600000 ? 'Recording ↗' : 'Webcast ↗');
+      cast.href = launch.webcast;
+      cast.target = '_blank';
+      cast.rel = 'noopener noreferrer';
+      cast.title = 'The webcast Launch Library lists for this launch';
+      buttons.append(cast);
+    }
     // The booster's way down (estimated): a small first stage, and a mark where it lands.
     let booster: THREE.Group | null = null;
     let landing: THREE.Sprite | null = null;
-    if (ascent.booster) {
+    if (ascent.booster && lost === undefined) {
       booster = new THREE.Group();
       booster.add(rocketModel(kind));
       booster.visible = false;
@@ -175,9 +222,17 @@ export function installAscent(app: App): void {
       note.textContent += ` Booster: lands on ${ascent.booster.where}${ascent.booster.estimated ? ' (usual for this rocket; not confirmed)' : ''}.`;
     }
     const real = el('div', 'at-real');
-    tag.append(head, live, stage, note, real, buttons);
+    // Where it was lost: a burst that flares and fades.
+    let burst: THREE.Sprite | null = null;
+    if (lost != null) {
+      burst = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, color: 0xff7a4a, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+      burst.position.set(...ascentState(ascent, ascent.liftoffMs + lost * 1000).pos);
+      burst.visible = false;
+      group.add(burst);
+    }
+    tag.append(head, live, stage, fail, note, real, buttons);
     root.append(tag);
-    return { ascent, group, flown, ahead, holder, model, glow: sprite, kind, staged: false, tag, live, stage, world: new THREE.Vector3(), shown: false, booster, landing, real, realFor: '' };
+    return { ascent, group, flown, ahead, holder, model, glow: sprite, kind, staged: false, tag, live, stage, world: new THREE.Vector3(), shown: false, booster, landing, real, realFor: '', lostAtS: lost, failReason: failure?.reason ?? '', burst, dismissed: false };
   }
 
   function drop(id: string): void {
@@ -190,8 +245,30 @@ export function installAscent(app: App): void {
     }
     flight.tag.remove();
     flights.delete(id);
-    if (following === id) following = null;
+    if (following === id) {
+      // The clock has left this climb's time (Live, a jump): let the camera go, gently, rather
+      // than leave it staring at the spot where the rocket was.
+      following = null;
+      app.follow(null);
+    }
   }
+
+  /** The climb's time span: an hour before lift-off to two orbits after; a lost rocket, a minute after the loss. */
+  const endOf = (ascent: Ascent, lost: number | null | undefined): number => ascent.liftoffMs + (lost != null ? lost + 60 : lost === null ? 30 * 60 : ascentSpanS(ascent)) * 1000;
+  const spanEnd = (flight: Flight): number => endOf(flight.ascent, flight.lostAtS);
+
+  // Escape closes the card of the climb being followed (or any shown), before anything else.
+  app.onEscape(() => {
+    if (app.away()) return false;
+    const open = [...flights.values()].filter((flight) => !flight.dismissed && !flight.tag.classList.contains('is-hidden'));
+    if (open.length === 0 && !following) return false;
+    for (const flight of open) flight.dismissed = true;
+    if (following) {
+      following = null;
+      app.follow(null);
+    }
+    return true;
+  });
 
   function startFollowing(id: string, tries = 0): void {
     const flight = flights.get(id);
@@ -203,6 +280,7 @@ export function installAscent(app: App): void {
       return;
     }
     following = id;
+    flight.dismissed = false;
     app.follow(() => (flights.get(id)?.shown ? flights.get(id)!.world.clone() : null), 0.9);
   }
 
@@ -239,9 +317,14 @@ export function installAscent(app: App): void {
     for (const launch of launches) {
       const ascent = planAscent(launch);
       if (!ascent) continue;
-      const inWindow = timeMs > ascent.liftoffMs - BEFORE_MS && timeMs < ascent.liftoffMs + ascentSpanS(ascent) * 1000 && launch.state !== 'failed';
-      if (inWindow && !flights.has(launch.id)) flights.set(launch.id, make(launch, ascent));
-      else if (!inWindow && flights.has(launch.id)) drop(launch.id);
+      const known = flights.get(launch.id);
+      // A launch whose status changed (it failed during the climb) is drawn afresh with the news.
+      if (known && (known.lostAtS !== lostAt(launch, ascent) || (launch.failure?.reason ?? '') !== known.failReason)) drop(launch.id);
+      const flight = flights.get(launch.id);
+      const end = endOf(ascent, lostAt(launch, ascent)); // the same end the frame loop uses, or the two would fight
+      const inWindow = timeMs > ascent.liftoffMs - BEFORE_MS && timeMs < end;
+      if (inWindow && !flight) flights.set(launch.id, make(launch, ascent));
+      else if (!inWindow && flight) drop(launch.id);
     }
     for (const id of [...flights.keys()]) if (!launches.some((launch) => launch.id === id)) drop(id);
   }
@@ -317,19 +400,35 @@ export function installAscent(app: App): void {
     root.classList.toggle('is-hidden', away || frame.uiHidden);
     for (const [id, flight] of flights) {
       const { ascent } = flight;
+      // Out of the climb's time (Live was pressed, or a jump): gone at once, not a second later
+      // with the rocket and the camera thrown along an orbit it never flew.
+      if (frame.timeMs < ascent.liftoffMs - BEFORE_MS || frame.timeMs > spanEnd(flight)) {
+        drop(id);
+        continue;
+      }
       const state = ascentState(ascent, frame.timeMs);
       flight.group.visible = !away;
       const before = state.t < 0;
+      // Lost: nothing flies after the loss (or at all, when where it was lost is not known).
+      const gone = flight.lostAtS === null ? !before : flight.lostAtS !== undefined && state.t > flight.lostAtS;
       // The path flown so far, and the rest: split where the rocket is now.
       const span = ascentSpanS(ascent);
-      const x = before ? 0 : state.t < ascent.burnS ? 0.4 * (state.t / ascent.burnS) : 0.4 + 0.6 * ((state.t - ascent.burnS) / (span - ascent.burnS));
-      const k = Math.max(1, Math.min(POINTS, Math.round(x * (POINTS - 1)) + 1));
+      const at = (t: number) => (t < ascent.burnS ? 0.4 * (t / ascent.burnS) : 0.4 + 0.6 * ((t - ascent.burnS) / (span - ascent.burnS)));
+      const flownTo = before || flight.lostAtS === null ? 0 : at(flight.lostAtS !== undefined ? Math.min(state.t, flight.lostAtS) : state.t);
+      const k = Math.max(1, Math.min(POINTS, Math.round(flownTo * (POINTS - 1)) + 1));
       flight.flown.geometry.setDrawRange(0, k);
       flight.ahead.geometry.setDrawRange(k - 1, POINTS - k + 1);
-      (flight.ahead.material as THREE.LineBasicMaterial).opacity = before ? 0.22 : 0.3;
+      flight.ahead.visible = !(gone && flight.lostAtS != null);
+      (flight.ahead.material as THREE.LineBasicMaterial).opacity = flight.lostAtS === null ? 0.14 : before ? 0.22 : 0.3;
+      if (flight.burst && flight.lostAtS != null) {
+        const since = state.t - flight.lostAtS;
+        flight.burst.visible = !away && since > 0 && since < 60;
+        (flight.burst.material as THREE.SpriteMaterial).opacity = Math.max(0, 1 - since / 60);
+      }
       // The rocket: on the pad until lift-off, pointing along its motion after.
-      flight.holder.visible = !before || state.t > -600; // on the pad for the last ten minutes
-      flight.holder.position.set(...state.pos);
+      flight.holder.visible = !gone && (!before || state.t > -600); // on the pad for the last ten minutes
+      // (Lost: the card stays where it was lost, or on the pad when that is not known.)
+      flight.holder.position.set(...aboveGround((gone ? ascentState(ascent, ascent.liftoffMs + (flight.lostAtS ?? 0) * 1000) : state).pos));
       const next = ascentState(ascent, frame.timeMs + 2000).pos;
       const dir = new THREE.Vector3(next[0] - state.pos[0], next[1] - state.pos[1], next[2] - state.pos[2]);
       if (before || dir.lengthSq() < 1e-9) dir.set(...state.pos);
@@ -341,7 +440,7 @@ export function installAscent(app: App): void {
         flight.model = rocketModel(state.staged ? 'rocketbody' : flight.kind);
         flight.holder.add(flight.model);
       }
-      flight.glow.visible = state.burning;
+      flight.glow.visible = state.burning && !gone;
       flight.glow.scale.setScalar(0.6 + 0.15 * Math.sin(frame.realSeconds * 31));
       flight.holder.updateMatrixWorld(true);
       flight.world.setFromMatrixPosition(flight.holder.matrixWorld);
@@ -349,16 +448,17 @@ export function installAscent(app: App): void {
       const distance = app.camera.position.distanceTo(flight.world);
       const size = THREE.MathUtils.clamp(distance * 0.045, 0.004, 0.4) * 1000; // km: the group's parent shrinks by 1000
       flight.holder.scale.setScalar(size);
+      if (flight.burst) flight.burst.scale.setScalar(size * (1.2 + Math.min(1, Math.max(0, state.t - (flight.lostAtS ?? 0)) / 8)));
       // The booster coming down, nose up (it lands standing), and the spot it lands on.
       const down = boosterState(ascent, frame.timeMs);
       if (flight.booster && flight.landing) {
         flight.booster.visible = !!down && !down.landed;
         const end = boosterState(ascent, ascent.liftoffMs + (ascent.booster!.landS + 1) * 1000);
         flight.landing.visible = state.t > ascent.stagingS - 60 && state.t < ascent.booster!.landS + 1800 && !!end;
-        if (end) flight.landing.position.set(...end.pos);
+        if (end) flight.landing.position.set(...aboveGround(end.pos));
         flight.landing.scale.setScalar(size * 0.5);
         if (down) {
-          flight.booster.position.set(...down.pos);
+          flight.booster.position.set(...aboveGround(down.pos));
           flight.booster.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...down.pos).normalize());
           flight.booster.scale.setScalar(size * 0.8);
         }
@@ -369,13 +469,16 @@ export function installAscent(app: App): void {
 
       // The card, beside the rocket on screen.
       toScreen.copy(flight.world).project(app.camera);
-      const visible = !away && !frame.uiHidden && toScreen.z < 1 && Math.abs(toScreen.x) < 1.05 && Math.abs(toScreen.y) < 1.05;
+      const visible = !flight.dismissed && !away && !frame.uiHidden && toScreen.z < 1 && Math.abs(toScreen.x) < 1.05 && Math.abs(toScreen.y) < 1.05;
       flight.tag.classList.toggle('is-hidden', !visible);
       if (!visible) continue;
       const sx = (toScreen.x * 0.5 + 0.5) * window.innerWidth, sy = (0.5 - toScreen.y * 0.5) * window.innerHeight;
       flight.tag.style.transform = `translate(${Math.round(sx + 18)}px, ${Math.round(sy - 20)}px)`;
-      flight.live.textContent = before ? `${clockText(state.t)} · on the pad` : `${clockText(state.t)} · ${fmtKm(state.altKm)} up · ${fmtKmS(state.speedKmS)}`;
-      flight.stage.textContent = state.stage;
+      flight.live.textContent = before ? `${clockText(state.t)} · on the pad`
+        : flight.lostAtS === null ? `${clockText(state.t)} · failed`
+        : gone ? `${clockText(state.t)} · lost at ${clockText(flight.lostAtS!)}`
+        : `${clockText(state.t)} · ${fmtKm(state.altKm)} up · ${fmtKmS(state.speedKmS)}`;
+      flight.stage.textContent = gone ? (flight.lostAtS === null ? 'Failed during the climb' : 'Lost') : state.stage;
       flight.tag.classList.toggle('is-followed', following === id);
     }
   });

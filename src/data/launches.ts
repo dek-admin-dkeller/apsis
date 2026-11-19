@@ -65,6 +65,13 @@ export interface Launch {
    * Absent in the ordinary answer; the climb then assumes what is usual for the rocket.
    */
   landing?: { type: string; place: string };
+  /**
+   * A launch that failed (status "Launch Failure" or "Partial Failure"): the service's own words
+   * (`failreason`, often empty for a day or two) and, when those words say so, how far into the
+   * flight it was lost. `atS` is null when the reason gives no time; `upper` is true when it says
+   * the upper stage failed (then it was lost after staging, but exactly when is not known).
+   */
+  failure?: { partial: boolean; reason: string; atS: number | null; upper: boolean };
 }
 
 export interface LaunchList {
@@ -103,6 +110,27 @@ const field = (object: unknown, key: string): unknown =>
 /** A coordinate, which the service sends as a string ("34.632"); NaN for anything missing or empty. */
 const degrees = (value: unknown): number =>
   typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN;
+
+/**
+ * How far into the flight a failure happened, from the service's text ("… at T+3:12", "about 190
+ * seconds into flight", "2.5 minutes after liftoff"). Null when the text gives no time: never guessed.
+ */
+export function failureTime(reason: string): number | null {
+  const clock = /T\s*\+\s*(\d{1,2}):(\d{2})/i.exec(reason);
+  if (clock) return Number(clock[1]) * 60 + Number(clock[2]);
+  const plus = /T\s*\+\s*(\d+(?:\.\d+)?)\s*(s|sec|seconds?|m|min|minutes?)\b/i.exec(reason);
+  if (plus) return Number(plus[1]) * (/^m/i.test(plus[2]) ? 60 : 1);
+  const into = /(\d+(?:\.\d+)?)\s*(seconds?|secs?|minutes?|mins?)\s+(?:into|after)\s+(?:the\s+)?(?:flight|launch|lift-?off|ascent)/i.exec(reason);
+  if (into) return Number(into[1]) * (/^m/i.test(into[2]) ? 60 : 1);
+  return null;
+}
+
+/** The failure of a launch, if the status says it failed. */
+export function failureOf(state: number, reason: string): Launch['failure'] {
+  if (state !== 4 && state !== 7) return undefined;
+  const words = reason.trim();
+  return { partial: state === 7, reason: words, atS: failureTime(words), upper: /second stage|upper stage|stage 2|kick stage|fregat|centaur|blok|third stage/i.test(words) };
+}
 
 /** The first stage's landing, from a detailed answer (`rocket.launcher_stage[0].landing`); undefined otherwise. */
 function landingOf(rocket: unknown): { type: string; place: string } | undefined {
@@ -167,6 +195,7 @@ export function parseLaunches(file: unknown): Launch[] {
       family: text(field(field(field(entry, 'rocket'), 'configuration'), 'family')),
       webcast: firstUrl(field(field(entry, 'mission'), 'vid_urls')) ?? firstUrl(field(entry, 'vidURLs')),
       landing: landingOf(field(entry, 'rocket')),
+      failure: failureOf(Number(field(status, 'id')), text(field(entry, 'failreason'))),
     });
   }
   return launches.sort((a, b) => a.netMs - b.netMs);

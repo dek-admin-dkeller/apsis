@@ -151,7 +151,8 @@ src/data/                   freshness (a tab left open takes the newer data file
                             decay + spaceWeather (time left, NOAA flux and Kp), launches (Launch Library 2), visibility
                             (bright passes), approachData (report numbers), places (cities the search can fly to)
 src/hashing/                SpatialHash, conjunction, lookahead, benchmark, groups (union–find)
-src/worker/                 sim.worker (+ SimClient, protocol, propagate), lookahead.worker, tonight.worker (visible passes)
+src/worker/                 sim.worker (+ SimClient, protocol, propagate), lookahead.worker, tonight.worker (visible passes),
+                            unseen.worker (the never-photographed parts of a few worlds, guessed)
 src/render/                 space/spaceView + space/bodyMesh (the scenes away from the tracker; see "Places"),
                             scene (renderer, bloom, quality presets, the dissolve between scenes), globe (Earth shader), tiles (close-up ground:
                             NASA GIBS map tiles streamed in below ~6,000 km), geoOverlay (borders, grid, terminator), sky (Milky Way, stars, constellations, planets, Sun, Moon), aurora, satellites
@@ -171,7 +172,7 @@ src/ui/                     places (+ space.css: the moves between the tracker, 
                             app (the App interface), featureList (every feature, drawn on the home page), objectTabs (the
                             Objects panel's three tabs), inspector (+ charts), monitor (live pairs), ahead (prediction), encounterPanel, howto
                             (walkthrough), hashTrace, benchmarkModal, filters, search (+ searchMatch, searchIndex,
-                            searchObjects: see "The search field"), settings, timeControls, labels,
+                            searchObjects, searchBrowse: see "The search field"), settings, timeControls, labels,
                             watchlist, feed (launches, trains, lowest), designer, constellations, contacts, crew,
                             gallery (the spacecraft catalogue), share (QR), tour, cinema (autopilot + recording), sheet (phone sheets), landing (welcome
                             page), launch + intro (loading screen), dom (DOM, number, unit and clock helpers)
@@ -558,8 +559,8 @@ craftPosition(craft, t) → km about craft.centre      bodyPosition / bodyRelati
   follows: a map from anywhere but Trek is lined up against the Trek layer of the same world
   by where its craters fall (`line_up`: it found NASA's colour maps of Saturn's moons half a
   turn out, and the Mimas one a further 3.9° out, an older zero of longitude); parts no
-  camera has seen are one flat average tone, never black and never invented terrain
-  (`fill_unseen`); a map is bundled only if its public-domain status was confirmed at the
+  camera has seen are one flat average tone in the FILE, never black and never invented terrain
+  (`fill_unseen`; the app draws a guess over that tone at run time, see "Third polish pass"); a map is bundled only if its public-domain status was confirmed at the
   source (which is why Mimas and Rhea come from NASA's colour maps, used in grey, and not
   from the DLR mosaics Trek serves as their tiles; and why Deimos has no map).
 - `sites.ts`: `SITES`, the 32 historic landing sites (Moon, Mars, Venus, Titan), each
@@ -721,14 +722,9 @@ it is used. So:
   not the model's name.
 - **"In contact" links to its source**, NASA DSN Now (`DSN_NOW_URL` in `space/dsn.ts`): on a craft's
   card and in the bell's heading.
-- **Phones** (`ui/worldStrip.ts` + `worldStrip.css`): away from the Earth a strip of worlds above
-  the tab bar (the owner's choice for phones only; on a computer the picture stays the menu):
-  chips made from each world's `_s` map, the world you are at ringed amber and slid to the middle,
-  the one beside the camera ringed blue ("Tap to go in"), its moons inserted after their planet.
-  It follows `Places.onWhere` (called from `drawPath`) and acts through `Places.goWorld`. It steps
-  aside for a panel or a craft's card (`body.place-card-open`) and lifts `#place-hud` above it.
-  In the tracker `#m-system` (round button) goes out to the solar system. Tap targets in the
-  space views are larger on phones (34 px; bodies 5 % grace).
+- **Phones** (`ui/worldStrip.ts` + `worldStrip.css`): see "Third polish pass": one pill and a
+  sheet replaced the strip of worlds and `#m-system`. Tap targets in the space views are larger
+  on phones (34 px; bodies 5 % grace).
 - **Sky view taps** (`skyTap` in `main.ts`): in `body.sky-immersive` a tap shows `.sky-card` beside
   what was tapped (a satellite within 26 px, else the Sun / Moon / a planet, else the nearest
   constellation within 140 px), closed by the next tap or after 8 s; a fingertip may move 12 px.
@@ -744,6 +740,65 @@ it is used. So:
   "never inside the planet" push (83° jumps). Measured both ways with a scripted drag.
 - **CI**: actions at checkout@v7, setup-node@v7, configure-pages@v6, upload-pages-artifact@v5
   (it leaves out dotfiles: the site has none), deploy-pages@v5; the smoke test on pushes.
+
+## Third polish pass (Nov 2026): what was added and the rules it brought
+
+- **Phones move between worlds with ONE pill** (`ui/worldStrip.ts`, `worldStrip.css`; the class is
+  still `WorldStrip`). The owner found the path at the top ("tap Solar system, tap again") and the
+  90 px strip of planet chips fiddly and in the way, and asked for a modern app feel with gestures
+  and as little on screen as possible; a research pass over Apple Maps, Google Earth, NASA Eyes and
+  Sky Guide gave the design. On a phone `#path` is hidden and the pill (`#m-worlds`, 44 px, above
+  the tab bar, everywhere including the tracker) says where you are: tap = the WHOLE solar system
+  in one move (`places.visitSystem`); on the solar system tap = go in to the world beside you, or
+  open the sheet; swipe it or ‹ › = next / previous world outwards (`ORDER`); swipe up or hold =
+  the sheet of worlds (grid of `_s` globes, the current planet's moons in a row; swipe down,
+  the scrim or Escape closes it; a choice goes all the way in via `places.goBody`). A two-finger
+  tap on the canvas (both fingers up within 260 ms, moved < 12 px) = up a level (Escape). Every
+  gesture has a visible equivalent: do not add gestures that have none, and never claim
+  full-screen sideways swipes or the screen edges (the one-finger drag turns the camera; the
+  edges belong to the browser and the OS). It hides for a panel, an object's or craft's card, a
+  close approach, the time controls, the sky view, and while browsing a search.
+- **Journeys queue** (`Places.travel`): a journey asked for while another is under way is kept
+  (latest wins) and run when the camera is free, instead of being dropped. **The Earth as a place**
+  is reached straight from the solar system (`fromMap(body, farEarth)`): searching Wind or Webb
+  from Mars used to dive into the TRACKER and lose the craft (the owner: "it takes me to Earth,
+  then I search again and it bugs out").
+- **Things on the ground are orbited about THEIR vertical** (`moveCamera` in `spaceView.ts`): with
+  a lander, rover or landing site in focus the camera's `up` eases to the local outward direction
+  and the polar angle is held between 0.08 rad and just above the horizon. About the scene's pole
+  the view swung through the Moon at Surveyor ("the camera axis is not aligned").
+- **Unseen sides** (`worker/unseen.worker.ts`, `UNSEEN` in `space/imagery.ts`, Layers switch
+  `guessUnseen`, default on): a map of a world with never-photographed parts is asked for as
+  `<file>?guess`; once decoded it goes to a worker that finds the flat fill (flat pixels joined to
+  a pole row, on a 256 × 128 copy) and lays in that world's own terrain mirrored north–south and
+  turned half a turn, through a soft mask. The owner asked for a guess rather than "half the
+  planet not rendered", with a switch and an explanation: the world's Facts tab says what is
+  missing and why (`.pc-unseen`). The bundled files are unchanged (still the flat tone); the
+  credits say so.
+- **Launch climbs** (`features/ascent.ts`): the webcast is a quiet link only when Launch Library
+  lists one ("Recording" for a launch more than 2 h old), never a made-up search link. A launch
+  whose status is a failure (`Launch.failure`: `failreason`; `failureTime()` reads "T+3:12" or
+  "190 seconds into flight" from it) is flown up to the moment it was lost and ends in a burst;
+  with no time in the words it is NOT flown (the planned path faint, the card says so); a partial
+  failure flies and says so. A climb whose time window the clock leaves (Live, a jump) is dropped
+  the same frame and the camera let go (`app.follow(null)`): the once-a-second check used to
+  throw the rocket and the camera along an orbit it never flew. Escape closes the card first
+  (`App.onEscape`). Anything lower than `GROUND_KM` (8 km) is drawn at that height, and a rocket
+  stands on its own `modelBase`: the close-up ground tiles are lifted 3–8 km and buried the
+  rocket on the pad.
+- **`App.onEscape(run)`**: a feature's own window closes on Escape before the tracker's panels
+  and selection, and before Escape leaves the Earth. Return true when you closed something.
+- **The bell's menu** (`render()` in `features/bell.ts`): a header with the state in words and the
+  notification switch; "Now" with the dish contacts folded into ONE row that opens into chips
+  (with "Source: NASA DSN Now"); "Coming up" as a timeline with a date column; one line per note.
+  The menu is inside the top bar, so `updateRest()` must treat it as open (it faded with the idle
+  dimming, to 0.28 on a phone).
+- **Browsing a searched type** (`ui/searchBrowse.ts`): choosing a Types row also opens a bar where
+  the filter banner sits, stepping through the objects (working craft first, then oldest first):
+  ‹ ›, ← →, a swipe on the bar. "Done" / Escape clears the filter and keeps the object selected.
+- **The time bar's offset is short** (`shortSpan` in `timeControls.ts`: "−3.0 d", "+8.4 mo",
+  "+82 yr") and the words "… behind" are hidden while the bar is open (the date line already says
+  it): far from the present they ran over the transport buttons.
 
 ## Small rules added in the polish pass (Nov 2026)
 

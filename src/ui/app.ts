@@ -200,6 +200,12 @@ export interface App {
   onEncounter(run: (encounter: Encounter | null) => void): void;
   /** The logo (or `0`) was pressed: everything is being put back the way it started. Undo what you changed. */
   onHome(run: () => void): void;
+  /**
+   * Escape was pressed in the tracker with no overlay open. Return true if you closed something
+   * of yours (the key is then spent); the tracker goes on to its own panels, and finally out to
+   * the solar system, only when every handler returns false.
+   */
+  onEscape(run: () => boolean): void;
   /** The phone's full-screen sky view opened (true) or closed (false). */
   onSkyView(run: (open: boolean) => void): void;
   /**

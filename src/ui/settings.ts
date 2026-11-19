@@ -38,6 +38,7 @@ export interface Settings {
   newLaunches: boolean; // mark what was launched in the last three days (data/fresh.ts)
   clouds: boolean;
   sharpGround: boolean; // stream detailed imagery when zoomed in
+  guessUnseen: boolean; // fill the never-photographed parts of a few worlds with an educated guess (worker/unseen.worker.ts)
   atmosphere: boolean;
   borders: boolean;
   graticule: boolean;
@@ -91,6 +92,7 @@ const DEFAULTS: Settings = {
   newLaunches: true,
   clouds: true,
   sharpGround: true,
+  guessUnseen: true,
   atmosphere: true,
   borders: false,
   graticule: false,

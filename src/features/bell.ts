@@ -34,7 +34,7 @@ import { eclipses, jupiterEvents, planetTransits, type SkyEvent } from '../space
 import type { DsnLink, Flyby } from '../space/types.ts';
 import type { App } from '../ui/app.ts';
 import { $ } from '../ui/dom.ts';
-import { clockStamp, duration } from '../ui/inspector.ts';
+import { clockStamp, duration, utcStamp } from '../ui/inspector.ts';
 import { watchLaunch } from './ascent.ts';
 
 /** A launch counts as "now" from this long before lift-off (if its time is known to the minute)… */
@@ -155,12 +155,15 @@ export function installBell(app: App): void {
     } catch { /* storage unavailable */ }
   }
   /** The footer switch: asks the browser (from the click itself) and remembers the choice. */
-  function notifyFooter(): HTMLElement {
-    const foot = el('div', 'bell-foot');
-    if (!('Notification' in window)) return foot;
+  /** The header's switch for browser notifications (alerts only); null where the browser has none. */
+  function notifySwitch(): HTMLElement | null {
+    if (!('Notification' in window)) return null;
     const on = notifyWanted();
-    const button = el('button', 'bell-notify', on ? 'Notifications on · turn off' : 'Notify me when something happens');
+    const button = el('button', `bell-notify${on ? ' is-on' : ''}`);
     button.type = 'button';
+    button.setAttribute('role', 'switch');
+    button.setAttribute('aria-checked', String(on));
+    button.append(el('span', 'bell-switch'), el('span', '', 'Notify me'));
     button.title = 'A browser notification for alerts only (a launch, an eclipse, a close asteroid, the Station overhead), never for routine things';
     button.addEventListener('click', () => {
       if (notifyWanted()) {
@@ -178,8 +181,7 @@ export function installBell(app: App): void {
         render();
       });
     });
-    foot.append(button);
-    return foot;
+    return button;
   }
 
   // ---- what there is to show ----------------------------------------------------------------
@@ -415,47 +417,109 @@ export function installBell(app: App): void {
     button.title = events > 0 ? `${events} happening now — what's live and coming up` : "What's live and coming up";
   }
 
+  /** The Deep Space Network rows fold into one, opened in place (seven contacts were half the list). */
+  let dishesOpen = false;
+
+  function rowButton(row: Row, timeline: boolean): HTMLButtonElement {
+    const item = el('button', `bell-row is-${row.kind}`);
+    item.type = 'button';
+    if (timeline) {
+      // Coming up: a date column, so the list reads as a timeline at a glance.
+      const when = el('span', 'bell-when');
+      if (Number.isFinite(row.at) && row.at > Date.now() - 60000) {
+        const [day, month, time] = utcStamp(row.at).split(' ');
+        when.append(el('b', '', `${day} ${month}`), el('span', '', time));
+      }
+      item.append(when);
+    } else {
+      const icon = el('span', 'bell-icon');
+      icon.innerHTML = `<svg viewBox="0 0 20 20" aria-hidden="true">${ICONS[row.icon]}</svg>`;
+      item.append(icon);
+    }
+    const text = el('span', 'bell-text');
+    const title = el('b', '', row.title);
+    if (row.kind === 'alert') title.prepend(el('i', 'bell-pulse'));
+    // (A timeline row's date is in its column: not again at the start of the note.)
+    const note = el('span', '', timeline ? row.note.replace(/^\d{1,2} \w{3} \d{2}:\d{2} \S+ · /, '') : row.note);
+    note.title = row.note; // the line is cut to one; the whole of it on hover
+    text.append(title, note);
+    item.append(text);
+    item.addEventListener('click', () => {
+      setOpen(false);
+      row.run();
+    });
+    return item;
+  }
+
   function render(): void {
     refreshIss();
     const all = rows();
     badge(all);
     notify(all);
     if (!open) return;
+    const now = all.filter((row) => row.kind === 'alert' || (row.kind === 'ongoing' && row.icon !== 'dish'));
+    const dishes = all.filter((row) => row.kind === 'ongoing' && row.icon === 'dish');
+    const coming = all.filter((row) => row.kind === 'coming');
     const parts: HTMLElement[] = [];
-    const section = (title: string, items: Row[]) => {
-      if (items.length === 0) return;
-      const head = el('div', 'bell-head', title);
-      if (items.some((row) => row.icon === 'dish')) {
-        // Where "in contact" comes from: NASA's own live page of the same feed.
-        const source = el('a', 'bell-source', 'Contacts: NASA DSN Now ↗');
-        source.href = DSN_NOW_URL;
-        source.target = '_blank';
-        source.rel = 'noopener noreferrer';
-        source.title = 'NASA’s live Deep Space Network page, the source of every contact listed here';
-        head.append(source);
-      }
-      parts.push(head);
-      for (const row of items) {
-        const item = el('button', `bell-row is-${row.kind}`);
-        item.type = 'button';
+
+    const top = el('div', 'bell-top');
+    const heading = el('div', 'bell-title');
+    heading.append(el('b', '', 'Live and coming up'));
+    const alerts = all.filter((row) => row.kind === 'alert').length;
+    heading.append(el('span', '', alerts > 0 ? `${alerts} happening now` : 'Nothing unusual right now'));
+    top.append(heading);
+    const toggle = notifySwitch();
+    if (toggle) top.append(toggle);
+    parts.push(top);
+
+    if (now.length > 0 || dishes.length > 0) {
+      parts.push(el('div', 'bell-head', 'Now'));
+      for (const row of now) parts.push(rowButton(row, false));
+      if (dishes.length > 0) {
+        const group = el('div', `bell-group${dishesOpen ? ' is-open' : ''}`);
+        const head = el('button', 'bell-row is-ongoing');
+        head.type = 'button';
+        head.setAttribute('aria-expanded', String(dishesOpen));
         const icon = el('span', 'bell-icon');
-        icon.innerHTML = `<svg viewBox="0 0 20 20" aria-hidden="true">${ICONS[row.icon]}</svg>`;
+        icon.innerHTML = `<svg viewBox="0 0 20 20" aria-hidden="true">${ICONS.dish}</svg>`;
         const text = el('span', 'bell-text');
-        text.append(el('b', '', row.title), el('span', '', row.note));
-        item.append(icon, text);
-        if (row.kind === 'alert') item.append(el('span', 'bell-live', 'Live'));
-        item.addEventListener('click', () => {
-          setOpen(false);
-          row.run();
+        const names = dishes.map((row) => row.title.replace(/ Space Telescope| Solar Probe| Reconnaissance Orbiter/, ''));
+        text.append(el('b', '', `${dishes.length} spacecraft in contact`), el('span', '', names.join(', ')));
+        head.append(icon, text, el('span', 'bell-chev'));
+        head.addEventListener('click', () => {
+          dishesOpen = !dishesOpen;
+          render();
         });
-        parts.push(item);
+        group.append(head);
+        if (dishesOpen) {
+          const inner = el('div', 'bell-sub');
+          for (const row of dishes) {
+            const chip = el('button', 'bell-chip');
+            chip.type = 'button';
+            chip.append(el('b', '', row.title), el('span', '', row.note.replace(/^In contact with /, '')));
+            chip.addEventListener('click', () => {
+              setOpen(false);
+              row.run();
+            });
+            inner.append(chip);
+          }
+          // Where "in contact" comes from: NASA's own live page of the same feed.
+          const source = el('a', 'bell-source', 'Source: NASA DSN Now ↗');
+          source.href = DSN_NOW_URL;
+          source.target = '_blank';
+          source.rel = 'noopener noreferrer';
+          source.title = 'NASA’s live Deep Space Network page, the source of every contact listed here';
+          inner.append(source);
+          group.append(inner);
+        }
+        parts.push(group);
       }
-    };
-    section('Happening now', all.filter((row) => row.kind === 'alert'));
-    section('Ongoing', all.filter((row) => row.kind === 'ongoing'));
-    section('Coming up', all.filter((row) => row.kind === 'coming'));
-    if (parts.length === 0) parts.push(el('p', 'bell-empty', 'Nothing to report just now. Contacts, launches and meteor showers appear here as they happen.'));
-    parts.push(notifyFooter());
+    }
+    if (coming.length > 0) {
+      parts.push(el('div', 'bell-head', 'Coming up'));
+      for (const row of coming) parts.push(rowButton(row, true));
+    }
+    if (now.length + dishes.length + coming.length === 0) parts.push(el('p', 'bell-empty', 'Nothing to report just now. Contacts, launches and meteor showers appear here as they happen.'));
     list.replaceChildren(...parts);
   }
 

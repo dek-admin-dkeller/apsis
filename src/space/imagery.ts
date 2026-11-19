@@ -162,6 +162,24 @@ const trekLayer = (body: string, layer: string): string => `https://trek.nasa.go
  * Who made each picture, under what terms, and where it was taken from. One line per file;
  * `body` names what it shows (and what was changed, where anything was).
  */
+/**
+ * Worlds whose maps have parts no camera has photographed (given one flat tone in the bundled
+ * map), with what is missing and why. The app draws an educated guess there by default
+ * (worker/unseen.worker.ts; Settings → "Fill in unseen ground") and says so on the world's card.
+ */
+export const UNSEEN: Partial<Record<BodyId, string>> = {
+  pluto: 'Its far south was in the dark of a decades-long winter when New Horizons flew past in 2015.',
+  charon: 'Its far south was in the dark when New Horizons flew past in 2015.',
+  triton: 'Its north was in the dark of a long winter when Voyager 2 flew past in 1989.',
+  miranda: 'Its north was in the dark when Voyager 2 flew past in 1986, the only visit to Uranus.',
+  ariel: 'Its north was in the dark when Voyager 2 flew past in 1986, the only visit to Uranus.',
+  umbriel: 'Its north was in the dark when Voyager 2 flew past in 1986, the only visit to Uranus.',
+  titania: 'Its north was in the dark when Voyager 2 flew past in 1986, the only visit to Uranus.',
+  oberon: 'Its north was in the dark when Voyager 2 flew past in 1986, the only visit to Uranus.',
+  phoebe: 'Cassini saw it closely from one side only, in 2004.',
+  callisto: 'Small areas near its poles were never photographed in detail.',
+};
+
 export const IMAGE_CREDITS: { body: string; source: string; licence: string; url: string }[] = [
   { body: 'Sun', source: SSS, licence: CC, url: commons('Solarsystemscope_texture_8k_sun.jpg') },
   { body: 'Mercury', source: 'NASA / Johns Hopkins University Applied Physics Laboratory / Carnegie Institution of Washington: MESSENGER MDIS global basemap, via NASA Solar System Treks', licence: PD, url: trekLayer('Mercury', 'Mercury_MESSENGER_MDIS_Basemap_BDR_Mosaic_Global_166m') },
@@ -186,13 +204,13 @@ export const IMAGE_CREDITS: { body: string; source: string; licence: string; url
   { body: 'Rhea (a colour map used in grey)', source: 'NASA / JPL-Caltech / Space Science Institute / Lunar and Planetary Institute: Cassini ISS colour map (PIA18438)', licence: PD, url: commons('Rhea_Color_Map.jpg') },
   { body: 'Rhea, streamed detail', source: 'NASA / JPL / Space Science Institute / DLR: Cassini ISS global mosaic, read from NASA Solar System Treks (not bundled)', licence: 'NASA Planetary Data System', url: trekLayer('Rhea', 'RH_120803_DLR_basemap') },
   { body: 'Iapetus (re-centred on longitude 0)', source: 'NASA / JPL-Caltech / Space Science Institute / Lunar and Planetary Institute: Cassini ISS colour map (PIA18436)', licence: PD, url: commons('Iapetus_Color_Map.jpg') },
-  { body: 'Phoebe (unseen parts filled with a flat tone)', source: 'NASA / JPL / Space Science Institute: Cassini ISS map (PIA07775)', licence: PD, url: commons('Phoebe_map_PIA07775_cropped.jpg') },
+  { body: 'Phoebe (unseen parts: a flat tone, drawn as a guess by default)', source: 'NASA / JPL / Space Science Institute: Cassini ISS map (PIA07775)', licence: PD, url: commons('Phoebe_map_PIA07775_cropped.jpg') },
   { body: 'Enceladus', source: 'NASA / JPL-Caltech / Space Science Institute / Lunar and Planetary Institute: Cassini ISS colour mosaic, via NASA Solar System Treks', licence: PD, url: trekLayer('Enceladus', 'Enceladus_cyl_KH') },
   { body: 'Titan (a one-colour infrared map, tinted orange-brown here)', source: 'NASA / JPL-Caltech / Space Science Institute: Cassini ISS mosaic at 938 nm (PIA19658), via NASA Solar System Treks', licence: PD, url: trekLayer('Titan', 'Titan_ISS_P19658_Mosaic_Global_4km') },
   { body: 'Uranus', source: SSS, licence: CC, url: commons('Solarsystemscope_texture_2k_uranus.jpg') },
-  { body: 'Miranda, Ariel, Umbriel, Titania and Oberon (unseen northern halves filled with a flat tone)', source: 'Caltech / JPL / USGS: Voyager 2 mosaics from JPL\'s planetary map set', licence: PD, url: 'https://commons.wikimedia.org/wiki/Special:Search?search=%22map+JPL+USGS%22+Uranus&ns6=1' },
+  { body: 'Miranda, Ariel, Umbriel, Titania and Oberon (unseen northern halves: a flat tone, drawn as a guess by default)', source: 'Caltech / JPL / USGS: Voyager 2 mosaics from JPL\'s planetary map set', licence: PD, url: 'https://commons.wikimedia.org/wiki/Special:Search?search=%22map+JPL+USGS%22+Uranus&ns6=1' },
   { body: 'Neptune', source: SSS, licence: CC, url: commons('Solarsystemscope_texture_2k_neptune.jpg') },
-  { body: 'Triton (unseen north filled with a flat tone)', source: 'NASA / JPL / Paul Schenk, Lunar and Planetary Institute: Voyager 2 colour map', licence: PD, url: commons('Triton_map_no_grid.jpg') },
-  { body: 'Pluto (re-centred on longitude 0; unseen south filled with a flat tone)', source: 'NASA / Johns Hopkins University Applied Physics Laboratory / Southwest Research Institute: New Horizons global colour map', licence: PD, url: commons('Pluto_color_mapmosaic.jpg') },
-  { body: 'Charon (unseen south filled with a flat tone)', source: 'NASA / Johns Hopkins University Applied Physics Laboratory / Southwest Research Institute: New Horizons global map', licence: PD, url: commons('Cpmap_cyl_PS717_HR_180.jpg') },
+  { body: 'Triton (unseen north: a flat tone, drawn as a guess by default)', source: 'NASA / JPL / Paul Schenk, Lunar and Planetary Institute: Voyager 2 colour map', licence: PD, url: commons('Triton_map_no_grid.jpg') },
+  { body: 'Pluto (re-centred on longitude 0; unseen south: a flat tone, drawn as a guess by default)', source: 'NASA / Johns Hopkins University Applied Physics Laboratory / Southwest Research Institute: New Horizons global colour map', licence: PD, url: commons('Pluto_color_mapmosaic.jpg') },
+  { body: 'Charon (unseen south: a flat tone, drawn as a guess by default)', source: 'NASA / Johns Hopkins University Applied Physics Laboratory / Southwest Research Institute: New Horizons global map', licence: PD, url: commons('Cpmap_cyl_PS717_HR_180.jpg') },
 ];

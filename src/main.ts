@@ -135,6 +135,7 @@ const settingsHooks: ((settings: Settings, changed: keyof Settings | null) => vo
 const encounterHooks: ((encounter: Encounter | null) => void)[] = [];
 const skyHooks: ((open: boolean) => void)[] = []; // the phone's full-screen sky view opened or closed
 const homeHooks: (() => void)[] = [];
+const escapeHooks: (() => boolean)[] = []; // features' own windows, closed by Escape before the tracker's (App.onEscape)
 let lastPairs: { a: Uint32Array; b: Uint32Array } | null = null; // the monitor's latest list, closest first
 let lastTraceAt = -Infinity;
 
@@ -249,11 +250,17 @@ const places = new Places({
   leaving: () => leaveTracker(),
   onAway: (away) => setAway(away),
 });
-// Phones: the strip of worlds above the tab bar away from the Earth (ui/worldStrip.ts), and in
-// the tracker a round button out to the solar system.
-const worldStrip = new WorldStrip({ whereNow: () => places.whereNow(), go: (id) => places.goWorld(id) });
+// Phones: the pill above the tab bar that moves between worlds, its list, and the two-finger tap
+// up a level (ui/worldStrip.ts). It replaces the path at the top on a phone.
+const worldStrip = new WorldStrip({
+  whereNow: () => places.whereNow(),
+  go: (id) => places.goWorld(id),
+  enter: (id) => places.goBody(id),
+  whole: () => void places.visitSystem(),
+  up: () => (places.elsewhere ? places.back() : places.openSystem()),
+});
 places.onWhere = () => worldStrip.update();
-$('m-system').addEventListener('click', () => places.goWorld('system'));
+worldStrip.update();
 const model = new SatelliteModel(kit);
 const encModels = [new SatelliteModel(kit, false), new SatelliteModel(kit, false)]; // the two objects of a close approach
 const labels = new Labels(kit, sim, cloud);
@@ -376,6 +383,7 @@ function applySettings(s: Settings, changed: keyof Settings | null): void {
   aurora.setVisible(s.aurora);
   tiles.enabled = s.sharpGround;
   places.setSharpGround(s.sharpGround);
+  places.setGuessUnseen(s.guessUnseen);
   globe.setClouds(s.clouds);
   globe.setAtmosphere(s.atmosphere);
   overlay.setBorders(s.borders);
@@ -1910,6 +1918,7 @@ window.addEventListener('keydown', (event) => {
         // the browser would have done had the app not kept Escape for itself (toggleFullscreen).
         if (!places.back() && document.fullscreenElement) void document.exitFullscreen();
       }
+      else if (escapeHooks.some((run) => run())) { /* a feature closed its own window (a launch climb's card) */ }
       else if (encPanel.isOpen) closeEncounter();
       else if (selected) select(null);
       else if (openPanelName) openPanel(null);
@@ -2178,7 +2187,7 @@ function updateRest(now: number): void {
   if (places.elsewhere) {
     const calm = places.drifting && now - lastTouchMs > 4000 && !landing.showing && openPanelName === null && !timeBar.classList.contains('is-open') &&
       viewsMenu.classList.contains('is-hidden') && document.activeElement?.id !== 'search' &&
-      !document.querySelector('.overlay:not(.is-hidden), .tool-menu:not(.is-hidden)');
+      !document.querySelector('.overlay:not(.is-hidden), .tool-menu:not(.is-hidden), .bell-menu:not(.is-hidden)');
     if (calm !== resting) setResting(calm);
     return;
   }
@@ -2187,7 +2196,7 @@ function updateRest(now: number): void {
     openPanelName === null && !inspector.isOpen && !encPanel.isOpen && // something is being read
     viewsMenu.classList.contains('is-hidden') && !timeBar.classList.contains('is-open') &&
     document.activeElement?.id !== 'search' &&
-    !document.querySelector('.overlay:not(.is-hidden), .tool-menu:not(.is-hidden), .cmd:not(.is-hidden)'); // a page, a menu or the command bar is open
+    !document.querySelector('.overlay:not(.is-hidden), .tool-menu:not(.is-hidden), .bell-menu:not(.is-hidden), .cmd:not(.is-hidden)'); // a page, a menu (the bell's too) or the command bar is open
   if (rest !== resting) setResting(rest);
 }
 
@@ -2439,6 +2448,7 @@ const app: App = {
     if (encPanel.isOpen && encPanel.encounter) run(encPanel.encounter);
   },
   onHome: (run) => void homeHooks.push(run),
+  onEscape: (run) => void escapeHooks.push(run),
   onSkyView: (run) => void skyHooks.push(run),
   useMyLocation,
 };

@@ -1,109 +1,157 @@
-/* The phone's strip of worlds (ui/worldStrip.ts): above the tab bar, away from the Earth only. */
+/* The phone's way between worlds (ui/worldStrip.ts): one pill above the tab bar, and a sheet of worlds. */
 
-.world-strip { display: none; }
+.world-pill, .world-sheet, .world-scrim { display: none; }
 
 @media (max-width: 760px) {
-  /* Shown on the solar system and at other worlds, unless something else needs the bottom of the
-     screen: a panel (sheet), a craft's card, the time controls, the full-screen sky, the hidden interface. */
-  body.away:not(.sky-immersive):not(.ui-hidden):not(.panel-open):not(.place-card-open):not(.m-time-open) .world-strip {
-    display: block;
+  /* The path at the top is replaced by the pill on a phone. */
+  #path { display: none !important; }
+
+  /* Shown everywhere (the tracker too), unless something else is using the bottom of the screen:
+     a panel, an object's or a craft's card, a close approach, the time controls, the full-screen
+     sky, the hidden interface, the home page. */
+  body:not(.home-open):not(.sky-immersive):not(.ui-hidden):not(.first-person):not(.panel-open):not(.place-card-open):not(.m-time-open) .world-pill {
+    display: flex;
+  }
+  body:has(#inspector:not(.is-hidden)) .world-pill, body:has(#encounter:not(.is-hidden)) .world-pill { display: none !important; }
+  .world-pill {
     position: fixed;
-    left: 10px;
-    right: 10px;
-    bottom: calc(64px + var(--safe-bottom, 0px));
+    left: 50%;
+    bottom: calc(64px + var(--safe-bottom, 0px) + 10px);
     z-index: 25;
+    align-items: center;
+    height: 44px;
+    padding: 0 2px;
+    transform: translateX(-50%);
     border: 1px solid var(--m-edge, rgba(255, 255, 255, 0.11));
-    border-radius: 20px;
+    border-radius: 999px;
     background: var(--m-glass, rgba(11, 17, 29, 0.74));
     -webkit-backdrop-filter: var(--m-blur, blur(22px) saturate(170%));
     backdrop-filter: var(--m-blur, blur(22px) saturate(170%));
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
-    animation: ws-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+    animation: wp-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
   }
-  body.ui-rest .world-strip { opacity: 0.28; transition: opacity 2.2s ease; }
-  /* The world's caption on the solar system ("Mars · Enter Mars") stands clear of the strip. */
-  body.away:not(.panel-open):not(.place-card-open) #place-hud { bottom: calc(64px + var(--safe-bottom, 0px) + 96px); }
+  .world-pill.is-beside { border-color: rgba(127, 227, 255, 0.45); }
+  body.ui-rest .world-pill { opacity: 0.28; transition: opacity 2.2s ease; }
+  /* The world's caption on the solar system ("Mars · Enter Mars") stands clear of the pill. */
+  body:not(.panel-open):not(.place-card-open) #place-hud { bottom: calc(64px + var(--safe-bottom, 0px) + 66px) !important; }
 }
 
-@keyframes ws-in { from { opacity: 0; transform: translateY(10px); } }
+@keyframes wp-in { from { opacity: 0; transform: translate(-50%, 8px); } }
 
-.ws-row {
-  display: flex;
-  gap: 4px;
-  padding: 8px 10px 6px;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scroll-snap-type: x proximity;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-  /* The ends fade, so the row reads as something that scrolls. */
-  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 18px, #000 calc(100% - 18px), transparent 100%);
-  mask-image: linear-gradient(90deg, transparent 0, #000 18px, #000 calc(100% - 18px), transparent 100%);
-}
-.ws-row::-webkit-scrollbar { display: none; }
-
-.ws-chip {
-  flex: 0 0 auto;
+.wp-step {
+  flex: none;
   display: grid;
-  justify-items: center;
-  gap: 3px;
-  width: 62px;
-  padding: 2px 0 0;
+  place-items: center;
+  width: 34px;
+  height: 40px;
   border: 0;
   background: none;
   color: var(--muted);
-  scroll-snap-align: center;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: pan-x;
 }
-.ws-chip.is-moon { width: 54px; }
+.wp-step::before { content: ''; width: 7px; height: 7px; border-left: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; transform: translateX(2px) rotate(45deg); }
+.wp-step.is-next::before { transform: translateX(-2px) rotate(-135deg); }
+.wp-step:active { color: var(--text); }
 
-/* A little globe: the world's own small map, two-to-one, so half of it shows as the near side,
-   with a lit edge and a shadowed one drawn over it. */
-.ws-orb {
-  position: relative;
-  width: 40px;
+.wp-label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 150px;
+  max-width: 60vw;
   height: 40px;
+  padding: 0 10px 0 6px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  touch-action: none; /* its swipes are its own */
+}
+.wp-label:active { background: rgba(255, 255, 255, 0.05); }
+.wp-text { display: grid; flex: 1; min-width: 0; line-height: 1.15; }
+.wp-caption { font: 500 9.5px var(--font-ui); color: var(--muted); letter-spacing: 0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.world-pill.is-beside .wp-caption { color: #7fe3ff; }
+.wp-name { font: 600 13.5px var(--font-ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* A little globe: the world's own small map, two-to-one, so half of it shows as the near side. */
+.ws-orb {
+  flex: none;
+  position: relative;
   border-radius: 50%;
   background:
-    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.28), transparent 42%),
-    radial-gradient(circle at 72% 78%, rgba(0, 0, 0, 0.62), transparent 62%),
+    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.26), transparent 42%),
+    radial-gradient(circle at 72% 78%, rgba(0, 0, 0, 0.6), transparent 62%),
     var(--map, none) center / 200% 100%,
     var(--orb, #889);
-  box-shadow: inset -4px -5px 10px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06);
-  transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 220ms ease;
+  box-shadow: inset -3px -4px 8px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
-.ws-chip.is-moon .ws-orb { width: 30px; height: 30px; margin-top: 5px; }
-.ws-orb.is-sun { box-shadow: 0 0 14px rgba(255, 190, 90, 0.55), inset -3px -4px 8px rgba(160, 60, 0, 0.35); }
+.ws-orb.is-small { width: 26px; height: 26px; }
+.ws-orb.is-large { width: 46px; height: 46px; }
+.ws-orb.is-sun { box-shadow: 0 0 12px rgba(255, 190, 90, 0.5), inset -3px -4px 8px rgba(160, 60, 0, 0.35); }
 .ws-orb.has-ring::after {
   content: '';
   position: absolute;
-  left: -9px;
-  right: -9px;
+  left: -22%;
+  right: -22%;
   top: 50%;
-  height: 12px;
-  margin-top: -6px;
-  border: 2px solid rgba(225, 205, 160, 0.75);
+  height: 30%;
+  transform: translateY(-50%) rotate(-16deg);
+  border: 1.5px solid rgba(225, 205, 160, 0.75);
   border-radius: 50%;
-  transform: rotate(-16deg);
 }
-.ws-orb.is-system { display: grid; place-items: center; background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); }
-.ws-orb.is-system svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.2; }
+.ws-orb.is-system { display: grid; place-items: center; background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); color: var(--text); }
+.ws-orb.is-system svg { width: 62%; height: 62%; fill: none; stroke: currentColor; stroke-width: 1.2; }
 
-.ws-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 11px var(--font-ui); }
-.ws-hint { height: 0; font: 600 9.5px var(--font-ui); color: #7fe3ff; white-space: nowrap; overflow: visible; }
-.ws-hint:empty { display: none; }
-
-.ws-chip:active .ws-orb { transform: scale(0.92); }
-.ws-chip.is-here { color: var(--text); }
-.ws-chip.is-here .ws-orb { transform: scale(1.08); box-shadow: 0 0 0 2px var(--amber, #ffb454), 0 0 14px rgba(255, 180, 84, 0.35), inset -4px -5px 10px rgba(0, 0, 0, 0.45); }
-.ws-chip.is-beside { color: #bff3ff; }
-.ws-chip.is-beside .ws-orb { transform: scale(1.08); box-shadow: 0 0 0 2px #7fe3ff, 0 0 14px rgba(127, 227, 255, 0.35), inset -4px -5px 10px rgba(0, 0, 0, 0.45); }
-.ws-chip.is-beside .ws-name { display: none; }
-.ws-chip.is-beside .ws-hint { height: auto; }
+/* The sheet of worlds. */
+@media (max-width: 760px) {
+  .world-scrim:not(.is-hidden) { display: block; position: fixed; inset: 0; z-index: 44; background: rgba(0, 0, 0, 0.32); animation: ws-fade 200ms ease; }
+  .world-sheet:not(.is-hidden) {
+    display: block;
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    bottom: calc(8px + var(--safe-bottom, 0px));
+    z-index: 45;
+    max-height: 70vh;
+    overflow-y: auto;
+    padding: 6px 14px 16px;
+    border: 1px solid var(--m-edge, rgba(255, 255, 255, 0.11));
+    border-radius: 24px;
+    background: rgba(10, 15, 24, 0.97);
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5);
+    animation: ws-up 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    transition: transform 120ms ease;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+@keyframes ws-up { from { transform: translateY(40%); opacity: 0.4; } }
+@keyframes ws-fade { from { opacity: 0; } }
+.ws-grip { width: 36px; height: 4px; margin: 4px auto 10px; border-radius: 2px; background: rgba(255, 255, 255, 0.22); }
+.ws-title { padding: 0 4px 8px; font: 600 14px var(--font-ui); color: var(--text); }
+.ws-title.is-sub { padding-top: 12px; font-size: 12px; color: var(--muted); font-weight: 500; }
+.ws-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px 6px; }
+.ws-tile {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 10px 0 8px;
+  border: 0;
+  border-radius: 14px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.ws-tile:active { background: rgba(255, 255, 255, 0.06); }
+.ws-tile.is-here { color: var(--text); background: rgba(255, 180, 84, 0.08); }
+.ws-tile.is-here .ws-orb { box-shadow: 0 0 0 2px var(--amber, #ffb454), inset -3px -4px 8px rgba(0, 0, 0, 0.45); }
+.ws-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 11.5px var(--font-ui); }
 
 @media (prefers-reduced-motion: reduce) {
-  .world-strip { animation: none !important; }
-  .ws-orb { transition: none; }
+  .world-pill, .world-sheet, .world-scrim { animation: none !important; }
 }
