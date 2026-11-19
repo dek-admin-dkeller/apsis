@@ -39,7 +39,12 @@ export interface Settings {
   skyLabels: boolean;
   // units and interface
   units: Units; // kilometres or miles, for every distance and speed shown
-  clockZone: ClockZone; // times shown in UTC or in the browser's local time
+  clockZone: ClockZone; // times shown in the browser's local time or in UTC
+  /**
+   * Which defaults this save was made under. 2 = local time is the default clock (it was UTC:
+   * visitors read the time in the corner as their own and found it "off" by their zone).
+   */
+  defaults: number;
   hoverCard: boolean; // the small card that appears when pointing at an object
   landing: boolean; // the welcome page shown when the site opens
   // rendering
@@ -76,7 +81,8 @@ const DEFAULTS: Settings = {
   planets: true,
   skyLabels: true,
   units: 'metric',
-  clockZone: 'utc',
+  clockZone: 'local',
+  defaults: 2,
   hoverCard: true,
   landing: true,
   glass: true,
@@ -104,7 +110,11 @@ export class SettingsStore {
     try {
       saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as Partial<Settings>;
     } catch { /* corrupted or unavailable storage → defaults */ }
-    this.settings = { ...DEFAULTS, ...saved };
+    // A save from before local time became the default holds 'utc' whether or not the visitor
+    // ever chose it (every setting is saved, chosen or not). Move those to local time once;
+    // choosing UTC afterwards sticks, because the save then carries `defaults: 2`.
+    if (saved.defaults === undefined) delete saved.clockZone;
+    this.settings = { ...DEFAULTS, ...saved, defaults: DEFAULTS.defaults };
 
     for (const group of this.groups) {
       for (const button of group.querySelectorAll('button')) {

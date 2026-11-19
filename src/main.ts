@@ -917,6 +917,35 @@ function jumpTo(timeMs: number, keepReplay = false): void {
   lastTraceAt = -Infinity;
 }
 
+/**
+ * Move simulated time on by one frame.
+ *
+ * At normal speed the clock follows the COMPUTER'S clock, not a sum of frame times. A browser
+ * stops drawing a tab that is in the background, a phone stops everything when it is locked,
+ * and a sum of frame times (capped, so that a hiccup cannot make things leap) then falls behind
+ * by however long that lasted: come back after ten minutes and "now" was ten minutes ago. So:
+ *   - showing the present (within a second and a half of it): the clock IS the present;
+ *   - showing another moment at normal speed: it moves on by the real time that passed.
+ * Either way a gap of more than a couple of seconds counts as a jump, so the simulation starts
+ * from fresh positions instead of gliding everything across the gap.
+ * At any other speed a long gap is not replayed (ten minutes asleep at 600× would be four days).
+ */
+let lastWallMs = Date.now();
+function advanceClock(elapsedSeconds: number): void {
+  const wallNow = Date.now();
+  const wallElapsed = Math.max(0, wallNow - lastWallMs);
+  lastWallMs = wallNow;
+  if (clock.paused) return;
+  if (clock.speed !== 1) {
+    clock.time += Math.min(elapsedSeconds, 5) * 1000 * clock.speed;
+    return;
+  }
+  const wasLive = Math.abs(clock.time + wallElapsed - wallNow) < 1500;
+  const next = wasLive ? wallNow : clock.time + wallElapsed;
+  if (wallElapsed > 2500) jumpTo(next, replay !== null);
+  else clock.time = next;
+}
+
 function jumpToNow(): void {
   clock.speed = 1;
   clock.paused = false;
@@ -1742,7 +1771,7 @@ function step(now: number): void {
   const dt = Math.min(elapsed, 0.1); // animation step, capped so a hiccup never makes the camera jump
   lastFrame = now;
   realSeconds += dt;
-  if (!clock.paused) clock.time += Math.min(elapsed, 5) * 1000 * clock.speed; // the clock keeps real pace even if frames drop
+  advanceClock(elapsed);
   if (replay && clock.time >= replay.endMs) {
     // A replay ran to its end: go (back) to the closest point and hold there.
     const hold = replay.holdMs;

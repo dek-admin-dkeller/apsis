@@ -24,7 +24,7 @@ export type Units = 'metric' | 'imperial';
 export type ClockZone = 'utc' | 'local';
 
 let units: Units = 'metric';
-let clockZone: ClockZone = 'utc';
+let clockZone: ClockZone = 'local';
 const MILES_PER_KM = 0.621371;
 const FEET_PER_KM = 3280.84;
 
