@@ -396,6 +396,32 @@ How the pieces fit:
   of the five leaving for good (`LEAVING`): with every dead probe named and ringed, the inner
   planets were buried.
 - Share links: `#place=mars`, `#place=system&at=jupiter`, `#craft=webb`.
+- **The way out is a button in the top bar** (`#system-btn`, amber; `#m-system` on a phone):
+  "Solar system" from the tracker or a place, "Back to Earth" on the solar system. The owner
+  asked for it to be prominent; it used to be only the last item of the rail's View group.
+- **A craft's card is as full as a satellite's inspector** (the owner: "it doesn't give me a
+  lot of information like Earth … I can't turn the orbit or footprint on or off"): the
+  article's photo and opening lines (`wikiSummary`, fetched when the card opens), the orbit
+  worked out from the real path (period, lowest and highest, tilt to the body's equator),
+  dates and mass where the data has them, "Sun there now" for anything on the ground, and
+  the SAME Orbit / Track / Footprint / 3D model switches (`#pc-acts`, static markup, the
+  tracker's own settings `orbitPath`, `groundTrack`, `footprint`, `model`). `SpaceView`
+  draws the ground track in the body's turning frame (a child of its mesh) and the footprint
+  as the circle acos(R / r) from the point under the craft.
+- **Layers away from the tracker** (`SpaceOptions`, set from `applySettings`): the sky tiles
+  and the selected craft's switches (`data-everywhere`), the ground (`data-place`: not on the
+  solar system), and a group that exists only out here (`data-away`): Orbits, Names,
+  Spacecraft, Landing sites, Every craft on the solar system (`spaceOrbits`, `spaceNames`,
+  `spaceCraft`, `landingSites`, `spaceAllCraft`). The solar system has no menu of planets, but
+  it does keep the rail's Layers and Settings: the owner asked to be able to turn the orbits
+  off there.
+- **Landing sites** (`space/sites.ts`, `Site`) are given to the views as craft that stand on
+  the ground (`siteCraft`, `Craft.site`), like passing asteroids: a dot, a name once the
+  camera comes down to it, a card. Listed under "Landing sites" in a place's Objects panel.
+- **Constellation names** away from the tracker are the tracker's own (`host.figures()`,
+  the same `.sky-label` style), behind the same "Sky names" switch.
+- **Zooming past the edge of a view** carries on into the next: the wheel, and on a phone a
+  pinch that begins at the limit (`pastEdge` in `SpaceView`, `pastTheEdge` in `main.ts`).
 
 Never verified on real hardware: how the dissolve and the long zooms feel on a phone's GPU.
 
@@ -782,9 +808,8 @@ so the site works from any sub-path.
 
 ## Ideas not built yet
 
-Beyond Earth orbit: pinch-zooming past the edge of a view on a phone (the wheel does it on a
-computer), constellation names in the views away from the tracker, landing sites as marks on
-the ground, Saturn's other moons.
+Beyond Earth orbit: a camera lock switch on a craft's card (today closing the card lets go
+of it), the paths of rovers across the ground, eclipses and transits called out as they happen.
 
 Multiplayer games on a separate `/play` page (needs a small real-time service such as
 Firebase or Supabase; Pages cannot provide one; the home page has a placeholder "Games" row),

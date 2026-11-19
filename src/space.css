@@ -17,6 +17,7 @@ body.away .rail :is([data-panel='conj'], [data-view], #view-sky) { display: none
 body.away .rail { bottom: 0; }
 /* On the solar system the picture is the menu: only what is drawn (Layers) and Settings stay on the rail. */
 body.on-map .rail [data-panel='objects'] { display: none; }
+body.on-map #panel-layers [data-place] { display: none !important; } /* nothing is selected and there is no ground on the solar system */
 /* Layers: what applies everywhere (the sky, the selected craft's switches), and the group that applies only out here. */
 body:not(.away) :is([data-away], .away-only), body.away .here-only { display: none; }
 body.away #panel-layers .panel-body > :not([data-everywhere]):not([data-away]),
@@ -136,7 +137,6 @@ body:not(.away) #space-tags, body.ui-hidden #space-tags { display: none; }
     border-radius: 18px;
     animation: none;
   }
-  body.on-map #place-card { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
   .pc-head { padding: 12px 8px 8px 14px; }
   .pc-title h2 { font-size: 16px; }
   .sp-tag { font-size: 11.5px; padding: 6px 9px; }

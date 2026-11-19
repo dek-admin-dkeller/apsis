@@ -509,8 +509,8 @@
                glance, two to a row, where there used to be nineteen lines of text with a small switch each. A tile
                is still a <label> around a checkbox, so src/ui/settings.ts binds it as before. -->
           <div class="panel-body">
-            <h3 class="group-label" data-everywhere>Selected object</h3>
-            <div class="layer-tiles" data-everywhere>
+            <h3 class="group-label" data-everywhere data-place>Selected object</h3>
+            <div class="layer-tiles" data-everywhere data-place>
               <label class="layer-tile" data-everywhere title="Draw the whole orbit of the selected object">
                 <input type="checkbox" data-setting="orbitPath" />
                 <svg viewBox="0 0 20 20" aria-hidden="true"><ellipse cx="10" cy="10" rx="8" ry="4.3" transform="rotate(-24 10 10)" /><circle cx="17.3" cy="6.7" r="1.4" /></svg>
@@ -536,8 +536,8 @@
             <div class="segmented" data-setting="labels" title="A few famous spacecraft are always named. Zoom in and more names and operator logos appear.">
               <button data-value="off">Off</button><button data-value="notable">Well-known</button><button data-value="nearby">As you zoom</button>
             </div>
-            <h3 class="group-label" data-everywhere><span class="here-only">Earth</span><span class="away-only">Ground</span></h3>
-            <div class="layer-tiles" data-everywhere>
+            <h3 class="group-label" data-everywhere data-place><span class="here-only">Earth</span><span class="away-only">Ground</span></h3>
+            <div class="layer-tiles" data-everywhere data-place>
               <label class="layer-tile" title="The cloud layer and its shadows">
                 <input type="checkbox" data-setting="clouds" />
                 <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 15.5a3.5 3.5 0 0 1-.5-6.96 4.5 4.5 0 0 1 8.8.96A3 3 0 0 1 14 15.5z" /></svg>
