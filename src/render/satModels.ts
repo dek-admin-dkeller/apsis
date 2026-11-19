@@ -1259,21 +1259,40 @@ export function modelThumbnail(kind: ModelKind): string {
   }
 }
 
-/** A small, slowly turning view of a model for the info card (its own tiny renderer). */
+/**
+ * A slowly turning view of a model, with its own small renderer: the info card's picture, and
+ * the large one in the spacecraft catalogue. There it can also be turned by hand (turn, hold).
+ */
 export class ModelPreview {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(32, 2, 0.1, 20);
-  private readonly holder = new THREE.Group();
+  private readonly holder = new THREE.Group(); // turns about the model's own vertical axis
+  private readonly tilt = new THREE.Group(); // tips it towards or away from the viewer
+  private readonly across = new THREE.Vector3(); // the direction that runs left to right on the screen
   private readonly canvas: HTMLCanvasElement;
+  private readonly fit: boolean;
+  private yaw = 0;
+  private pitch = 0;
+  private held = false;
+  private last = 0;
 
-  constructor(canvas: HTMLCanvasElement) {
+  /**
+   * @param fit  place the camera to suit the picture's shape: a little closer than usual, and
+   *             further back when the picture is narrow (a phone held upright). The info card's
+   *             picture is always wide and leaves it off.
+   */
+  constructor(canvas: HTMLCanvasElement, fit = false) {
     this.canvas = canvas;
+    this.fit = fit;
     this.renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.camera.position.set(1.5, 0.95, 1.9);
     this.camera.lookAt(0, 0, 0);
-    this.scene.add(this.holder);
+    this.camera.updateMatrixWorld(true);
+    this.across.setFromMatrixColumn(this.camera.matrixWorld, 0);
+    this.tilt.add(this.holder);
+    this.scene.add(this.tilt);
     const sun = addLights(this.scene);
     sun.position.set(2.5, 3, 1.5);
     const rim = new THREE.DirectionalLight(0x5ad1ff, 1.4);
@@ -1284,17 +1303,37 @@ export class ModelPreview {
   show(kind: ModelKind): void {
     disposeModel(this.holder);
     this.holder.add(buildModel(kind));
+    this.yaw = 0;
+    this.pitch = 0;
+  }
+
+  /** Turn the model by hand (radians): `yaw` about its own vertical axis, `pitch` towards the viewer. */
+  turn(yaw: number, pitch: number): void {
+    this.yaw += yaw;
+    this.pitch = THREE.MathUtils.clamp(this.pitch + pitch, -1.35, 1.35); // short of upside down
+  }
+
+  /** While held (a finger or the mouse is on it) the model stops turning by itself. */
+  hold(on: boolean): void {
+    this.held = on;
   }
 
   render(realSeconds: number): void {
     const width = this.canvas.clientWidth, height = this.canvas.clientHeight;
     if (width === 0 || height === 0) return; // card hidden
-    if (this.canvas.width !== Math.round(width * this.renderer.getPixelRatio())) {
+    const pixels = this.renderer.getPixelRatio();
+    if (this.canvas.width !== Math.round(width * pixels) || (this.fit && this.canvas.height !== Math.round(height * pixels))) {
       this.renderer.setSize(width, height, false);
       this.camera.aspect = width / height;
+      // A large picture can stand closer than the info card's does. But the lens angle is measured top
+      // to bottom, so in a tall narrow picture the camera steps back, or the model's sides would be cut off.
+      if (this.fit) this.camera.position.set(1.5, 0.95, 1.9).multiplyScalar(Math.max(0.85, 0.9 / this.camera.aspect));
       this.camera.updateProjectionMatrix();
     }
-    this.holder.rotation.y = realSeconds * 0.45;
+    if (this.held) this.yaw -= (realSeconds - this.last) * 0.45; // cancels the idle turn below: it stays where the hand left it
+    this.last = realSeconds;
+    this.holder.rotation.y = realSeconds * 0.45 + this.yaw;
+    this.tilt.quaternion.setFromAxisAngle(this.across, this.pitch);
     this.renderer.render(this.scene, this.camera);
   }
 }

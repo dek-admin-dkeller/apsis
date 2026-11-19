@@ -108,7 +108,7 @@ const SHAPES: [RegExp, ModelKind][] = [
   [/^XMM\b/, 'xmm'],
   [/^SDO$/, 'soho'],
   [/^(MMS \d|THEMIS|ARASE|TRACERS|POLAR$|IMAGE$)/, 'l1monitor'], // spinning drums with booms, like their cousins out in the solar wind
-  [/^(LAGEOS|LARES|STARLETTE|STELLA$|AJISAI|WESTPAC|LARETS|CALSPHERE|LCS \d|RIGIDSPHERE)|ETALON/, 'lasersphere'],
+  [/^(LAGEOS|LARES|STARLETTE|STELLA$|AJISAI|WESTPAC|LARETS)|ETALON/, 'lasersphere'], // (not the Calspheres: those are bare radar targets, with no prisms)
   [/^(TDRS|LUCH|TIANLIAN)/, 'relay'],
   [/^(SPACEMOBILE|BLUEWALKER|BLUEBIRD)/, 'phasedarray'], // (must come before the constellation line below, which used to claim them)
   [/^(HST|SWIFT|FERMI|NUSTAR|IXPE|ASTROSAT|CHEOPS|TESS|XRISM|HXMT|INTEGRAL|NEOSSAT|EINSTEIN PROBE|SVOM|HINODE|IRIS)\b/, 'telescope'],

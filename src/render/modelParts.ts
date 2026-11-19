@@ -467,7 +467,7 @@ function makeMaterials() {
     goldPlate: std({ color: 0xe0a93c, metalness: 0.9, roughness: 0.5, envMapIntensity: 1.6 }), // gold-plated fittings (a record cover, a plaque)
     dullMetal: std({ color: 0x4b4f57, metalness: 0.75, roughness: 0.55, envMapIntensity: 1.2 }), // aluminium gone dull and dusty: rover wheels, generator fins, a laser-ranging ball
     // Asteroid: matte and shaded per corner (dark hollows, pale rims). The foil's crinkle map, used gently, makes broken stone.
-    rock: std({ color: 0x6a5f55, metalness: 0, roughness: 0.97, envMapIntensity: 0.1, vertexColors: true, normalMap: crinkle, normalScale: wrinkles(0.55) }),
+    rock: std({ color: 0x5b524a, metalness: 0, roughness: 0.97, envMapIntensity: 0.1, vertexColors: true, normalMap: crinkle, normalScale: wrinkles(0.55) }),
   };
 }
 export type Materials = ReturnType<typeof makeMaterials>;

@@ -18,7 +18,7 @@ import * as THREE from 'three';
 import { mountLaunch } from './ui/launch.ts';
 import { eciToGeodetic, gstime, type SatRec } from 'satellite.js';
 import { buildCatalog, loadLive, loadSnapshot, searchCatalog, type Catalog } from './data/catalog.ts';
-import { describe } from './data/describe.ts';
+import { describe, type ModelKind } from './data/describe.ts';
 import { makeSatrec, rangeKm, stateAt, wrapLon, type Observer, type Vec3 } from './data/ephemeris.ts';
 import { loadRegions } from './data/regions.ts';
 import { loadFacts, type CatalogFacts } from './data/satcat.ts';
@@ -53,6 +53,7 @@ import { $, fmt, fmtInt, fmtKm, fmtKmS, fmtRange, setClockZone, setUnits } from 
 import { EncounterPanel, type Encounter, type EncounterFocus } from './ui/encounterPanel.ts';
 import { Filters } from './ui/filters.ts';
 import { HashTrace } from './ui/hashTrace.ts';
+import { Gallery } from './ui/gallery.ts';
 import { HowTo } from './ui/howto.ts';
 import { alertDistance, clockStamp, duration, Inspector } from './ui/inspector.ts';
 import { LoadingScreen } from './ui/intro.ts';
@@ -1317,6 +1318,37 @@ $('about-how').addEventListener('click', () => {
   howto.open();
 });
 
+// ---- spacecraft catalogue -------------------------------------------------------------------
+
+/** The catalogue's objects sorted by the shape that represents them; worked out when first asked for. */
+let byKind: { of: Catalog; lists: Map<ModelKind, Satellite[]>; asked: Map<ModelKind, number> } | null = null;
+function ofKind(kind: ModelKind): Satellite[] {
+  if (!catalog) return [];
+  if (byKind?.of !== catalog) {
+    byKind = { of: catalog, lists: new Map(), asked: new Map() };
+    for (const sat of catalog.sats) {
+      const shape = describe(sat).kind;
+      const list = byKind.lists.get(shape);
+      if (list) list.push(sat); else byKind.lists.set(shape, [sat]);
+    }
+    // Oldest first: for a telescope that is Hubble, for the Space Station its first module.
+    for (const list of byKind.lists.values()) list.sort((a, b) => a.noradId - b.noradId);
+  }
+  return byKind.lists.get(kind) ?? [];
+}
+const gallery = new Gallery({
+  count: (kind) => ofKind(kind).length,
+  show: (kind) => {
+    const list = ofKind(kind);
+    if (list.length === 0 || !byKind) return;
+    const asked = byKind.asked.get(kind) ?? 0; // asked again, it shows the next one
+    byKind.asked.set(kind, asked + 1);
+    if (landing.showing) landing.enter();
+    select(list[asked % list.length]);
+  },
+});
+$('gallery-open').addEventListener('click', () => setAbout(false)); // the button is in the About sheet
+
 const tour = new Tour({
   selectByName: (name) => {
     const sat = catalog?.byName.get(name)?.[0];
@@ -1426,6 +1458,7 @@ function goHome(): void {
   shareDialog.close();
   if (howto.isOpen) howto.close();
   if (bench.isOpen) bench.close();
+  if (gallery.isOpen) gallery.close();
   sheets.reset();
   jumpToNow();
   preset(1);
