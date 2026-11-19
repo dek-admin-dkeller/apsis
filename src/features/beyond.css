@@ -27,7 +27,8 @@ div.bx-row { flex: 1; min-width: 0; }
 .bx-list li.is-past .bx-fig { color: var(--muted); }
 
 /* A small heading between two groups of rows ("Active now", "Coming next"; a network site). */
-.bx-head { margin: 12px 0 2px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+/* Plain words, like the group headings in the other panels (.group-label); not spaced capitals. */
+.bx-head { margin: 14px 0 3px; font-size: 11.5px; font-weight: 600; color: var(--muted); }
 .bx-head:first-child { margin-top: 2px; }
 .bx-credit { margin-top: 8px; }
 
