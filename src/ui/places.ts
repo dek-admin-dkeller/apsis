@@ -38,7 +38,7 @@ import { watchDsn } from '../space/dsn.ts';
 import { bodyAxes, bodyPosition, bodyRelative } from '../space/ephem.ts';
 import { IMAGERY } from '../space/imagery.ts';
 import { SITES } from '../space/sites.ts';
-import type { Body, BodyId, Craft, DsnLink, Flyby, Motion, Site, Vec } from '../space/types.ts';
+import type { Body, BodyId, Craft, DeepData, DsnLink, Flyby, Motion, Site, Vec } from '../space/types.ts';
 import type { SearchHit } from './app.ts';
 import { $, fmt, fmtInt, fmtKm, fmtKmS, getUnits, lengthUnit, lengthValue } from './dom.ts';
 import { clockStamp, duration } from './inspector.ts';
@@ -231,12 +231,20 @@ export class Places {
     this.crafts = SITES.map(siteCraft);
     this.place.setCraft(this.crafts, host.time());
     void loadDeep().then((deep) => {
-      if (!deep) return;
-      this.crafts = [...deep.craft, ...deep.flybys.map(rockCraft).filter((rock): rock is Craft => rock !== null), ...SITES.map(siteCraft)];
-      this.place.setCraft(this.crafts, host.time());
-      this.map.setCraft(this.crafts, host.time());
-      if (this.spot === 'place') this.fillHere();
+      if (deep) this.refreshData(deep);
     });
+  }
+
+  /**
+   * Take a (newer) copy of public/data/deep.json: the craft, and the asteroids with a path.
+   * Called once at start-up, and again whenever the site has published fresher data while this
+   * tab was open. What is being looked at stays selected if it is still in the data.
+   */
+  refreshData(deep: DeepData): void {
+    this.crafts = [...deep.craft, ...deep.flybys.map(rockCraft).filter((rock): rock is Craft => rock !== null), ...SITES.map(siteCraft)];
+    this.place.setCraft(this.crafts, this.host.time());
+    this.map.setCraft(this.crafts, this.host.time());
+    if (this.spot === 'place') this.fillHere();
   }
 
   // ---- state the rest of the program may ask about ---------------------------------------------
