@@ -28,7 +28,7 @@
 import { findPasses, makeSatrec, type Pass } from '../data/ephemeris.ts';
 import { loadLaunches, type Launch } from '../data/launches.ts';
 import { loadDeep } from '../space/deep.ts';
-import { latestDsn, watchDsn } from '../space/dsn.ts';
+import { DSN_NOW_URL, latestDsn, watchDsn } from '../space/dsn.ts';
 import { activeShowers, nextShowers } from '../space/showers.ts';
 import { eclipses, jupiterEvents, planetTransits, type SkyEvent } from '../space/skyEvents.ts';
 import type { DsnLink, Flyby } from '../space/types.ts';
@@ -424,7 +424,17 @@ export function installBell(app: App): void {
     const parts: HTMLElement[] = [];
     const section = (title: string, items: Row[]) => {
       if (items.length === 0) return;
-      parts.push(el('div', 'bell-head', title));
+      const head = el('div', 'bell-head', title);
+      if (items.some((row) => row.icon === 'dish')) {
+        // Where "in contact" comes from: NASA's own live page of the same feed.
+        const source = el('a', 'bell-source', 'Contacts: NASA DSN Now ↗');
+        source.href = DSN_NOW_URL;
+        source.target = '_blank';
+        source.rel = 'noopener noreferrer';
+        source.title = 'NASA’s live Deep Space Network page, the source of every contact listed here';
+        head.append(source);
+      }
+      parts.push(head);
       for (const row of items) {
         const item = el('button', `bell-row is-${row.kind}`);
         item.type = 'button';

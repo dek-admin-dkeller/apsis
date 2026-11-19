@@ -41,7 +41,9 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const read = (path) => JSON.parse(readFileSync(join(HERE, path), 'utf8'));
 const DEG = Math.PI / 180;
 const C_KM_S = 299792.458;
-const MODELS = ['webb', 'voyager', 'pioneer', 'newhorizons', 'juno', 'parker', 'solarorbiter', 'soho', 'l1monitor', 'tess', 'euclid', 'lunarorbiter', 'marsorbiter', 'rover', 'lander', 'clipper', 'lucy', 'psyche', 'bepi', 'samplereturn', 'stereo', 'roadster', 'probe'];
+const MODELS = ['webb', 'voyager', 'pioneer', 'newhorizons', 'juno', 'parker', 'solarorbiter', 'soho', 'l1monitor', 'tess', 'euclid', 'lunarorbiter', 'marsorbiter', 'rover', 'lander', 'clipper', 'lucy', 'psyche', 'bepi', 'samplereturn', 'stereo', 'roadster', 'probe',
+  'roman', 'gaia', 'kepler', 'spitzer', 'juice', 'hayabusa2', 'hera', 'mmx', 'dscovr', 'wind', 'imap', 'ulysses', 'dawn', 'cubesat',
+  'chandrayaan2', 'danuri', 'odyssey', 'marsexpress', 'tgo', 'hope', 'insight', 'blueghost', 'novac', 'vikram', 'slim', 'zhurong'];
 
 let failed = 0;
 const check = (name, ok, detail = '') => {
@@ -400,6 +402,7 @@ check('the reference positions are from the same download as deep.json', referen
 
 {
   const { SITES } = await import('../src/space/sites.ts');
+  const { isModelKind } = await import('../src/data/describe.ts'); // a site may stand any 3D model there is
   const problems = [];
   const ids = new Set();
   // The thirteen that went live first: share links name them, so they must stay.
@@ -414,7 +417,7 @@ check('the reference positions are from the same download as deep.json', referen
     if (!(Math.abs(site.latDeg) <= 90) || !(site.lonDeg >= -180 && site.lonDeg <= 180)) problems.push(`${site.id}: coordinates out of range (${site.latDeg}, ${site.lonDeg})`);
     const landed = Date.parse(`${site.date}T00:00:00Z`);
     if (!/^\d{4}-\d\d-\d\d$/.test(site.date) || !(landed > Date.UTC(1959, 0, 1) && landed < Date.now())) problems.push(`${site.id}: date ${site.date}`);
-    if (!['crewed', 'lander', 'rover', 'probe'].includes(site.kind) || !['lander', 'rover'].includes(site.model)) problems.push(`${site.id}: kind or model`);
+    if (!['crewed', 'lander', 'rover', 'probe'].includes(site.kind) || !isModelKind(site.model)) problems.push(`${site.id}: kind or model`);
     for (const field of ['name', 'agency', 'blurb', 'wiki']) if (!site[field]) problems.push(`${site.id}: no ${field}`);
     // Not a craft the data file already stands on the ground: by name, and by place (within 20 km).
     if (deep.craft.some((craft) => craft.id === site.id)) problems.push(`${site.id}: also a craft in deep.json`);

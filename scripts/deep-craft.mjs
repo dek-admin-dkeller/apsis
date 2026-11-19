@@ -53,7 +53,7 @@ export const CRAFT = [
     wiki: 'Euclid (spacecraft)', dsn: [],
   },
   {
-    id: 'roman', horizons: -211, centre: 'earth', path: 'samples', stepMin: 1440, model: 'euclid', status: 'active',
+    id: 'roman', horizons: -211, centre: 'earth', path: 'samples', stepMin: 1440, model: 'roman', status: 'active',
     name: 'Nancy Grace Roman Space Telescope', short: 'Roman',
     aliases: ['roman', 'roman telescope', 'roman space telescope', 'nancy grace roman', 'nancy roman', 'wfirst', 'rst'],
     agency: 'NASA', launched: '2026-08-30', role: 'Wide-field infrared telescope',
@@ -70,7 +70,7 @@ export const CRAFT = [
     wiki: 'Solar and Heliospheric Observatory', dsn: ['SOHO'],
   },
   {
-    id: 'dscovr', horizons: -78, centre: 'earth', path: 'samples', stepMin: 1440, model: 'l1monitor', status: 'active',
+    id: 'dscovr', horizons: -78, centre: 'earth', path: 'samples', stepMin: 1440, model: 'dscovr', status: 'active',
     arrived: '2015-06-08', massKg: 570,
     name: 'Deep Space Climate Observatory', short: 'DSCOVR', aliases: ['dscovr', 'discover', 'dscover', 'deep space climate observatory', 'epic camera'],
     agency: 'NOAA / NASA', launched: '2015-02-11', role: 'Space-weather sentinel and Earth camera',
@@ -86,7 +86,7 @@ export const CRAFT = [
     wiki: 'Advanced Composition Explorer', dsn: ['ACE'],
   },
   {
-    id: 'wind', horizons: -8, centre: 'earth', path: 'samples', stepMin: 1440, model: 'l1monitor', status: 'active',
+    id: 'wind', horizons: -8, centre: 'earth', path: 'samples', stepMin: 1440, model: 'wind', status: 'active',
     massKg: 1250,
     name: 'Wind', short: 'Wind', aliases: ['wind spacecraft', 'wind satellite', 'ggs wind'],
     agency: 'NASA', launched: '1994-11-01', role: 'Solar-wind laboratory',
@@ -94,7 +94,7 @@ export const CRAFT = [
     wiki: 'Wind (spacecraft)', dsn: ['WIND'],
   },
   {
-    id: 'imap', horizons: -43, centre: 'earth', path: 'samples', stepMin: 1440, model: 'l1monitor', status: 'active',
+    id: 'imap', horizons: -43, centre: 'earth', path: 'samples', stepMin: 1440, model: 'imap', status: 'active',
     massKg: 900,
     name: 'Interstellar Mapping and Acceleration Probe', short: 'IMAP', aliases: ['imap', 'interstellar mapping and acceleration probe', 'interstellar mapping probe'],
     agency: 'NASA', launched: '2025-09-24', role: 'Heliosphere mapper',
@@ -127,7 +127,7 @@ export const CRAFT = [
     wiki: 'Lunar Reconnaissance Orbiter', dsn: ['LRO'],
   },
   {
-    id: 'chandrayaan-2', horizons: -152, centre: 'moon', path: 'orbit', model: 'lunarorbiter', status: 'active',
+    id: 'chandrayaan-2', horizons: -152, centre: 'moon', path: 'orbit', model: 'chandrayaan2', status: 'active',
     arrived: '2019-08-20', massKg: 3850,
     name: 'Chandrayaan-2 orbiter', short: 'Chandrayaan-2', aliases: ['chandrayaan 2', 'chandrayaan2', 'chandrayan 2', 'chandrayaan', 'indian moon orbiter'],
     agency: 'ISRO', launched: '2019-07-22', role: 'Moon orbiter',
@@ -135,7 +135,7 @@ export const CRAFT = [
     wiki: 'Chandrayaan-2', dsn: ['CH2', 'CH2O'],
   },
   {
-    id: 'danuri', horizons: -155, centre: 'moon', path: 'orbit', model: 'lunarorbiter', status: 'active',
+    id: 'danuri', horizons: -155, centre: 'moon', path: 'orbit', model: 'danuri', status: 'active',
     arrived: '2022-12-16', massKg: 678,
     name: 'Danuri (Korea Pathfinder Lunar Orbiter)', short: 'Danuri', aliases: ['danuri', 'kplo', 'korea pathfinder lunar orbiter', 'korean moon orbiter', 'korean lunar orbiter'],
     agency: 'KARI', launched: '2022-08-04', role: 'Moon orbiter',
@@ -144,7 +144,7 @@ export const CRAFT = [
   },
   // ── At Mars ───────────────────────────────────────────────────────────────────────────
   {
-    id: 'mars-odyssey', horizons: -53, centre: 'mars', path: 'orbit', model: 'marsorbiter', status: 'active',
+    id: 'mars-odyssey', horizons: -53, centre: 'mars', path: 'orbit', model: 'odyssey', status: 'active',
     arrived: '2001-10-24', massKg: 725,
     name: '2001 Mars Odyssey', short: 'Odyssey', aliases: ['mars odyssey', 'odyssey', '2001 mars odyssey', 'oddysey', 'odyssey orbiter'],
     agency: 'NASA', launched: '2001-04-07', role: 'Mars orbiter and rover relay',
@@ -160,7 +160,7 @@ export const CRAFT = [
     wiki: 'Mars Reconnaissance Orbiter', dsn: ['MRO', 'MROS'],
   },
   {
-    id: 'mars-express', horizons: -41, centre: 'mars', path: 'orbit', model: 'marsorbiter', status: 'active',
+    id: 'mars-express', horizons: -41, centre: 'mars', path: 'orbit', model: 'marsexpress', status: 'active',
     arrived: '2003-12-25', massKg: 1223,
     name: 'Mars Express', short: 'Mars Express', aliases: ['mars express', 'mex', 'mars expres'],
     agency: 'ESA', launched: '2003-06-02', role: 'Mars orbiter',
@@ -168,7 +168,7 @@ export const CRAFT = [
     wiki: 'Mars Express', dsn: ['MEX'],
   },
   {
-    id: 'tgo', horizons: -143, centre: 'mars', path: 'orbit', model: 'marsorbiter', status: 'active',
+    id: 'tgo', horizons: -143, centre: 'mars', path: 'orbit', model: 'tgo', status: 'active',
     arrived: '2016-10-19', massKg: 4332,
     name: 'ExoMars Trace Gas Orbiter', short: 'TGO', aliases: ['tgo', 'trace gas orbiter', 'exomars', 'exomars orbiter', 'exo mars'],
     agency: 'ESA / Roscosmos', launched: '2016-03-14', role: 'Atmosphere analyser and rover relay',
@@ -176,7 +176,7 @@ export const CRAFT = [
     wiki: 'Trace Gas Orbiter', dsn: ['TGO'],
   },
   {
-    id: 'hope', horizons: -62, centre: 'mars', path: 'orbit', model: 'marsorbiter', status: 'active',
+    id: 'hope', horizons: -62, centre: 'mars', path: 'orbit', model: 'hope', status: 'active',
     arrived: '2021-02-09', massKg: 1350,
     name: 'Emirates Mars Mission (Hope)', short: 'Hope', aliases: ['hope', 'hope probe', 'al amal', 'emirates mars mission', 'emm', 'uae mars'],
     agency: 'UAE Space Agency', launched: '2020-07-19', role: 'Mars weather satellite',
@@ -202,7 +202,7 @@ export const CRAFT = [
     wiki: 'Perseverance (rover)', dsn: ['M20'],
   },
   {
-    id: 'insight', centre: 'mars', path: 'surface', site: [4.502, 135.623], model: 'lander', status: 'silent',
+    id: 'insight', centre: 'mars', path: 'surface', site: [4.502, 135.623], model: 'insight', status: 'silent',
     arrived: '2018-11-26', ended: '2022-12-15', massKg: 694,
     name: 'InSight', short: 'InSight', aliases: ['insight', 'insight lander', 'mars insight'],
     agency: 'NASA', launched: '2018-05-05', role: 'Mars lander (seismometer)',
@@ -210,7 +210,7 @@ export const CRAFT = [
     wiki: 'InSight', dsn: ['NSYT'],
   },
   {
-    id: 'zhurong', centre: 'mars', path: 'surface', site: [25.066, 109.925], model: 'rover', status: 'silent',
+    id: 'zhurong', centre: 'mars', path: 'surface', site: [25.066, 109.925], model: 'zhurong', status: 'silent',
     arrived: '2021-05-14', ended: '2022-05-18',
     name: 'Zhurong (Tianwen-1 rover)', short: 'Zhurong', aliases: ['zhurong', 'tianwen', 'tianwen-1', 'tianwen 1', 'chinese mars rover'],
     agency: 'CNSA', launched: '2020-07-23', role: 'Mars rover',
@@ -219,7 +219,7 @@ export const CRAFT = [
   },
   // ── Landers on the Moon (their missions are over; they are still there) ────────────────
   {
-    id: 'blue-ghost', centre: 'moon', path: 'surface', site: [18.56, 61.81], model: 'lander', status: 'silent',
+    id: 'blue-ghost', centre: 'moon', path: 'surface', site: [18.56, 61.81], model: 'blueghost', status: 'silent',
     arrived: '2025-03-02', ended: '2025-03-16',
     name: 'Blue Ghost Mission 1', short: 'Blue Ghost', aliases: ['blue ghost', 'firefly lander', 'firefly blue ghost', 'blueghost'],
     agency: 'Firefly Aerospace / NASA', launched: '2025-01-15', role: 'Moon lander',
@@ -227,7 +227,7 @@ export const CRAFT = [
     wiki: 'Blue Ghost Mission 1', dsn: [],
   },
   {
-    id: 'odysseus', centre: 'moon', path: 'surface', site: [-80.13, 1.44], model: 'lander', status: 'silent',
+    id: 'odysseus', centre: 'moon', path: 'surface', site: [-80.13, 1.44], model: 'novac', status: 'silent',
     arrived: '2024-02-22', ended: '2024-02-29',
     name: 'Odysseus (IM-1)', short: 'Odysseus', aliases: ['odysseus', 'im-1', 'im1', 'intuitive machines', 'nova-c'],
     agency: 'Intuitive Machines / NASA', launched: '2024-02-15', role: 'Moon lander',
@@ -235,7 +235,7 @@ export const CRAFT = [
     wiki: 'IM-1', dsn: [],
   },
   {
-    id: 'vikram', centre: 'moon', path: 'surface', site: [-69.373, 32.319], model: 'lander', status: 'silent',
+    id: 'vikram', centre: 'moon', path: 'surface', site: [-69.373, 32.319], model: 'vikram', status: 'silent',
     arrived: '2023-08-23', ended: '2023-09-04', massKg: 3900,
     name: 'Chandrayaan-3 lander (Vikram)', short: 'Vikram', aliases: ['vikram', 'chandrayaan 3', 'chandrayaan-3', 'chandrayaan3', 'pragyan', 'chandrayan 3'],
     agency: 'ISRO', launched: '2023-07-14', role: 'Moon lander and rover',
@@ -243,7 +243,7 @@ export const CRAFT = [
     wiki: 'Chandrayaan-3', dsn: ['CH3'],
   },
   {
-    id: 'slim', centre: 'moon', path: 'surface', site: [-13.316, 25.251], model: 'lander', status: 'silent',
+    id: 'slim', centre: 'moon', path: 'surface', site: [-13.316, 25.251], model: 'slim', status: 'silent',
     arrived: '2024-01-19',
     name: 'SLIM (Smart Lander for Investigating Moon)', short: 'SLIM', aliases: ['slim', 'moon sniper', 'smart lander for investigating moon', 'japan moon lander'],
     agency: 'JAXA', launched: '2023-09-06', role: 'Moon lander',
@@ -268,7 +268,7 @@ export const CRAFT = [
     wiki: 'Europa Clipper', dsn: ['EURC'],
   },
   {
-    id: 'juice', horizons: -28, centre: 'sun', path: 'orbit', model: 'clipper', status: 'active',
+    id: 'juice', horizons: -28, centre: 'sun', path: 'orbit', model: 'juice', status: 'active',
     name: 'Jupiter Icy Moons Explorer', short: 'JUICE', aliases: ['juice', 'jupiter icy moons explorer', 'jupiter icy moon explorer', 'esa juice'],
     agency: 'ESA', launched: '2023-04-14', role: 'Jupiter moons explorer, on its way',
     blurb: 'Due at Jupiter in 2031 to study Europa, Callisto and above all Ganymede, where it is to become the first craft to orbit a moon of another planet.',
@@ -307,21 +307,21 @@ export const CRAFT = [
     wiki: 'OSIRIS-REx', dsn: ['ORX'],
   },
   {
-    id: 'hayabusa2', horizons: -37, centre: 'sun', path: 'orbit', model: 'samplereturn', status: 'active',
+    id: 'hayabusa2', horizons: -37, centre: 'sun', path: 'orbit', model: 'hayabusa2', status: 'active',
     name: 'Hayabusa2', short: 'Hayabusa2', aliases: ['hayabusa2', 'hayabusa 2', 'hayabusa', 'hyabusa', 'ryugu'],
     agency: 'JAXA', launched: '2014-12-03', role: 'Asteroid sample-return craft',
     blurb: 'Delivered pieces of the asteroid Ryugu to the Earth in 2020 and flew on; its extended mission is to reach a small, fast-spinning asteroid in 2031.',
     wiki: 'Hayabusa2', dsn: ['HYB2'],
   },
   {
-    id: 'hera', horizons: -91, centre: 'sun', path: 'orbit', model: 'samplereturn', status: 'active',
+    id: 'hera', horizons: -91, centre: 'sun', path: 'orbit', model: 'hera', status: 'active',
     name: 'Hera', short: 'Hera', aliases: ['hera', 'hera mission', 'hera spacecraft', 'didymos', 'dimorphos', 'dart follow-up'],
     agency: 'ESA', launched: '2024-10-07', role: 'Asteroid-deflection investigator',
     blurb: 'Sent to the double asteroid Didymos, which it was due to reach in late 2026, to measure the crater and the change of orbit left when NASA\'s DART deliberately hit its small moon in 2022.',
     wiki: 'Hera (space mission)', dsn: [],
   },
   {
-    id: 'mmx', horizons: -239, centre: 'sun', path: 'orbit', model: 'samplereturn', status: 'active',
+    id: 'mmx', horizons: -239, centre: 'sun', path: 'orbit', model: 'mmx', status: 'active',
     massKg: 4480,
     name: 'Martian Moons eXploration', short: 'MMX', aliases: ['mmx', 'martian moons exploration', 'martian moons explorer', 'phobos sample return', 'phobos mission'],
     agency: 'JAXA', launched: '2026-10-19', role: 'Phobos sample-return mission, on its way',
@@ -354,7 +354,7 @@ export const CRAFT = [
     wiki: 'STEREO', dsn: ['STA'],
   },
   {
-    id: 'biosentinel', horizons: -70007, centre: 'sun', path: 'orbit', model: 'probe', status: 'active',
+    id: 'biosentinel', horizons: -70007, centre: 'sun', path: 'orbit', model: 'cubesat', status: 'active',
     massKg: 14,
     name: 'BioSentinel', short: 'BioSentinel', aliases: ['biosentinel', 'bio sentinel', 'cubesat'],
     agency: 'NASA', launched: '2022-11-16', role: 'Deep-space radiation CubeSat',
@@ -402,7 +402,7 @@ export const CRAFT = [
   },
   // ── Retired, and still out there ──────────────────────────────────────────────────────
   {
-    id: 'gaia', horizons: -139479, centre: 'sun', path: 'orbit', model: 'euclid', status: 'silent',
+    id: 'gaia', horizons: -139479, centre: 'sun', path: 'orbit', model: 'gaia', status: 'silent',
     ended: '2025-03-27', massKg: 2029,
     name: 'Gaia', short: 'Gaia', aliases: ['gaia', 'gaia telescope', 'gaia spacecraft', 'gaia mission'],
     agency: 'ESA', launched: '2013-12-19', role: 'Star-mapping telescope (retired)',
@@ -410,7 +410,7 @@ export const CRAFT = [
     wiki: 'Gaia (spacecraft)', dsn: ['GAIA'],
   },
   {
-    id: 'kepler', horizons: -227, centre: 'sun', path: 'orbit', model: 'euclid', status: 'silent',
+    id: 'kepler', horizons: -227, centre: 'sun', path: 'orbit', model: 'kepler', status: 'silent',
     ended: '2018-11-15', massKg: 1052,
     name: 'Kepler space telescope', short: 'Kepler', aliases: ['kepler', 'kepler telescope', 'kepler space telescope', 'keplar'],
     agency: 'NASA', launched: '2009-03-07', role: 'Planet-hunting telescope (retired)',
@@ -418,7 +418,7 @@ export const CRAFT = [
     wiki: 'Kepler space telescope', dsn: ['KEPL'],
   },
   {
-    id: 'spitzer', horizons: -79, centre: 'sun', path: 'orbit', model: 'euclid', status: 'silent',
+    id: 'spitzer', horizons: -79, centre: 'sun', path: 'orbit', model: 'spitzer', status: 'silent',
     ended: '2020-01-30', massKg: 950,
     name: 'Spitzer Space Telescope', short: 'Spitzer', aliases: ['spitzer', 'spitzer telescope', 'spitzer space telescope', 'spitser'],
     agency: 'NASA', launched: '2003-08-25', role: 'Infrared telescope (retired)',
@@ -426,7 +426,7 @@ export const CRAFT = [
     wiki: 'Spitzer Space Telescope', dsn: ['STF'],
   },
   {
-    id: 'ulysses', horizons: -55, centre: 'sun', path: 'orbit', model: 'probe', status: 'silent',
+    id: 'ulysses', horizons: -55, centre: 'sun', path: 'orbit', model: 'ulysses', status: 'silent',
     ended: '2009-06-30', massKg: 370,
     name: 'Ulysses', short: 'Ulysses', aliases: ['ulysses', 'ulysses probe', 'ulyses'],
     agency: 'ESA / NASA', launched: '1990-10-06', role: 'Solar polar probe (retired)',
@@ -434,7 +434,7 @@ export const CRAFT = [
     wiki: 'Ulysses (spacecraft)', dsn: ['ULYS'],
   },
   {
-    id: 'dawn', horizons: -203, centre: 'sun', path: 'orbit', model: 'probe', status: 'silent',
+    id: 'dawn', horizons: -203, centre: 'sun', path: 'orbit', model: 'dawn', status: 'silent',
     arrived: '2015-03-06', ended: '2018-10-31', massKg: 1218,
     name: 'Dawn', short: 'Dawn', aliases: ['dawn', 'dawn spacecraft', 'dawn mission', 'ceres', 'vesta'],
     agency: 'NASA', launched: '2007-09-27', role: 'Asteroid-belt orbiter (retired)',

@@ -34,7 +34,7 @@ import { MAP_REST, PLACE_REST, PLACE_REST_PHONE, SpaceView, targetKey, type Pose
 import { wikiSummary } from '../data/wiki.ts';
 import { BODIES, BODY_LIST } from '../space/bodies.ts';
 import { craftPeriodMs, craftPosition, loadDeep } from '../space/deep.ts';
-import { watchDsn } from '../space/dsn.ts';
+import { DSN_NOW_URL, watchDsn } from '../space/dsn.ts';
 import { bodyAxes, bodyPosition, bodyRelative } from '../space/ephem.ts';
 import { IMAGERY } from '../space/imagery.ts';
 import { loadRovers, onRoversRefresh, roverPath } from '../space/rovers.ts';
@@ -1268,7 +1268,20 @@ export class Places {
         const names = new Set(craft.dsn.map((name) => name.toUpperCase()));
         const link = this.links.find((candidate) => names.has(candidate.craft.toUpperCase()) && (candidate.up || candidate.down));
         contact.className = `pc-contact ${link ? 'is-live' : ''}`;
-        contact.textContent = link ? `In contact now · ${link.site} ${link.dish} ${link.up && link.down ? 'sending and receiving' : link.down ? 'receiving' : 'sending'}` : '';
+        const said = link ? `In contact now · ${link.site} ${link.dish} ${link.up && link.down ? 'sending and receiving' : link.down ? 'receiving' : 'sending'}` : '';
+        // Rebuilt only when it changes (this runs twice a second), so the link stays clickable.
+        if (contact.dataset.said !== said) {
+          contact.dataset.said = said;
+          contact.replaceChildren();
+          if (link) {
+            const source = el('a', 'pc-source', 'NASA DSN Now ↗');
+            source.href = DSN_NOW_URL;
+            source.target = '_blank';
+            source.rel = 'noopener noreferrer';
+            source.title = 'Where this comes from: NASA’s live Deep Space Network page';
+            contact.append(`${said} · `, source);
+          }
+        }
       };
     }]);
 
@@ -1309,10 +1322,13 @@ export class Places {
       if (!site && !pass) rows.push(['Status', craft.status === 'silent' ? 'No longer answering' : 'Operational']);
       // A rover's odometry, from NASA's traverse maps (space/rovers.ts). The file may still be on
       // its way, so the row is filled when it arrives, and taken away if this rover has no path.
+      // Asked of the data, not of the model's name: a rover may have a model of its own.
       const driven = el('span');
-      if (motion.type === 'surface' && craft.model === 'rover') rows.push(['Driven so far', driven]);
+      const known = roverPath(craft.id);
+      if (known) driven.textContent = `${fmtKm(known.drivenKm, 1)} by sol ${fmtInt(known.sol)}`;
+      if (motion.type === 'surface' && !site) rows.push(['Driven so far', driven]);
       if (rows.length > 0) into.append(this.facts(rows));
-      if (driven.parentElement) {
+      if (driven.parentElement && !known) {
         void loadRovers().then(() => {
           const path = roverPath(craft.id);
           if (path) driven.textContent = `${fmtKm(path.drivenKm, 1)} by sol ${fmtInt(path.sol)}`;

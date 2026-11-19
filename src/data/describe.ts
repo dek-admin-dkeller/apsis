@@ -19,11 +19,21 @@ export type ModelKind =
   // (render/constellationModels.ts, render/vehicleModels.ts).
   | 'starlinkv2' | 'kuiper' | 'qianfan' | 'guowang' | 'iridium' | 'globalstar' | 'o3b' | 'galileo' | 'glonass' | 'goes'
   | 'iceye' | 'capella' | 'dove'
+  | 'gpsiii' | 'beidou' | 'lemur' | 'sdatranche' | 'strix' | 'qpssar' | 'umbra' | 'skysat' | 'nusat' | 'hawkeye' | 'orbcomm'
   | 'shenzhou' | 'starliner' | 'orion' | 'dreamchaser' | 'roadster'
   // Launch vehicles standing on their pad (render/rocketModels.ts): +Y is up the rocket's axis
   // and y = 0 is the bottom of its engine bells, so modelBase() stands one on the ground.
   | 'falcon9' | 'falconheavy' | 'starship' | 'electron' | 'longmarch' | 'soyuzrocket'
   | 'atlasv' | 'vulcan' | 'ariane6' | 'newglenn' | 'launcher'
+  // Particular missions beyond Earth orbit (render/missionModels.ts, planetMissionModels.ts) and
+  // what stands at the historic landing sites (render/historicModels.ts): named in deep.json and
+  // space/sites.ts as plain strings, like the other deep-space kinds.
+  | 'roman' | 'gaia' | 'kepler' | 'spitzer' | 'juice' | 'hayabusa2' | 'hera' | 'mmx'
+  | 'dscovr' | 'wind' | 'imap' | 'ulysses' | 'dawn'
+  | 'chandrayaan2' | 'danuri' | 'odyssey' | 'marsexpress' | 'tgo' | 'hope'
+  | 'insight' | 'blueghost' | 'novac' | 'vikram' | 'slim' | 'zhurong'
+  | 'apollolm' | 'apollolrv' | 'surveyor' | 'luna' | 'lunokhod' | 'change' | 'yutu'
+  | 'viking' | 'pathfinder' | 'mer' | 'phoenix' | 'venera' | 'huygens'
   // Beyond Earth orbit (render/deepModels.ts). The deep-space data file names these as plain
   // strings, so the spelling here is a contract: check with isModelKind before trusting one.
   | 'webb' | 'euclid' | 'tess' | 'chandra' | 'xmm' | 'soho' | 'l1monitor' | 'stereo'
@@ -139,6 +149,17 @@ const SHAPES: [RegExp, ModelKind][] = [
   [/^ICEYE/, 'iceye'],
   [/^CAPELLA/, 'capella'],
   [/^(FLOCK|DOVE|SUPERDOVE)/, 'dove'], // Planet's Doves (must come before the CubeSat line, which used to claim them)
+  [/^NAVSTAR (7[7-9]|[89]\d|1\d\d)\b/, 'gpsiii'], // GPS III and IIIF (NAVSTAR 77, launched 2018, onwards); older GPS keep the gnss shape
+  [/^BEIDOU/, 'beidou'],
+  [/^LEMUR/, 'lemur'],
+  [/^(PRAETORIAN|SDA[_-])/, 'sdatranche'],
+  [/^STRIX/, 'strix'],
+  [/^QPS-SAR/, 'qpssar'],
+  [/^UMBRA/, 'umbra'],
+  [/^SKYSAT/, 'skysat'],
+  [/^NUSAT/, 'nusat'],
+  [/^HAWK/, 'hawkeye'],
+  [/^ORBCOMM/, 'orbcomm'],
   [/^IRIDIUM 1\d\d$/, 'iridium'], // Iridium NEXT (100–180); the first generation, numbered below 100, keeps the comsat shape
   [/^O3B/, 'o3b'],
   [/GALILEO/, 'galileo'],
@@ -217,6 +238,17 @@ export const KIND_LABEL: Record<ModelKind, string> = {
   iceye: 'ICEYE radar satellite',
   capella: 'Capella radar satellite',
   dove: 'Planet Dove',
+  gpsiii: 'GPS III satellite',
+  beidou: 'BeiDou navigation satellite',
+  lemur: 'Spire Lemur',
+  sdatranche: 'SDA Tranche satellite',
+  strix: 'StriX radar satellite',
+  qpssar: 'QPS-SAR radar satellite',
+  umbra: 'Umbra radar satellite',
+  skysat: 'SkySat',
+  nusat: 'Satellogic NewSat',
+  hawkeye: 'HawkEye 360 satellite',
+  orbcomm: 'ORBCOMM satellite',
   o3b: 'O3b medium-orbit satellite',
   galileo: 'Galileo navigation satellite',
   glonass: 'GLONASS navigation satellite',
@@ -226,6 +258,44 @@ export const KIND_LABEL: Record<ModelKind, string> = {
   orion: 'Orion spacecraft',
   dreamchaser: 'Dream Chaser spaceplane',
   roadster: 'Tesla Roadster',
+  roman: 'Nancy Grace Roman Space Telescope',
+  gaia: 'Gaia',
+  kepler: 'Kepler',
+  spitzer: 'Spitzer Space Telescope',
+  juice: 'JUICE',
+  hayabusa2: 'Hayabusa2',
+  hera: 'Hera',
+  mmx: 'MMX',
+  dscovr: 'DSCOVR',
+  wind: 'Wind',
+  imap: 'IMAP',
+  ulysses: 'Ulysses',
+  dawn: 'Dawn',
+  chandrayaan2: 'Chandrayaan-2 orbiter',
+  danuri: 'Danuri',
+  odyssey: '2001 Mars Odyssey',
+  marsexpress: 'Mars Express',
+  tgo: 'ExoMars Trace Gas Orbiter',
+  hope: 'Hope',
+  insight: 'InSight',
+  blueghost: 'Blue Ghost',
+  novac: 'Nova-C lander',
+  vikram: 'Vikram',
+  slim: 'SLIM',
+  zhurong: 'Zhurong',
+  apollolm: 'Apollo lunar module',
+  apollolrv: 'Apollo lunar module and rover',
+  surveyor: 'Surveyor',
+  luna: 'Luna sample-return lander',
+  lunokhod: 'Lunokhod',
+  change: 'Chang’e lander',
+  yutu: 'Yutu rover',
+  viking: 'Viking lander',
+  pathfinder: 'Mars Pathfinder',
+  mer: 'Mars Exploration Rover',
+  phoenix: 'Phoenix lander',
+  venera: 'Venera lander',
+  huygens: 'Huygens',
   falcon9: 'Falcon 9',
   falconheavy: 'Falcon Heavy',
   starship: 'Starship',

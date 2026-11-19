@@ -17,7 +17,10 @@
  * This file holds the builders for the general shapes in Earth orbit; observatoryModels.ts,
  * deepModels.ts and planetaryModels.ts hold the craft that fly beyond it, constellationModels.ts
  * particular satellite families (Starlink V2 Mini, Kuiper, Galileo …), vehicleModels.ts the
- * newer crew and cargo ships (and the Tesla Roadster), rocketModels.ts the launch vehicles.
+ * newer crew and cargo ships (and the Tesla Roadster), rocketModels.ts the launch vehicles,
+ * fleetModels.ts smaller fleets (GPS III, BeiDou, the radar start-ups …), missionModels.ts and
+ * planetMissionModels.ts particular missions beyond Earth orbit, historicModels.ts what stands
+ * at the historic landing sites.
  *
  *   buildModel      a model of one kind (built once, then cloned); modelBase: its lowest point
  *   modelThumbnail  a still picture of a kind, for lists
@@ -39,6 +42,10 @@ import { PLANETARY_BUILDERS } from './planetaryModels.ts';
 import { CONSTELLATION_BUILDERS } from './constellationModels.ts';
 import { VEHICLE_BUILDERS } from './vehicleModels.ts';
 import { ROCKET_BUILDERS } from './rocketModels.ts';
+import { MISSION_BUILDERS } from './missionModels.ts';
+import { PLANET_MISSION_BUILDERS } from './planetMissionModels.ts';
+import { HISTORIC_BUILDERS } from './historicModels.ts';
+import { FLEET_BUILDERS } from './fleetModels.ts';
 
 // ---------------------------------------------------------------------------------------
 // Crew and cargo vehicles (also reused, scaled down, as the craft docked to the stations).
@@ -957,6 +964,10 @@ const BUILDERS: Record<ModelKind, Builder> = {
   ...CONSTELLATION_BUILDERS,
   ...VEHICLE_BUILDERS,
   ...ROCKET_BUILDERS,
+  ...MISSION_BUILDERS,
+  ...PLANET_MISSION_BUILDERS,
+  ...HISTORIC_BUILDERS,
+  ...FLEET_BUILDERS,
 };
 
 /** Weld every part that shares a material into a single mesh (far fewer draw calls). */

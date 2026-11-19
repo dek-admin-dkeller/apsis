@@ -69,7 +69,7 @@ export const FEATURES: FeatureGroup[] = [
     summary: 'Pick anything and stay with it: where it is, what it is, and what it can see.',
     items: [
       { name: 'Inspector', text: 'Live height, speed and position, the path over the ground, the shape of the orbit, its record (owner, launch date, size) and a link to its Wikipedia article.' },
-      { name: '3D models and photos', text: 'Seventy-eight kinds of spacecraft and rockets modelled in 3D, from a CubeSat and the Starlink V2 Mini to the Webb telescope, Starship and the Tesla Roadster, beside a real photo where one exists.', fresh: true },
+      { name: '3D models and photos', text: '127 kinds of spacecraft, landers and rockets modelled in 3D: every spacecraft beyond Earth orbit and nearly every landing site has its own, from Gaia and JUICE to Viking, Lunokhod and Apollo’s lunar module, and the big satellite fleets too. Beside a real photo where one exists.', fresh: true },
       { name: 'Ride along', text: 'Sit on a satellite and look out from it.' },
       { name: 'Passes over you', text: 'When it will next cross your sky, and the path it will take across it.' },
       { name: 'Watchlist and contact timeline', text: 'Star the objects you care about and see when ground stations can reach each of them.' },
@@ -155,6 +155,17 @@ export interface Update {
 }
 
 export const WHATS_NEW: Update[] = [
+  {
+    date: '2026-11-19',
+    title: '49 more models, one for nearly everything out there',
+    items: [
+      'Every spacecraft beyond Earth orbit now has its own model or the one drawn from it: Gaia, Roman, Kepler, Spitzer, JUICE, Hayabusa2, Hera, the Mars orbiters, InSight, Zhurong, the Moon landers and more.',
+      'The historic landing sites show what really stands there: Apollo’s lunar module (with the rover on Apollo 15–17), Surveyor, Lunokhod, Viking, Pathfinder and Sojourner, Spirit and Opportunity, Venera, Huygens on Titan.',
+      'More satellite fleets drawn as themselves: GPS III, BeiDou, Spire’s Lemur, the Space Development Agency’s satellites, HawkEye 360, SkySat, Satellogic, Orbcomm, and the Umbra, Strix and QPS-SAR radar satellites. 127 kinds in all.',
+      'The launch list shows each rocket, and the spacecraft catalogue can preview a rocket’s next launch.',
+      'Wherever a spacecraft is “in contact”, a link goes to the source: NASA’s live Deep Space Network page.',
+    ],
+  },
   {
     date: '2026-11-19',
     title: 'Easier on a phone',

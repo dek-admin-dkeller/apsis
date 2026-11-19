@@ -13,7 +13,7 @@
  */
 
 import './beyond.css';
-import { dsnStatus, watchDsn } from '../space/dsn.ts';
+import { DSN_NOW_URL, dsnStatus, watchDsn } from '../space/dsn.ts';
 import type { DsnLink } from '../space/types.ts';
 import type { App } from '../ui/app.ts';
 import { $, fmtCompact, fmtKm, lengthUnit, lengthValue, sectionNote } from '../ui/dom.ts';
@@ -44,7 +44,7 @@ export function installDsn(app: App): void {
   const box = el('div');
   const credit = el('p', 'note bx-credit');
   const link = el('a', '', 'NASA Deep Space Network Now');
-  link.href = 'https://eyes.nasa.gov/dsn/dsn.html';
+  link.href = DSN_NOW_URL;
   link.target = '_blank';
   link.rel = 'noopener noreferrer';
   credit.append('Live from ', link, '.');

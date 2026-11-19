@@ -271,6 +271,19 @@ export function installAscent(app: App): void {
     flight.real.append(line, show);
   }
 
+  // The catalogue of models: a rocket kind with a launch in the list can be seen climbing.
+  const upcomingOf = (kind: string): Launch[] => launches
+    .filter((launch) => rocketKind(`${launch.rocket} ${launch.family}`) === kind && planAscent(launch) !== null && launch.netMs > Date.now() - 3 * 3600000)
+    .sort((a, b) => a.netMs - b.netMs);
+  app.addModelUser({
+    label: 'Preview its next launch',
+    count: (kind) => upcomingOf(kind).length,
+    show: (kind) => {
+      const next = upcomingOf(kind)[0];
+      return next ? watchLaunch(next) : false;
+    },
+  });
+
   // Share links: "#launch=<id>&t=…" opens the climb being followed, at that moment.
   app.addShareLink({
     add: (q) => {

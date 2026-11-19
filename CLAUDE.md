@@ -156,7 +156,7 @@ src/render/                 space/spaceView + space/bodyMesh (the scenes away fr
                             scene (renderer, bloom, quality presets, the dissolve between scenes), globe (Earth shader), tiles (close-up ground:
                             NASA GIBS map tiles streamed in below ~6,000 km), geoOverlay (borders, grid, terminator), sky (Milky Way, stars, constellations, planets, Sun, Moon), aurora, satellites
                             (the point cloud, colour modes, highlighting, picking), satModels + modelParts + observatoryModels +
-                            deepModels + planetaryModels + constellationModels + vehicleModels + rocketModels (78 procedural models: see "3D models"; satModels also holds the
+                            deepModels + planetaryModels + constellationModels + vehicleModels + rocketModels + missionModels + planetMissionModels + historicModels + fleetModels (127 procedural models: see "3D models"; satModels also holds the
                             previews, thumbnails), prewarm (models built in idle slices from the home page), cameraRig (fly-to, object focus, Earth drift), firstPerson (ride-along,
                             sky view, phone motion), orbitLine, groundTrack, encounterViz (close-approach drawing),
                             conjunctionMarkers, gridViz, constellation (orbits + coverage map), siteMarker, padMarkers
@@ -708,8 +708,19 @@ it is used. So:
   heading's count is the real number (`#ld-kind-count`).
 - **Deploys re-apply the craft facts** (`fetch-deep.mjs --facts`) to the kept deep.json — see
   "Deploying" — after the Roadster stayed a "probe" on the live site.
-- **Models**: 78 kinds; the latest are qianfan, guowang, dove (Planet), iceye, globalstar,
+- **Models**: 127 kinds (round 3, 49 more: a model for nearly every deep-space craft in `missionModels.ts` /
+  `planetMissionModels.ts`, one for nearly every landing site in `historicModels.ts` — `Site.model` — and
+  the big Earth fleets in `fleetModels.ts`; `deep-craft.mjs` names them, `check-deep` MODELS lists them).
+  Earlier: qianfan, guowang, dove (Planet), iceye, globalstar,
   capella, and a rebuilt `roadster` (lofted body at true proportions, Starman at the wheel).
+- **Every model is meant to be used** (the owner's rule): a craft or landing site that exists gets its
+  own kind or the one drawn from it; models of things not in space (rockets between launches,
+  Cygnus / Starliner / Orion / Dream Chaser between flights, the generic station module) are fine.
+  Rockets are shown in the launch list (`launch-rocket`, drawn in idle moments) and the catalogue's
+  button previews a rocket's next launch (`App.addModelUser`). "Driven so far" asks the rover data,
+  not the model's name.
+- **"In contact" links to its source**, NASA DSN Now (`DSN_NOW_URL` in `space/dsn.ts`): on a craft's
+  card and in the bell's heading.
 - **Phones** (`ui/worldStrip.ts` + `worldStrip.css`): away from the Earth a strip of worlds above
   the tab bar (the owner's choice for phones only; on a computer the picture stays the menu):
   chips made from each world's `_s` map, the world you are at ringed amber and slid to the middle,
@@ -971,7 +982,7 @@ addresses, never a third party) whether a file has been published again, and tak
 
 ## 3D models (`render/satModels.ts` and the files beside it)
 
-- 78 kinds (`ModelKind` in `data/describe.ts`), each a builder, built once, merged by
+- 127 kinds (`ModelKind` in `data/describe.ts`), each a builder, built once, merged by
   material, normalised and cloned by `buildModel(kind)`. The files:
   - `modelParts.ts`: the kit, and nothing about any one spacecraft. `makeMaterials()` (painted
     canvas textures, normal maps computed from painted height fields, a small painted

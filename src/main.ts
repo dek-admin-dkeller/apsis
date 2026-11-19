@@ -1610,10 +1610,20 @@ function ofKind(kind: ModelKind): Satellite[] {
   }
   return byKind.lists.get(kind) ?? [];
 }
+// Features that show a model's kind in use (App.addModelUser): the rockets of the launch list.
+const modelUsers: import('./ui/app.ts').ModelUser[] = [];
 const gallery = new Gallery({
-  // A kind is either in the Earth catalogue or one of the craft beyond Earth orbit (ui/places.ts).
-  count: (kind) => ofKind(kind).length || places.countOf(kind),
+  // A kind is in the Earth catalogue, one of the craft beyond Earth orbit (ui/places.ts), or
+  // shown by a feature (a rocket of a listed launch: its climb).
+  count: (kind) => ofKind(kind).length || places.countOf(kind) || modelUsers.reduce((sum, user) => sum + user.count(kind), 0),
+  label: (kind) => (ofKind(kind).length || places.countOf(kind) ? 'Show one in orbit' : modelUsers.find((user) => user.count(kind) > 0)?.label ?? 'Show one in orbit'),
   show: (kind) => {
+    const user = !ofKind(kind).length && !places.countOf(kind) ? modelUsers.find((candidate) => candidate.count(kind) > 0) : undefined;
+    if (user) {
+      if (landing.showing) landing.enter();
+      user.show(kind);
+      return;
+    }
     const list = ofKind(kind);
     if (list.length === 0 && places.countOf(kind) > 0) {
       if (landing.showing) landing.enter();
@@ -2333,6 +2343,7 @@ const app: App = {
   showFlyby: (name) => places.showFlyby(name),
   showDeepCraft: (code) => places.showByDsn(code),
   goWorld: (body) => places.goBody(body),
+  addModelUser: (user) => void modelUsers.push(user),
   addShareLink: (link) => {
     shareLinks.push(link);
     if (pendingLink && link.apply(pendingLink)) pendingLink = null;

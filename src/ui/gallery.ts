@@ -28,6 +28,8 @@ export interface GalleryHost {
   count(kind: ModelKind): number;
   /** Go and show one of them. The catalogue has already closed itself. */
   show(kind: ModelKind): void;
+  /** What the button says for this kind ("Show one in orbit" when not given): a rocket's is "Preview its next launch". */
+  label?(kind: ModelKind): string;
 }
 
 export class Gallery {
@@ -207,7 +209,8 @@ export class Gallery {
     this.fact.textContent = KIND_FACT[kind];
     const inOrbit = this.host.count(kind);
     this.orbit.classList.toggle('is-hidden', inOrbit === 0);
-    this.orbit.title = inOrbit === 1 ? 'There is one in the catalogue' : `${inOrbit.toLocaleString('en-US')} in the catalogue`;
+    this.orbit.textContent = this.host.label?.(kind) ?? 'Show one in orbit';
+    this.orbit.title = inOrbit === 1 ? 'There is one to see' : `${inOrbit.toLocaleString('en-US')} to see`;
     try {
       this.preview ??= new ModelPreview(this.stage, true);
       this.preview.show(kind);

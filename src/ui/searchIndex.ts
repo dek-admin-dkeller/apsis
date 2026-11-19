@@ -70,6 +70,8 @@ const KIND_TOPIC: Partial<Record<ModelKind, string>> = {
   // Families that took over part of a general kind keep its topic, so a type is never split in
   // two ("radar" still finds ICEYE and Capella with the rest) …
   globalstar: 'Communications satellites', iceye: 'Radar-imaging satellites', capella: 'Radar-imaging satellites', dove: 'CubeSats',
+  gpsiii: 'Navigation satellites', beidou: 'Navigation satellites', lemur: 'CubeSats', sdatranche: 'Communications satellites', strix: 'Radar-imaging satellites', qpssar: 'Radar-imaging satellites',
+  umbra: 'Radar-imaging satellites', skysat: 'Earth-imaging satellites', nusat: 'Earth-imaging satellites', hawkeye: 'CubeSats', orbcomm: 'Communications satellites',
   // … except the two Chinese constellations, which people ask for by name (their purpose,
   // "Broadband internet constellation", still files them with the other broadband fleets).
   qianfan: 'Qianfan satellites', guowang: 'Guowang satellites',

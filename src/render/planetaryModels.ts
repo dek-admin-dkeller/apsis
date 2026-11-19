@@ -19,7 +19,7 @@ import {
 } from './modelParts.ts';
 
 /** A rover wheel on an axle along Z: a wide thin-walled drum with cleats, spokes to a small hub. */
-function wheel(g: THREE.Group, m: Materials, x: number, y: number, z: number, r: number, w: number): void {
+export function wheel(g: THREE.Group, m: Materials, x: number, y: number, z: number, r: number, w: number): void {
   cyl(g, m.dullMetal, r, r, w, x, y, z, 'z', true, 20);
   cyl(g, m.baffle, r * 0.94, r * 0.94, w, x, y, z, 'z', true, 20); // its dark inside
   for (const side of [-1, 1]) hoop(g, m.metal, r, r * 0.04, x, y, z + (side * w) / 2, 'z', 20);

@@ -76,6 +76,13 @@ export interface ShareLink {
   apply(q: URLSearchParams): boolean;
 }
 
+export interface ModelUser {
+  count(kind: string): number;
+  show(kind: string): boolean;
+  /** The catalogue's button for such a kind: "Preview its next launch". */
+  label: string;
+}
+
 export interface App {
   // ---- what is loaded, selected and open -------------------------------------------------
   /** The catalogue in use (null only for the first moments after start-up). */
@@ -126,6 +133,11 @@ export interface App {
    * and offered to it when it registers.
    */
   addShareLink(link: ShareLink): void;
+  /**
+   * A feature that can show a model's kind in use (the launch climbs show rockets): the
+   * catalogue of models offers its button for a kind when `count` says there is one to show.
+   */
+  addModelUser(user: ModelUser): void;
   /** Go to a world (its place; the Earth is the tracker), as a click on it would. */
   goWorld(body: BodyId): void;
   /** Back to the Earth's tracker (a journey, if the visitor is elsewhere); resolves once there. */

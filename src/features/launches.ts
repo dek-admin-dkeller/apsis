@@ -20,6 +20,8 @@ import './launches.css';
 import { loadLaunches, type Launch, type LaunchList, type LaunchProblem } from '../data/launches.ts';
 import { PadMarkers } from '../render/padMarkers.ts';
 import { canWatch, watchLaunch } from './ascent.ts';
+import { rocketKind, type ModelKind } from '../data/describe.ts';
+import { modelThumbnail } from '../render/satModels.ts';
 import type { App } from '../ui/app.ts';
 import { $ } from '../ui/dom.ts';
 import { clockStamp, duration } from '../ui/inspector.ts';
@@ -95,6 +97,27 @@ export function installLaunches(app: App): void {
 
   const pickedPad = (): number => rows.find((row) => row.launch.id === pickedId)?.pad ?? -1;
 
+  /**
+   * Each row's rocket, drawn with the same models as the launch climbs (render/rocketModels.ts):
+   * one picture per idle moment, and each kind only once (modelThumbnail keeps them), so opening
+   * the list never stalls a frame.
+   */
+  function drawRockets(): void {
+    const waiting = [...listBox.querySelectorAll<HTMLImageElement>('img.launch-rocket:not([src])')];
+    const next = (): void => {
+      const image = waiting.shift();
+      if (!image) return;
+      try {
+        const url = modelThumbnail(image.dataset.kind as ModelKind);
+        if (url) image.src = url;
+      } catch { /* a model that cannot be drawn: the row simply has no picture */ }
+      if (typeof requestIdleCallback === 'function') requestIdleCallback(next, { timeout: 800 });
+      else setTimeout(next, 60);
+    };
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(next, { timeout: 800 });
+    else setTimeout(next, 60);
+  }
+
   function renderRows(): void {
     const now = Date.now();
     // A saved list can be old: leave out what happened more than a day ago.
@@ -121,6 +144,11 @@ export function installLaunches(app: App): void {
       const when = el('span', 'launch-when', whenText(launch));
       const count = el('span', 'launch-count', countdownText(launch, now));
       pick.append(el('span', 'launch-name', launch.mission), status, who, when, count);
+      // The rocket itself, as a small picture (drawn in an idle moment: see drawRockets).
+      const thumb = el('img', 'launch-rocket') as HTMLImageElement;
+      thumb.alt = '';
+      thumb.dataset.kind = rocketKind(`${launch.rocket} ${launch.family}`);
+      pick.prepend(thumb);
       pick.title = [launch.mission, launch.pad && launch.place ? `${launch.pad}, ${launch.place}` : launch.pad || launch.place, pad >= 0 ? 'Click to fly to the pad.' : '']
         .filter(Boolean).join('. ').replace(/\.\./g, '.');
       pick.addEventListener('click', () => {
@@ -151,6 +179,7 @@ export function installLaunches(app: App): void {
       return { launch, item, when, count, pad };
     });
     listBox.replaceChildren(...rows.map((row) => row.item));
+    drawRockets();
 
     if (pads.length > 0) markers ??= new PadMarkers(app.earth);
     markers?.set(pads);

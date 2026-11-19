@@ -47,6 +47,9 @@ const NOT_CRAFT = new Set(['DSN', 'DSS', 'TEST', 'CASS', 'GBRA', 'VLBI', 'RFC', 
 const SITES: Record<string, DsnLink['site']> = { gdscc: 'Goldstone', mdscc: 'Madrid', cdscc: 'Canberra' };
 
 /** A readable name for one of the feed's spacecraft codes ('VGR1' → 'Voyager 1'); the code itself if it is not known. */
+/** NASA's public page of the same live feed: where every "in contact" in the app comes from (linked wherever it is shown). */
+export const DSN_NOW_URL = 'https://eyes.nasa.gov/dsn/dsn.html';
+
 export const dsnName = (code: string): string => NAMES[code.toUpperCase()] ?? code.toUpperCase();
 /** Is this one of the codes the table above has a name for? (The check uses it on every craft in deep.json.) */
 export const dsnKnown = (code: string): boolean => code.toUpperCase() in NAMES;

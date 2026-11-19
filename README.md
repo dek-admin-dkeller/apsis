@@ -286,6 +286,9 @@ src/
     planetaryModels.ts   a lunar orbiter, a Mars orbiter, a rover, a lander, and an asteroid
     constellationModels.ts  Starlink V2 Mini, Amazon Kuiper, Iridium NEXT, O3b, Galileo, GLONASS, GOES-R
     vehicleModels.ts     Shenzhou, Starliner, Orion, Dream Chaser, and the Tesla Roadster with Starman
+    missionModels.ts, planetMissionModels.ts  a model for nearly every craft beyond Earth orbit (Gaia, JUICE, the Mars orbiters, the landers …)
+    historicModels.ts    the landing sites: Apollo LM (and LRV), Surveyor, Luna, Lunokhod, Yutu, Viking, Pathfinder, MER, Phoenix, Venera, Huygens
+    fleetModels.ts       GPS III, BeiDou, Lemur, SDA tranche, HawkEye 360, SkySat, NuSat, Orbcomm, Umbra, Strix, QPS-SAR
     rocketModels.ts      Falcon 9 and Heavy, Starship, Electron, Long March, Soyuz, Atlas V, Vulcan, Ariane 6, New Glenn, a generic launcher
     prewarm.ts           builds the models in idle moments when there is no loading screen to work behind
     cameraRig.ts         fly-to, object-centred focus camera, view presets

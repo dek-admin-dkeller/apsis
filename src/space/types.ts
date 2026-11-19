@@ -157,7 +157,7 @@ export interface Site {
   agency: string;
   /** People walked there; a lander that stayed put; one that drove; one that only fell or struck. */
   kind: 'crewed' | 'lander' | 'rover' | 'probe';
-  /** Which 3D model stands there: 'lander' or 'rover'. */
+  /** Which 3D model stands there (a ModelKind: 'apollolm', 'viking', 'mer' …; 'lander' or 'rover' when there is no model of its own). */
   model: string;
   /** One or two sentences for the information card. */
   blurb: string;
