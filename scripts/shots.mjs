@@ -77,6 +77,9 @@ const SHOTS = [
     // Left alone, the view drifts slowly round the planet; held still, it stays over the chosen place.
     setup: `const drift = document.querySelector('input[data-setting=earthDrift]'); if (drift?.checked) drift.click();`,
   },
+  // Beyond Earth orbit: a share link opens straight at a place (ui/places.ts), so no clicking is needed.
+  { name: 'system', hash: '#place=system', size: [1440, 900, 1.5], settle: 9000 },
+  { name: 'world', hash: '#place=mars', size: [1440, 900, 1.5], settle: 12000 },
   { name: 'phone', hash: '#sat=20580', size: [390, 844, 3, true], settle: 11000 },
 ];
 

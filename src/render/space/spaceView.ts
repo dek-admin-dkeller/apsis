@@ -1121,6 +1121,7 @@ export class SpaceView {
       if (visible && disc > window.innerHeight * 0.3) visible = false;
       if (visible && item.beside > 0 && disc < 5 && item !== focusItem) visible = false;
       if (visible && item.quiet && item !== focusItem && distance > 60) visible = false;
+      if (item === focusItem && this.modelHolder.visible) visible = false; // its model is on screen and its card names it
       const drop = disc + 12;
       const width = tag.textContent!.length * 6.5 + 16;
       if (visible && item !== focusItem && taken.some((box) => Math.abs(box.x - x) < (box.w + width) / 2 && Math.abs(box.y - (y + drop)) < 18)) visible = false;
