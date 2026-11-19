@@ -295,19 +295,31 @@ check('the reference positions are from the same download as deep.json', referen
 }
 
 {
-  // The moons again, now with the downloaded orbits, over the ten days after the download.
+  // The moons again, on the download day and the ten days after it: a second, independent set
+  // of Horizons positions. First as the app places them (the table, since the download falls
+  // inside the years it was fitted to), then with the downloaded ellipses forced on, which is
+  // the path a download made after 2056 would take.
+  const run = () => {
+    const lines = [];
+    let worst = { v: 0 };
+    for (const [id, ref] of Object.entries(reference.moons)) {
+      let mine = 0;
+      ref.tMs.forEach((t, i) => { mine = Math.max(mine, angle(bodyRelative(id, ref.centre, t), ref.xyz[i])); });
+      lines.push(`${id} ${mine.toFixed(2)}°`);
+      if (mine > worst.v) worst = { v: mine, id };
+    }
+    return { lines, worst };
+  };
   setMoonElements(deep.moons);
-  const lines = [];
-  let worst = { v: 0 };
-  for (const [id, ref] of Object.entries(reference.moons)) {
-    let mine = 0;
-    ref.tMs.forEach((t, i) => { mine = Math.max(mine, angle(bodyRelative(id, ref.centre, t), ref.xyz[i])); });
-    lines.push(`${id} ${mine.toFixed(3)}°`);
-    if (mine > worst.v) worst = { v: mine, id };
-  }
+  const table = run();
+  setMoonElements(deep.moons, true);
+  const forced = run();
   setMoonElements(null);
-  check('moons with the downloaded orbits, download day to ten days later: within 2°', worst.v < 2 && lines.length >= 10, `worst ${worst.v.toFixed(3)}° (${worst.id})`);
-  console.log(`     ${lines.join(', ')}`);
+  const everyMoon = BODY_LIST.filter((body) => body.kind === 'moon').every((body) => deep.moons[body.id] && reference.moons[body.id]);
+  check(`${table.lines.length} moons on the download day and the ten days after: within 2°`, table.worst.v < 2 && everyMoon, `worst ${table.worst.v.toFixed(3)}° (${table.worst.id})`);
+  console.log(`     ${table.lines.join(', ')}`);
+  check('the same with the downloaded ellipses forced on (the path taken outside 1996–2056): within 2°', forced.worst.v < 2, `worst ${forced.worst.v.toFixed(3)}° (${forced.worst.id})`);
+  console.log(`     ${forced.lines.join(', ')}`);
 }
 
 {

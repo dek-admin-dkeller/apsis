@@ -15,9 +15,8 @@
  *   the Moon  a trigonometric series (the largest terms of Meeus's abridged ELP-2000/82): the
  *             Sun disturbs the Moon's orbit far too much for an ellipse to do.
  *   moons     an ellipse about the planet that turns and swings at rates fitted to sixty years
- *             of JPL positions (moonOrbits.ts). The shape and the phase are replaced by fresh
- *             osculating elements from deep.json when setMoonElements() is called, so near
- *             the download date they are almost exact.
+ *             of JPL positions (moonOrbits.ts). Outside those years the ellipses downloaded
+ *             with deep.json take over as the starting point (setMoonElements).
  *
  * Orientation follows the IAU rotation models: the pole's right ascension and declination and
  * the angle W of the prime meridian, W = W0 + rate × days.
@@ -362,18 +361,23 @@ const moonOrbits: Partial<Record<BodyId, LiveOrbit>> = {};
 for (const key of Object.keys(MOON_ORBITS) as BodyId[]) moonOrbits[key] = { ...MOON_ORBITS[key]!, swing0: 0 };
 
 /**
- * Use the osculating elements downloaded with deep.json (each moon about its planet, at the
- * moment of the download) for the shape, the plane and the phase of every moon's orbit, keeping
- * the built-in long-term rates and swings. Near the download date positions are then right to
- * a small fraction of a degree; years away they are as good as the built-in orbits. The Earth's
- * Moon is left to its series, which beats any single ellipse after a few days.
+ * Offer the osculating elements downloaded with deep.json (each moon's ellipse at the moment
+ * of the download). They are used ONLY for a download made outside the years a moon's table
+ * orbit was fitted to (1996–2056): there the table can only be extrapolated, and a fresh
+ * ellipse carried forward with the table's rates is the better start. Inside those years the
+ * table wins: it was averaged over decades, whereas one moment's ellipse carries that moment's
+ * passing disturbances with it (checked: after ten days a downloaded Mimas is half a degree
+ * out and Pluto's small moons two degrees, the table a tenth of that). `always` is for the
+ * check, which exercises the download path whatever the date. The Earth's Moon is left to its
+ * series.
  */
-export function setMoonElements(moons: Partial<Record<BodyId, Motion>> | null | undefined): void {
+export function setMoonElements(moons: Partial<Record<BodyId, Motion>> | null | undefined, always = false): void {
   for (const key of Object.keys(MOON_ORBITS) as BodyId[]) {
     const base = MOON_ORBITS[key]!;
     const el = moons?.[key];
     const usable = el && el.type === 'elements' && el.e < 1 && el.aKm > 0
       && [el.epochMs, el.aKm, el.e, el.incl, el.node, el.peri, el.m0].every(Number.isFinite)
+      && (always || el.epochMs < base.fitted[0] || el.epochMs > base.fitted[1])
       // A wrong body's elements must not move a moon: the size has to be the one expected.
       && Math.abs(el.aKm / base.aKm - 1) < 0.05;
     const orbit: MoonOrbit = usable ? { ...base, epochMs: el.epochMs, aKm: el.aKm, e: el.e, incl: el.incl, node: el.node, peri: el.peri, m0: el.m0 } : base;

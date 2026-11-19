@@ -195,7 +195,11 @@ export interface Fireball {
 export interface DeepData {
   fetchedAt: string; // ISO time of the download
   craft: Craft[];
-  /** Osculating elements of each moon about its planet at `fetchedAt` (Motion of type 'elements'). */
+  /**
+   * Osculating elements of each moon about its planet (Motion of type 'elements'), each at its
+   * own `epochMs`. For ephem.ts's setMoonElements only: Pluto's four small moons are given about
+   * the centre of mass of Pluto and Charon, which is what they really circle (see moonOrbits.ts).
+   */
   moons: Partial<Record<BodyId, Motion>>;
   flybys: Flyby[];
   fireballs: Fireball[];

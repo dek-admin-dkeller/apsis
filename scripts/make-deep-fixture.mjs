@@ -360,7 +360,7 @@ async function fitMoon(id) {
   const wobbleText = parts.slice(1).flatMap((part) => [part.rate.toPrecision(7), part.e.toPrecision(5), wrap(part.peri + lead).toFixed(5)]).join(', ');
   const years = (w) => (TAU / Math.abs(w) / 365.25 < 0.1 ? `${(TAU / Math.abs(w)).toFixed(1)} d` : `${(TAU / Math.abs(w) / 365.25).toFixed(1)} yr`);
   console.log(`  ${id}: ${rows.length} samples ${new Date(rows[0].tMs).getUTCFullYear()}–${new Date(rows.at(-1).tMs).getUTCFullYear()}; rms ${Math.sqrt(sumSq / rows.length).toFixed(3)}° worst ${worst.toFixed(3)}°; e ${parts.map((part) => part.e.toFixed(5)).join(' + ') || '0'}; tilt ${(tilt / DEG).toFixed(2)}° to its axis, node ${(nodeRate / DEG * 365.25).toFixed(3)}°/yr${swings.length ? `; swings ${swings.map((w, k) => `${(Math.hypot(fit.coef[2 + 2 * k], fit.coef[3 + 2 * k]) / DEG).toFixed(2)}° every ${years(w)}`).join(', ')}` : ''}`);
-  return `  ${id}: { epochMs: ${FIT_EPOCH}, aKm: ${aKm.toFixed(1)}, e: ${first.e.toFixed(6)}, incl: ${incl.toFixed(7)}, node: ${wrap(node).toFixed(7)}, peri: ${wrap(first.peri + lead).toFixed(6)}, m0: ${wrap(c0 - first.peri).toFixed(7)}, rate: ${rate.toFixed(11)}, periRate: ${Number(first.rate.toPrecision(7))}, axis: [${axis.map((x) => x.toFixed(7)).join(', ')}], nodeRate: ${Number(nodeRate.toPrecision(7))}, swing: [${swingText}], wobble: [${wobbleText}]${partner ? `, partner: '${partner}'` : ''} },`;
+  return `  ${id}: { epochMs: ${FIT_EPOCH}, aKm: ${aKm.toFixed(1)}, e: ${first.e.toFixed(6)}, incl: ${incl.toFixed(7)}, node: ${wrap(node).toFixed(7)}, peri: ${wrap(first.peri + lead).toFixed(6)}, m0: ${wrap(c0 - first.peri).toFixed(7)}, rate: ${rate.toFixed(11)}, periRate: ${Number(first.rate.toPrecision(7))}, axis: [${axis.map((x) => x.toFixed(7)).join(', ')}], nodeRate: ${Number(nodeRate.toPrecision(7))}, swing: [${swingText}], wobble: [${wobbleText}], fitted: [${rows[0].tMs}, ${rows.at(-1).tMs}]${partner ? `, partner: '${partner}'` : ''} },`;
 }
 
 const ORBITS_HEAD = `/**
@@ -388,6 +388,10 @@ const ORBITS_HEAD = `/**
  * that arrow turning steadily, and each triple [rate, length, direction at SWING_EPOCH_MS]
  * in \`wobble\` is a smaller arrow added to it, turning at its own rate.
  *
+ * \`fitted\` is the span of the positions the orbit was fitted to (Unix ms). Inside it the
+ * orbit is better than any one-moment ellipse; ephem.ts falls back on the ellipses downloaded
+ * with deep.json only outside it.
+ *
  * \`partner\` marks Pluto's four small moons: Pluto and Charon are a double, and those moons
  * go round the pair's centre of mass, 2,100 km from Pluto's centre. Their orbits here are about
  * that point; ephem.ts adds the step from Pluto's centre to it.
@@ -409,6 +413,7 @@ export interface MoonOrbit {
   nodeRate: number;
   swing: number[];
   wobble: number[];
+  fitted: [number, number];
   partner?: BodyId;
 }
 

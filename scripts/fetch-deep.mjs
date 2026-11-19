@@ -19,9 +19,17 @@
 // Why build time: none of these services sends an Access-Control-Allow-Origin header a web
 // page could use (Horizons) or should be asked by every visitor (CNEOS).
 //
-// Politeness: about 80 requests, strictly one at a time and at least 1.1 s apart (horizons.mjs
+// Politeness: about 130 requests, strictly one at a time and at least 1.1 s apart (horizons.mjs
 // enforces it), a generic User-Agent, never repeated or polled. The script refuses to run again
-// while the file is younger than 12 hours (use --force). Nothing here is fatal: a craft that
+// while the file is younger than 12 hours (use --force). Two ways to change the file without
+// asking for everything again:
+//
+//   --only-new   ask Horizons only for the spacecraft and moons the file does not have yet
+//                (after adding a row to deep-craft.mjs or a moon to bodies.ts); everything
+//                else, and the file's date, stay as they are
+//   --facts      no network at all: rewrite each craft's name, dates, mass and text from
+//                deep-craft.mjs, keeping every position as downloaded
+// Nothing here is fatal: a craft that
 // cannot be placed is skipped with a line in the log, a list that cannot be read is carried
 // over from the file already on disk, and if no craft at all could be placed the old file is
 // left untouched. The exit code is always 0, so an outage can never break a deploy.
@@ -33,6 +41,7 @@ import { CRAFT } from './deep-craft.mjs';
 import { BODY_CODE, coverageLimit, TT_MINUS_UTC_MS, vectorRun, vectors } from './horizons.mjs';
 import { BODIES } from '../src/space/bodies.ts';
 import { bodyAxes, bodyPosition, meanMotion, stateToElements } from '../src/space/ephem.ts';
+import { MOON_ORBITS } from '../src/space/moonOrbits.ts';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'public/data/deep.json');
@@ -224,15 +233,27 @@ function tidy(el) {
   return { type: 'elements', epochMs: el.epochMs, aKm: sig(el.aKm), e: sig(el.e), incl: sig(el.incl), node: sig(el.node), peri: sig(el.peri), m0: sig(el.m0) };
 }
 
-async function allCraft(epoch, reference) {
+/** One craft as the file holds it: the table's facts (the optional ones only where the table has them), then where it is. */
+function craftRecord(row, centre, motion) {
+  const record = {
+    id: row.id, name: row.name, short: row.short, aliases: row.aliases, centre, model: row.model, status: row.status,
+    agency: row.agency, launched: row.launched, role: row.role, blurb: row.blurb, wiki: row.wiki, dsn: row.dsn,
+  };
+  for (const key of ['arrived', 'ended', 'massKg']) if (row[key] !== undefined) record[key] = row[key];
+  return { ...record, motion };
+}
+
+async function allCraft(epoch, reference, have = new Map()) {
   const craft = [];
   for (const row of CRAFT) {
+    // --only-new: a craft the file already places keeps its position; only its facts are refreshed.
+    if (have.has(row.id)) {
+      craft.push(craftRecord(row, have.get(row.id).centre, have.get(row.id).motion));
+      continue;
+    }
     try {
       const { centre, motion } = await placeCraft(row, epoch, reference);
-      craft.push({
-        id: row.id, name: row.name, short: row.short, aliases: row.aliases, centre, model: row.model, status: row.status,
-        agency: row.agency, launched: row.launched, role: row.role, blurb: row.blurb, wiki: row.wiki, dsn: row.dsn, motion,
-      });
+      craft.push(craftRecord(row, centre, motion));
       const how = motion.type === 'elements' ? `orbit about ${centre} (e ${motion.e.toFixed(3)}${motion.rates ? ', measured rates' : ''})` : motion.type === 'samples' ? `${motion.xyz.length / 3} positions about ${centre}` : `on ${centre} at ${motion.latDeg}°, ${motion.lonDeg}°`;
       console.log(`  ${row.id}: ${how}`);
     } catch (error) {
@@ -244,22 +265,45 @@ async function allCraft(epoch, reference) {
 
 // ── moons ───────────────────────────────────────────────────────────────────────────────
 
-async function allMoons(epoch, reference) {
-  const moons = {};
+async function allMoons(epoch, reference, have = {}) {
+  const moons = { ...have };
+  const times = [epoch, epoch + DAY, epoch + 3 * DAY, epoch + 10 * DAY];
+  // Asked for once each, even when a moon is needed twice (Charon, for Pluto's small moons).
+  const asked = new Map();
+  const statesOf = (id) => {
+    if (!asked.has(id)) asked.set(id, vectors(CODE[id], CODE[BODIES[id].parent], times));
+    return asked.get(id);
+  };
+  let fresh = 0;
   for (const id of MOONS) {
+    if (have[id]) continue; // --only-new
     const parent = BODIES[id].parent;
     try {
-      const states = await vectors(CODE[id], CODE[parent], [epoch, epoch + DAY, epoch + 3 * DAY, epoch + 10 * DAY]);
+      const states = await statesOf(id);
+      let { pos, vel } = states[0];
       // Two bodies circling each other: the sum of the masses sets the pace (12 % more than
       // Pluto alone for Charon). ephem.ts keeps its own fitted rates and takes only the shape
       // and phase from this.
-      moons[id] = tidy(stateToElements(states[0].pos, states[0].vel, BODIES[parent].gm + BODIES[id].gm, epoch));
+      let gm = BODIES[parent].gm + BODIES[id].gm;
+      // Pluto's small moons go round the centre of mass of Pluto and Charon, not round Pluto
+      // (see moonOrbits.ts): their ellipse is given about that point, which is Charon's share
+      // of the pair's mass along the line from Pluto to Charon.
+      const partner = MOON_ORBITS[id]?.partner;
+      if (partner) {
+        const other = (await statesOf(partner))[0];
+        const share = BODIES[partner].gm / (BODIES[parent].gm + BODIES[partner].gm);
+        pos = pos.map((x, k) => x - share * other.pos[k]);
+        vel = vel.map((x, k) => x - share * other.vel[k]);
+        gm += BODIES[partner].gm;
+      }
+      moons[id] = tidy(stateToElements(pos, vel, gm, epoch));
       reference[id] = { centre: parent, tMs: states.map((s) => s.tMs), xyz: states.map((s) => s.pos.map((v) => sig(v, 12))) };
+      fresh++;
     } catch (error) {
       console.log(`  ${id}: skipped (${error.message})`);
     }
   }
-  console.log(`  moons: ${Object.keys(moons).length} of ${MOONS.length}`);
+  console.log(`  moons: ${fresh} asked for, ${Object.keys(moons).length} of ${MOONS.length} in the file`);
   return moons;
 }
 
@@ -335,6 +379,35 @@ async function main() {
   if (await exists(OUT)) {
     try { previous = JSON.parse(await readFile(OUT, 'utf8')); } catch { /* unreadable file: replace it */ }
   }
+  const referenceNote = 'JPL Horizons positions (km, ICRF, about `centre`) from the same download as public/data/deep.json; written by scripts/fetch-deep.mjs, read by scripts/check-deep.mjs.';
+
+  if (process.argv.includes('--facts')) {
+    // No network: the same positions, with whatever deep-craft.mjs now says about each craft.
+    if (!previous) return console.error('  there is no deep.json to rewrite');
+    const rows = new Map(CRAFT.map((row) => [row.id, row]));
+    const craft = previous.craft.filter((c) => rows.has(c.id)).map((c) => craftRecord(rows.get(c.id), c.centre, c.motion));
+    await writeFile(OUT, JSON.stringify({ ...previous, craft }));
+    console.log(`  rewrote the facts of ${craft.length} spacecraft from deep-craft.mjs; positions untouched (${previous.fetchedAt})`);
+    return;
+  }
+
+  if (process.argv.includes('--only-new')) {
+    // Ask only for what the file lacks. Each new orbit carries its own epoch (now); the file
+    // keeps its date, because everything else in it is still from that download.
+    if (!previous) return console.error('  there is no deep.json to add to: run without --only-new');
+    let kept = { craft: {}, moons: {} };
+    try { kept = JSON.parse(await readFile(REFERENCE, 'utf8')); } catch { /* no reference yet */ }
+    const epoch = Math.floor(Date.now() / 60000) * 60000;
+    const reference = { craft: { ...kept.craft }, moons: { ...kept.moons } };
+    const craft = await allCraft(epoch, reference.craft, new Map(previous.craft.map((c) => [c.id, c])));
+    const moons = await allMoons(epoch, reference.moons, previous.moons);
+    await writeFile(OUT, JSON.stringify({ ...previous, craft, moons }));
+    await mkdir(dirname(REFERENCE), { recursive: true });
+    await writeFile(REFERENCE, JSON.stringify({ note: referenceNote, fetchedAt: previous.fetchedAt, ...reference }));
+    console.log(`  the file now has ${craft.length} spacecraft and ${Object.keys(moons).length} moons; its date is still ${previous.fetchedAt}`);
+    return;
+  }
+
   if (previous && !process.argv.includes('--force')) {
     const ageHours = (Date.now() - Date.parse(previous.fetchedAt)) / 3.6e6;
     if (ageHours < MIN_AGE_HOURS) {
@@ -365,10 +438,7 @@ async function main() {
   await mkdir(dirname(OUT), { recursive: true });
   await writeFile(OUT, text);
   await mkdir(dirname(REFERENCE), { recursive: true });
-  await writeFile(REFERENCE, JSON.stringify({
-    note: 'JPL Horizons positions (km, ICRF, about `centre`) from the same download as public/data/deep.json; written by scripts/fetch-deep.mjs, read by scripts/check-deep.mjs.',
-    fetchedAt, ...reference,
-  }));
+  await writeFile(REFERENCE, JSON.stringify({ note: referenceNote, fetchedAt, ...reference }));
   console.log(`  wrote ${craft.length} of ${CRAFT.length} spacecraft, ${Object.keys(moons).length} moons, ${flybys.length} fly-bys and ${fireballs.length} fireballs to public/data/deep.json (${(text.length / 1024).toFixed(0)} KB)`);
 }
 
