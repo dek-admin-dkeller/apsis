@@ -24,7 +24,7 @@ import { loadRegions } from './data/regions.ts';
 import { loadFacts, type CatalogFacts } from './data/satcat.ts';
 import type { OmmRecord, Satellite, Snapshot } from './data/types.ts';
 import { Aurora } from './render/aurora.ts';
-import { CameraRig } from './render/cameraRig.ts';
+import { CameraRig, easeIn, easeOut } from './render/cameraRig.ts';
 import { ConjunctionMarkers } from './render/conjunctionMarkers.ts';
 import { ConstellationView } from './render/constellation.ts';
 import { EncounterViz, type EncounterFrame } from './render/encounterViz.ts';
@@ -213,7 +213,13 @@ const places = new Places({
   drift: () => store.settings.earthDrift,
   match: roughMatch,
   jumpTo: (timeMs) => jumpTo(timeMs),
-  onAway: (away) => setAway(away),
+  pullBack: (seconds) => {
+    // Straight back from the Earth, as far as the tracker's camera may go.
+    rig.follow = false;
+    rig.flyToView(kit.camera.position.clone().setLength(Math.min(kit.camera.position.length() * 7, 400)), ORIGIN.clone(), seconds, easeIn);
+  },
+  apparent: () => EARTH_RADIUS / Math.max(kit.camera.position.length(), 1e-6),
+  onAway: (away, apparent) => setAway(away, apparent),
   toast: (text) => toast(text),
 });
 const model = new SatelliteModel(kit);
@@ -1473,7 +1479,7 @@ cinema.onChange = () => {
  * On the way out everything of the tracker's is put away; while away the simulation is not
  * kept up (see step()), so on the way back it starts again from fresh positions.
  */
-function setAway(away: boolean): void {
+function setAway(away: boolean, apparent = 0): void {
   if (away) {
     if (cinema.isPlaying) cinema.stop();
     if (fp.mode !== 'off') fp.exit();
@@ -1485,6 +1491,13 @@ function setAway(away: boolean): void {
   } else {
     jumpTo(clock.time, true);
     viewKey = '';
+    // Arriving: the Earth comes up out of the distance, the camera already moving and settling
+    // into the whole-Earth view (the second half of the move that began where the visitor was).
+    const home = homeView();
+    rig.follow = false;
+    kit.camera.position.copy(home).setLength(apparent > 0 ? THREE.MathUtils.clamp(EARTH_RADIUS / apparent, home.length() * 2, 400) : 170);
+    kit.controls.target.set(0, 0, 0);
+    rig.flyToView(home, ORIGIN.clone(), 2.4, easeOut);
   }
   setResting(false);
 }

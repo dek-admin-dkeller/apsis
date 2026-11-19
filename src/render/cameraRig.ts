@@ -12,6 +12,8 @@ interface Flight {
   startTarget: THREE.Vector3;
   /** Where the camera and its look-at target should end up (re-evaluated every frame). */
   end: () => { pos: THREE.Vector3; target: THREE.Vector3 } | null;
+  /** How progress runs from 0 to 1 (slow–fast–slow unless a flight says otherwise). */
+  ease: (t: number) => number;
 }
 
 const ORIGIN = new THREE.Vector3();
@@ -19,6 +21,13 @@ const WORLD_UP = new THREE.Vector3(0, 1, 0);
 const ZOOM_SPEED = 0.9; // OrbitControls' zoom step far from the Earth (matches scene.ts)
 const ROTATE_SPEED = 0.55; // …and its drag-to-turn rate
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+/**
+ * Half-flights, for a move that continues in another scene (see ui/places.ts): `easeIn` starts
+ * gently and is at full speed when it ends, `easeOut` starts at full speed and settles. Joined
+ * at their fast ends, with the scene changed there, the two read as one movement.
+ */
+export const easeIn = (t: number) => t * t * t;
+export const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
 
 export class CameraRig {
   follow = false;
@@ -73,13 +82,13 @@ export class CameraRig {
   }
 
   /** Fly to a fixed viewpoint (used by the intro and the 1 / 2 / 3 presets). */
-  flyToView(pos: THREE.Vector3, target: THREE.Vector3, duration = 1.8): void {
+  flyToView(pos: THREE.Vector3, target: THREE.Vector3, duration = 1.8, ease = easeInOut): void {
     this.idle = 0;
     this.held = false;
     this.focus = null;
     this.lastFocus = null;
     this.kit.controls.minDistance = target.lengthSq() === 0 ? EARTH_RADIUS * 1.12 : 0.05;
-    this.startFlight(duration, () => ({ pos, target }));
+    this.startFlight(duration, () => ({ pos, target }), ease);
   }
 
   /**
@@ -120,8 +129,9 @@ export class CameraRig {
     this.flyToView(dir.multiplyScalar(Math.max(this.kit.camera.position.length(), 19)), ORIGIN.clone(), 1.4);
   }
 
-  private startFlight(duration: number, end: Flight['end']): void {
+  private startFlight(duration: number, end: Flight['end'], ease = easeInOut): void {
     this.flight = {
+      ease,
       elapsed: 0,
       duration,
       startPos: this.kit.camera.position.clone(),
@@ -141,7 +151,7 @@ export class CameraRig {
       } else {
         f.elapsed += dt;
         const t = Math.min(1, f.elapsed / f.duration);
-        const e = easeInOut(t);
+        const e = f.ease(t);
         // Swing the camera AROUND the Earth (interpolate direction and radius separately)
         // instead of cutting straight through it.
         const dirA = f.startPos.clone().normalize();

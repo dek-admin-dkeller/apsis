@@ -41,8 +41,16 @@ export interface PlacesHost {
   match(query: string, ...texts: string[]): number;
   /** Move the clock. */
   jumpTo(timeMs: number): void;
-  /** About to leave the tracker (true) or just back in it (false): close panels, restart the simulation … */
-  onAway(away: boolean): void;
+  /** The tracker's camera pulls straight back from the Earth, gathering speed, for `seconds`. */
+  pullBack(seconds: number): void;
+  /** How big the Earth looks in the tracker right now: its radius over the camera's distance. */
+  apparent(): number;
+  /**
+   * About to leave the tracker (true) or just back in it (false): close panels, restart the
+   * simulation … On the way back, `apparent` is how big the Earth looked where the visitor
+   * came from, so the tracker can open with it the same size.
+   */
+  onAway(away: boolean, apparent?: number): void;
   toast(text: string): void;
 }
 
@@ -97,6 +105,8 @@ const kindText = (body: Body): string =>
   body.kind === 'star' ? 'Star' : body.kind === 'planet' ? 'Planet' : body.kind === 'dwarf' ? 'Dwarf planet' : `Moon of ${BODIES[body.parent!].name}`;
 
 const wikiLink = (title: string): string => `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}`;
+
+const reduced = (): boolean => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = ''): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
@@ -169,7 +179,11 @@ export class Places {
       this.show(focus ?? this.defaultTarget(where));
       return;
     }
-    this.through(() => {
+    // The move starts in the scene the visitor is in and finishes in the next one. Towards a
+    // body from the map it is a dive at that body's dot; any other way it is a pull back.
+    const diving = current?.kind === 'system' && where.kind === 'place' && !focus;
+    const from: BodyId = current?.kind === 'place' ? current.body : 'earth';
+    this.through(diving ? where.body : null, (apparent) => {
       if (!this.view.active) {
         this.host.onAway(true);
         document.body.classList.add('away');
@@ -179,7 +193,9 @@ export class Places {
           this.markLinked();
         });
       }
-      this.view.enter(where, this.host.time(), focus);
+      this.view.enter(where, this.host.time(), focus, true, apparent);
+      // Out to the map: it opens right beside the world just left and draws back from it.
+      if (where.kind === 'system' && !focus && !reduced()) this.view.emergeFrom(from, apparent);
       this.markLinked();
       this.markRail();
       this.show(focus ?? this.defaultTarget(where));
@@ -189,7 +205,8 @@ export class Places {
   /** Back to the tracker. */
   home(): void {
     if (!this.view.active || this.switching) return;
-    this.through(() => this.leaveNow());
+    const fromMap = this.view.where?.kind === 'system';
+    this.through(fromMap ? 'earth' : null, (apparent) => this.leaveNow(fromMap ? apparent : 0));
   }
 
   /** Escape: stop looking at one thing; from a place, out to the map; from the map, back to the tracker. */
@@ -202,7 +219,7 @@ export class Places {
   }
 
   /** The same, at once and without the fade (the logo's "put everything back"). */
-  leaveNow(): void {
+  leaveNow(apparent = 0): void {
     if (!this.view.active) return;
     this.view.leave();
     this.stopDsn?.();
@@ -210,7 +227,7 @@ export class Places {
     document.body.classList.remove('away');
     this.rail.classList.add('is-hidden');
     this.show(null);
-    this.host.onAway(false);
+    this.host.onAway(false, apparent);
   }
 
   /** Look at one craft, wherever it is: in its body's place, or on the map if it is out between the planets. */
@@ -232,12 +249,28 @@ export class Places {
     return where.kind === 'place' ? { kind: 'body', body: BODIES[where.body] } : null;
   }
 
-  private through(change: () => void): void {
+  /**
+   * Change the scene as one camera move. The camera sets off in the scene on screen (a dive at
+   * `towards` on the map, otherwise a pull straight back), gathering speed; at its fastest the
+   * picture dips to black for a moment, the scene is changed behind that, and the new scene
+   * opens with its camera already moving and settling into place. With "reduce motion" set in
+   * the system, only the dip.
+   */
+  private through(towards: BodyId | null, change: (apparent: number) => void): void {
     this.switching = true;
-    this.fade.classList.add('is-on');
+    const still = reduced();
+    const lead = still ? 0 : 430; // how long the camera travels before the dip begins
+    if (!still) {
+      if (!this.view.active) this.host.pullBack(0.7);
+      else if (towards) this.view.diveTo(towards, 0.7);
+      else this.view.pullBack(0.7);
+    }
+    setTimeout(() => this.fade.classList.add('is-on'), lead);
     setTimeout(() => {
       try {
-        change();
+        // How big the thing in the middle looks at this moment (0 = unknown: use the usual distance).
+        const apparent = still ? 0 : this.view.active ? (towards || this.view.where?.kind === 'place' ? this.view.apparentOf(towards ?? undefined) : 0) : this.host.apparent();
+        change(apparent);
       } finally {
         // Two frames, so the new scene has been drawn once before the curtain lifts.
         requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -245,7 +278,7 @@ export class Places {
           this.switching = false;
         }));
       }
-    }, 230);
+    }, lead + 240);
   }
 
   /** A click on something in the picture (or on nothing). */

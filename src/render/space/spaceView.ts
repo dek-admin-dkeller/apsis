@@ -33,6 +33,7 @@ import { craftPeriodMs, craftPosition } from '../../space/deep.ts';
 import { bodyAxes, bodyPosition, bodyRelative } from '../../space/ephem.ts';
 import { IMAGERY } from '../../space/imagery.ts';
 import type { Body, BodyId, Craft, Vec } from '../../space/types.ts';
+import { easeIn, easeOut } from '../cameraRig.ts';
 import { buildModel } from '../satModels.ts';
 import type { SceneKit } from '../scene.ts';
 import { addRing, createBody, glowTexture, MAX_OCCLUDERS, type BodyMesh } from './bodyMesh.ts';
@@ -92,6 +93,9 @@ interface Flight {
   fromOffset: THREE.Vector3;
   fromTarget: THREE.Vector3;
   toOffset: THREE.Vector3;
+  ease: (t: number) => number;
+  /** Where the look-at point ends up, if not on whatever is being followed. */
+  toTarget: THREE.Vector3 | null;
 }
 
 export class SpaceView {
@@ -223,7 +227,7 @@ export class SpaceView {
    * Show a place or the map. `glide` starts the camera further out and eases it in; without
    * it the camera is simply put in place (a rebuild of the view the visitor is already in).
    */
-  enter(where: Where, tMs: number, focus: Target | null = null, glide = true): void {
+  enter(where: Where, tMs: number, focus: Target | null = null, glide = true, apparent = 0): void {
     const sameView = this.where !== null && this.where.kind === where.kind && (where.kind === 'system' || (this.where as { body: BodyId }).body === where.body);
     const keepCamera = sameView && !glide;
     this.clear();
@@ -236,7 +240,7 @@ export class SpaceView {
     else this.buildPlace(where.body, tMs);
     this.place(tMs);
     this.focus = null;
-    if (!keepCamera) this.homeCamera(glide);
+    if (!keepCamera) this.homeCamera(glide, apparent);
     this.setFocus(focus, tMs, glide && !keepCamera ? 0 : 1.4);
   }
 
@@ -666,7 +670,21 @@ export class SpaceView {
 
   // ---- the camera ----------------------------------------------------------------------------
 
-  private homeCamera(glide: boolean): void {
+  /**
+   * How big the body in the middle of the view looks right now: its radius over its distance
+   * from the camera. When the scene changes mid-move, the next scene opens with its body
+   * looking the same size, so the eye sees one thing shrinking or growing, not a swap.
+   * In a place that is the place's body; on the map, the dot of `body`.
+   */
+  apparentOf(body?: BodyId): number {
+    if (this.where?.kind === 'system') {
+      const item = body ? this.mapItem(body) : null;
+      return item ? item.radius / Math.max(this.camera.position.distanceTo(item.pos), 1e-6) : 0;
+    }
+    return R / Math.max(this.camera.position.length(), 1e-6);
+  }
+
+  private homeCamera(glide: boolean, apparent = 0): void {
     const map = this.where?.kind === 'system';
     const phone = this.host.isPhone();
     let offset: THREE.Vector3;
@@ -682,22 +700,65 @@ export class SpaceView {
     this.controls.minDistance = map ? 12 : R * 1.06;
     this.controls.maxDistance = this.extent;
     if (glide) {
-      this.camera.position.copy(offset).multiplyScalar(map ? 1.5 : 2.4);
-      this.fly(offset, 2.2);
+      // Arriving: already moving fast from a long way back, settling into place (the second
+      // half of the move that began in the scene the visitor came from).
+      // In a place it starts where the body looks as big as the dot the visitor was diving at.
+      const far = map ? 2.2 : apparent > 0 ? THREE.MathUtils.clamp(R / apparent / offset.length(), 2, 12) : 6;
+      this.camera.position.copy(offset).multiplyScalar(far);
+      this.fly(offset, 2.4, easeOut);
     } else {
       this.camera.position.copy(offset);
     }
     this.idle = 0;
   }
 
-  private fly(toOffset: THREE.Vector3, duration: number): void {
+  private fly(toOffset: THREE.Vector3, duration: number, ease = easeInOut, toTarget: THREE.Vector3 | null = null): void {
     this.flight = {
       elapsed: 0,
       duration,
       fromOffset: this.camera.position.clone().sub(this.controls.target),
       fromTarget: this.controls.target.clone(),
       toOffset,
+      ease,
+      toTarget,
     };
+  }
+
+  // Moves that begin here and finish in another scene, or the other way round (ui/places.ts
+  // changes the scene at their fast end, behind a moment of darkness).
+
+  /** Pull straight back from what is being looked at, gathering speed. */
+  pullBack(duration: number): void {
+    const offset = this.camera.position.clone().sub(this.controls.target);
+    this.fly(offset.multiplyScalar(this.where?.kind === 'system' ? 2.4 : 7), duration, easeIn, this.controls.target.clone());
+  }
+
+  /** On the map: dive towards one body's dot, gathering speed (the way into its place). */
+  diveTo(body: BodyId, duration: number): void {
+    const item = this.mapItem(body);
+    if (!item) return this.pullBack(duration);
+    const offset = this.camera.position.clone().sub(item.pos).normalize().multiplyScalar(item.radius * 3.2);
+    this.fly(offset, duration, easeIn, item.pos.clone());
+  }
+
+  /** On the map: start right beside one body's dot and draw back to the whole picture (the way out of its place). */
+  emergeFrom(body: BodyId, apparent = 0): void {
+    const item = this.mapItem(body);
+    if (!item) return;
+    // Where the view is meant to end up: the flight enter() has just set off on, if there is one.
+    const home = this.flight ? this.flight.toOffset.clone() : this.camera.position.clone().sub(this.controls.target);
+    this.controls.target.copy(item.pos);
+    // Begin where the dot looks as big as the world just left did at the moment of the change.
+    const start = THREE.MathUtils.clamp(apparent > 0 ? item.radius / apparent : 0, item.radius * 3.2, home.length() * 0.6);
+    this.camera.position.copy(item.pos).addScaledVector(home.clone().normalize(), start);
+    this.fly(home, 2.6, easeOut, ORIGIN.clone());
+  }
+
+  /** A body's dot on the map; a moon that has none stands where its planet does. */
+  private mapItem(body: BodyId): Item | null {
+    if (this.where?.kind !== 'system') return null;
+    const find = (id: BodyId | null) => (id ? this.items.find((item) => item.key === `body:${id}`) ?? null : null);
+    return find(body) ?? find(BODIES[body].parent);
   }
 
   /** Look at a body or craft (the camera then stays with it), or back at the middle with null. */
@@ -735,12 +796,12 @@ export class SpaceView {
     if (this.flight) {
       const f = this.flight;
       f.elapsed += dt;
-      const e = easeInOut(Math.min(1, f.elapsed / f.duration));
+      const e = f.ease(Math.min(1, f.elapsed / f.duration));
       // Swing round (turn the direction, change the distance) instead of cutting straight across.
       const from = f.fromOffset.clone().normalize(), to = f.toOffset.clone().normalize();
       const dir = from.applyQuaternion(new THREE.Quaternion().slerp(new THREE.Quaternion().setFromUnitVectors(from, to), e));
       const length = THREE.MathUtils.lerp(f.fromOffset.length(), f.toOffset.length(), e);
-      controls.target.lerpVectors(f.fromTarget, anchor, e);
+      controls.target.lerpVectors(f.fromTarget, f.toTarget ?? anchor, e);
       camera.position.copy(controls.target).addScaledVector(dir, length);
       if (f.elapsed >= f.duration) this.flight = null;
     } else {
@@ -761,7 +822,7 @@ export class SpaceView {
       controls.zoomSpeed = 0.9;
       controls.rotateSpeed = 0.55;
     }
-    controls.maxDistance = this.extent;
+    controls.maxDistance = this.flight ? Infinity : this.extent; // a flight may pass beyond the limit on its way out
     controls.update();
   }
 
