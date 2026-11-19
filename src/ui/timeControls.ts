@@ -194,6 +194,9 @@ export class TimeControls {
     const now = $('now');
     now.textContent = live ? 'Live' : 'Now';
     now.classList.toggle('is-live', live);
+    // In words, so a clock that is not the present can never be read as the time of day: the
+    // owner once read a paused clock, 3 hours old, as the app showing the wrong time.
+    $('clock-behind').textContent = live ? '' : clockBehind(offset, this.clock.paused, this.clock.speed);
 
     // Timeline: normally centred on the real present; if the clock is taken more than
     // 12 hours away (a typed date, a long fast-forward) the window re-centres on the clock.
@@ -221,4 +224,13 @@ export function speedText(speed: number): string {
   const name = named.find(([value]) => Math.abs(speed - value) < 1)?.[1];
   if (name) return `${name} a second`;
   return speed >= 1 ? `${Math.round(speed)}×` : `${speed.toFixed(2)}× slow motion`;
+}
+
+/** "paused · 2 h 53 min behind", "3 d ahead", "100× · 4 min ahead": what the clock is doing, when it is not the present. */
+export function clockBehind(offset: number, paused: boolean, speed: number): string {
+  const parts: string[] = [];
+  if (paused) parts.push('paused');
+  else if (speed !== 1) parts.push(speed < 0 ? 'running backwards' : speedText(Math.abs(speed)).replace(' a second', '/s'));
+  if (Math.abs(offset) >= 5000) parts.push(`${duration(offset)} ${offset < 0 ? 'behind' : 'ahead'}`);
+  return parts.join(' · ');
 }

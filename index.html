@@ -1046,6 +1046,8 @@
               <span class="clock-meta"><span id="clock-date"></span><span>UTC <span id="clock-offset" class="offset"></span></span></span>
             </button>
             <input type="datetime-local" id="clock-input" class="is-hidden" step="1" aria-label="Simulation date and time, UTC" />
+            <!-- Only while the clock is not the real present: says so in words, even in the resting pill. -->
+            <span id="clock-behind" class="clock-behind" aria-live="polite"></span>
           </div>
           <div class="transport">
             <button id="step-back" class="tb" title="Back 10 minutes ([)">−10m</button>

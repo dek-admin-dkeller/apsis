@@ -1657,3 +1657,8 @@ details[data-feature]:has(> div:empty) { display: none; }
 .at-real { margin-top: 6px; font-size: 11px; color: #9af2c2; }
 .at-real:empty { display: none; }
 .at-link { padding: 0; border: 0; background: none; color: #9af2c2; font: 600 11px var(--font-ui); text-decoration: underline; cursor: pointer; }
+
+/* The clock is not the present: say so in words beside it (also in the resting pill). */
+.clock-behind { align-self: center; margin-left: 6px; font-size: 11px; font-weight: 500; color: var(--amber); white-space: nowrap; }
+.clock-behind:empty { display: none; }
+.timebar.is-shifted .now:not(.is-live) { border-color: rgba(255, 180, 84, 0.55); color: var(--amber); }

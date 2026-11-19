@@ -101,7 +101,9 @@ worker/lookahead.worker.ts: started on demand for the "Coming hours" scan (hashi
   through `jumpTo()` (it calls `sim.reset()`). The autopilot runs scenes at 100× and 1000× and
   now puts the clock back to the present when it stops (it used to leave it hours ahead, and
   the owner read that as "the time is still off"); whenever the clock is not the present its
-  figures are amber (`.timebar.is-shifted`). At normal speed `advanceClock()` follows the
+  figures are amber (`.timebar.is-shifted`) and `#clock-behind` says it in words ("paused · 2 h 53 min
+  behind"), even in the resting pill; coming back to a tab after 10 min with the clock not live
+  gives a toast (the owner read a paused clock's "12:11" as the time of day at 3 pm). At normal speed `advanceClock()` follows the
   COMPUTER'S clock rather than summing frame times: a background tab or a locked phone draws
   no frames, and the sum used to come back minutes behind the present (the owner saw the clock
   "off"). Times are shown in the browser's local time unless Settings says UTC (the default

@@ -75,7 +75,7 @@ import { DEFAULT_SITE, SettingsStore, type Settings } from './ui/settings.ts';
 import { ShareDialog, warmShare } from './ui/share.ts';
 import { Sheets } from './ui/sheet.ts';
 import { thumbnail } from './ui/thumb.ts';
-import { speedText, TimeControls, type SimClock } from './ui/timeControls.ts';
+import { clockBehind, speedText, TimeControls, type SimClock } from './ui/timeControls.ts';
 import { ObjectTabs } from './ui/objectTabs.ts';
 import { Tour } from './ui/tour.ts';
 import { Watchlist } from './ui/watchlist.ts';
@@ -1686,6 +1686,21 @@ function goHome(): void {
   preset(1);
   for (const run of homeHooks) run(); // feature modules undo what they changed (a year filter, say)
 }
+// Back to a tab left for a while with the clock not live (paused, moved, sped up): say so at
+// once. Its amber figures alone were read as the time of day (the owner saw "12:11" at 3 pm).
+let hiddenAt = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    hiddenAt = Date.now();
+    return;
+  }
+  const away = hiddenAt > 0 ? Date.now() - hiddenAt : 0;
+  const offset = clock.time - Date.now();
+  if (away > 10 * 60000 && (clock.paused || Math.abs(offset) > 60000)) {
+    toast(`The clock is ${clockBehind(offset, clock.paused, clock.speed)}. Press N or Now for the real time.`, 7000);
+  }
+});
+
 $('home').addEventListener('click', goHome);
 $('home').addEventListener('keydown', (event) => {
   if (event.key === 'Enter' || event.key === ' ') {
