@@ -40,6 +40,8 @@ import { IMAGERY } from '../space/imagery.ts';
 import { SITES } from '../space/sites.ts';
 import type { Body, BodyId, Craft, DeepData, DsnLink, Flyby, Motion, Site, Vec } from '../space/types.ts';
 import type { SearchHit } from './app.ts';
+import { isModelKind } from '../data/describe.ts';
+import { modelThumbnail } from '../render/satModels.ts';
 import { $, fmt, fmtInt, fmtKm, fmtKmS, getUnits, lengthUnit, lengthValue } from './dom.ts';
 import { clockStamp, duration } from './inspector.ts';
 import { PlaceWatch } from './placeWatch.ts';
@@ -61,6 +63,8 @@ export interface PlacesHost {
   jumpToNow(): void;
   /** The tracker's own "put everything back" (the logo there). */
   home(): void;
+  /** The hover card setting (Settings.hoverCard): one switch for the tracker and every place. */
+  hoverCard(): boolean;
   /** Switch the screening cells on or off (one switch for the tracker and every place). */
   setGrid(on: boolean): void;
   toast(text: string): void;
@@ -231,6 +235,7 @@ export class Places {
       onPick: (target) => this.pick(view(), target),
       onOpen: (target) => this.open(target),
       onOut: () => this.openSystem(),
+      onHover: (target, x, y) => this.hover(target, x, y),
       figures: host.figures,
       isPhone: host.isPhone,
       drift: host.drift,
@@ -395,6 +400,7 @@ export class Places {
     if (to === 'tracker') {
       kit.show();
       this.host.holdTracker(null);
+      document.body.classList.remove('arriving');
     } else {
       const view = this.view(to);
       kit.show(view.scene, view.camera, view.controls.target);
@@ -425,7 +431,14 @@ export class Places {
     this.shownBody = body;
     const away = spot !== 'tracker';
     document.body.classList.toggle('away', away);
+    this.hover(null, 0, 0); // whatever was under the pointer belongs to the scene being left
+    // On the way back into the tracker its name tags (ISS, Hubble, the planets) would show at
+    // once, placed by a camera that is not the one on screen, over the solar system's dive in.
+    // They wait until the tracker is the picture (removed at the end of the dissolve).
+    document.body.classList.toggle('arriving', spot === 'tracker' && this.spot !== 'tracker');
     document.body.classList.toggle('on-map', spot === 'map');
+    // One button, two tours: the Earth's autopilot in the tracker, the solar system's autoplay everywhere else.
+    $('autopilot').title = away ? 'Autoplay: a tour of the solar system, world by world (A)' : 'Autopilot: a hands-free tour of the view (A)';
     document.body.classList.toggle('no-moons', spot === 'place' && !BODY_LIST.some((other) => other.parent === body || (BODIES[body].kind === 'moon' && other.id === BODIES[body].parent)));
     this.here.classList.add('is-hidden');
     if (!away) this.show(null);
@@ -454,6 +467,62 @@ export class Places {
     this.markLinked();
     this.drawPath();
   }
+
+  // ---- the hover card (the tracker's own #tooltip, filled with what is under the pointer) ---------
+
+  private hoverKey = '';
+
+  private hover(target: Target | null, x: number, y: number): void {
+    const tip = $('tooltip');
+    if (!target || this.busy || !this.host.hoverCard() || document.body.classList.contains('ui-hidden')) {
+      tip.classList.add('is-hidden');
+      this.hoverKey = '';
+      if (!target) this.host.kit.renderer.domElement.style.cursor = '';
+      return;
+    }
+    const key = targetKey(target);
+    if (key !== this.hoverKey) {
+      this.hoverKey = key;
+      const line = (className: string, text: string) => el('span', className, text);
+      const text = el('div', 'tip-text');
+      let picture: HTMLElement;
+      const t = this.host.time();
+      if (target.kind === 'body') {
+        const body = target.body;
+        picture = el('span', 'tip-orb');
+        const [r, g, b] = body.color.map((c) => Math.round(c * 255));
+        picture.style.setProperty('--orb', `rgb(${r}, ${g}, ${b})`);
+        const kind = body.kind === 'star' ? 'Star' : body.kind === 'planet' ? 'Planet' : body.kind === 'dwarf' ? 'Dwarf planet' : `Moon of ${BODIES[body.parent!].name}`;
+        const v = bodyRelative(body.id, 'earth', t);
+        const km = Math.hypot(v[0], v[1], v[2]);
+        text.append(line('tip-name', body.name), line('tip-what', kind));
+        if (body.id !== 'earth') text.append(line('tip-live', `${farText(km)} from Earth`));
+        const inside = this.spot === 'place' && this.hereBody === body.id;
+        text.append(line('tip-op', inside ? 'Click for its card' : body.visitable || body.id === 'earth' ? 'Click to look · again to go in' : 'Click to look'));
+      } else {
+        const craft = target.craft;
+        if (isModelKind(craft.model) && !craft.site) {
+          const img = el('img', 'thumb') as HTMLImageElement;
+          img.alt = '';
+          img.src = modelThumbnail(craft.model);
+          picture = img;
+        } else {
+          picture = el('span', 'tip-orb is-site');
+        }
+        const c = bodyRelative(craft.centre, 'earth', t), p = craftPosition(craft, t, this.vecTip).pos;
+        const km = Math.hypot(c[0] + p[0], c[1] + p[1], c[2] + p[2]);
+        text.append(line('tip-name', craft.name), line('tip-what', craft.site ? `${SITE_KIND[craft.site.kind]} · ${BODIES[craft.centre].name}` : craft.role));
+        if (!craft.site) text.append(line('tip-live', `${farText(km)} from Earth${craft.status === 'silent' ? ' · silent' : ''}`));
+        if (craft.agency) text.append(line('tip-op', craft.agency));
+      }
+      tip.replaceChildren(picture, text);
+    }
+    tip.classList.remove('is-hidden');
+    tip.classList.toggle('is-left', x > window.innerWidth - 340);
+    tip.style.left = `${x}px`;
+    tip.style.top = `${Math.min(Math.max(y, 70), window.innerHeight - 70)}px`;
+  }
+  private readonly vecTip: Vec = [0, 0, 0];
 
   /** The body the visitor is at: the place's, or the Earth in the tracker. */
   private get hereBody(): BodyId {
@@ -644,6 +713,21 @@ export class Places {
     else void this.travel({ kind: 'map' });
   }
 
+  /** For the autoplay (ui/spaceTour.ts): go to a world, the Earth being the tracker, and resolve once there. */
+  visit(body: BodyId): Promise<void> {
+    return this.travel(body === 'earth' ? { kind: 'tracker' } : { kind: 'place', body });
+  }
+
+  /** For the autoplay: out to the whole solar system, and resolve once there. */
+  visitSystem(): Promise<void> {
+    return this.travel({ kind: 'map', focus: null });
+  }
+
+  /** A journey is under way (it cannot be interrupted, and a new one is refused until it ends). */
+  get moving(): boolean {
+    return this.busy;
+  }
+
   /** Enter (the key, or the prompt on the solar system): go in to the world the camera has gone up to. */
   enter(): void {
     const focus = this.spot === 'map' ? this.map.focus : null;
@@ -693,6 +777,7 @@ export class Places {
     this.map.setLive(false);
     this.spot = 'tracker';
     this.host.holdTracker(null);
+    document.body.classList.remove('arriving');
     if (!this.trackerOn) {
       this.trackerOn = true;
       this.host.onAway(false);
@@ -740,6 +825,13 @@ export class Places {
     const rock = this.crafts.find((craft) => craft.passing?.name === name);
     if (rock) this.showCraft(rock);
     return rock !== undefined;
+  }
+
+  /** Go and look at the craft a Deep Space Network dish calls `code` ('JNO', 'JWST'). False if no craft has it. */
+  showByDsn(code: string): boolean {
+    const craft = this.crafts.find((candidate) => candidate.dsn.some((own) => own.toUpperCase() === code.toUpperCase()));
+    if (craft) this.showCraft(craft);
+    return craft !== undefined;
   }
 
   /** How many of the craft beyond Earth orbit are drawn with one kind of 3D model, and a way to go and see one. */

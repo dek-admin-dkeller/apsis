@@ -26,6 +26,12 @@ import type { Settings } from './settings.ts';
 
 export type Vec3 = { x: number; y: number; z: number };
 
+/** What a filter is called, and how to undo it (see App.setFilter). */
+export interface FilterAbout {
+  label: string;
+  clear: () => void;
+}
+
 export interface FrameInfo {
   timeMs: number; // simulated time, Unix ms
   realSeconds: number; // seconds this page has been running (for animation)
@@ -102,6 +108,10 @@ export interface App {
    * path (the clock is moved to the pass). False if that asteroid's path is not known.
    */
   showFlyby(name: string): boolean;
+  /** Go and look at a craft beyond Earth orbit, named by its Deep Space Network code ('JNO'). False if none has that code. */
+  showDeepCraft(dsnCode: string): boolean;
+  /** Back to the Earth's tracker (a journey, if the visitor is elsewhere); resolves once there. */
+  goEarth(): Promise<void>;
   /** Offer more things in the search field (bodies, spacecraft beyond Earth orbit …). */
   addSearch(provider: SearchProvider): void;
   /** Put the cursor in the search field, optionally with `text` already typed in it (the list then shows what it finds). */
@@ -122,8 +132,10 @@ export interface App {
   /**
    * Hide objects from the globe (and from screening). Every registered test must pass for an
    * object to be shown; register under a key of your own, and pass null to remove the test.
+   * `about` names the filter in the banner that says something is hidden ("Telescopes",
+   * "launched by 1990") and undoes it when the visitor presses "Show all" there.
    */
-  setFilter(key: string, keep: ((sat: Satellite) => boolean) | null): void;
+  setFilter(key: string, keep: ((sat: Satellite) => boolean) | null, about?: FilterAbout): void;
 
   // ---- drawing ----------------------------------------------------------------------------
   /** Where object `index` is drawn right now, km in the inertial frame. False if it has no position. */

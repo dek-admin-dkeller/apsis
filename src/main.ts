@@ -49,6 +49,7 @@ import { TOGETHER_KM_S } from './hashing/conjunction.ts';
 import { AheadPanel } from './ui/ahead.ts';
 import { BenchmarkModal } from './ui/benchmarkModal.ts';
 import { Cinema } from './ui/cinema.ts';
+import { SpaceTour } from './ui/spaceTour.ts';
 import { ConstellationsPanel } from './ui/constellations.ts';
 import { Contacts } from './ui/contacts.ts';
 import { renderCrew, renderCrewSummary } from './ui/crew.ts';
@@ -67,6 +68,7 @@ import type { App, FrameInfo, SearchProvider } from './ui/app.ts';
 import { installChanges } from './features/changes.ts';
 import { installCommands } from './features/commands.ts';
 import { installDsn } from './features/dsn.ts';
+import { installBell } from './features/bell.ts';
 import { installFireballs } from './features/fireballs.ts';
 import { installFlybys } from './features/flybys.ts';
 import { installGrowth } from './features/growth.ts';
@@ -229,7 +231,8 @@ const places = new Places({
   backdrop: () => sky.backdrop(),
   time: () => clock.time,
   isPhone: () => isPhone(),
-  drift: () => store.settings.earthDrift,
+  drift: () => store.settings.earthDrift || spaceTour.isPlaying, // the autoplay always turns slowly round each world
+  hoverCard: () => store.settings.hoverCard,
   figures: () => sky.constellations,
   match: matchScore,
   jumpTo: (timeMs) => jumpTo(timeMs),
@@ -387,7 +390,7 @@ function applySettings(s: Settings, changed: keyof Settings | null): void {
   setClockZone(s.clockZone);
   places.setSky(s.stars, s.constellations);
   places.setOptions({
-    orbits: s.spaceOrbits, names: s.spaceNames, craft: s.spaceCraft, moons: s.spaceMoons, allCraft: s.spaceAllCraft, sites: s.landingSites,
+    orbits: s.spaceOrbits, craftOrbits: s.spaceCraftOrbits, names: s.spaceNames, craft: s.spaceCraft, moons: s.spaceMoons, allCraft: s.spaceAllCraft, sites: s.landingSites,
     skyNames: s.skyLabels, selOrbit: s.orbitPath, selTrack: s.groundTrack, selFootprint: s.footprint, selModel: s.model,
   });
   if (changed === null || changed === 'units') $('d-label').textContent = alertDistance(screeningDistance);
@@ -1537,7 +1540,21 @@ const cinema = new Cinema({
   hideInterface: (on) => document.body.classList.toggle('ui-hidden', on),
   toast: (text) => toast(text, 4000),
 }, canvas);
+// Away from the tracker the same button (and A) plays the solar system's autoplay instead.
+const spaceTour = new SpaceTour({
+  visit: (body) => places.visit(body),
+  system: () => places.visitSystem(),
+  moving: () => places.moving,
+  view: (name) => places.goView(name),
+  hideInterface: (on) => document.body.classList.toggle('ui-hidden', on),
+  onChange: () => $('autopilot').setAttribute('aria-pressed', String(cinema.isPlaying || spaceTour.isPlaying)),
+});
 function toggleAutopilot(): void {
+  if (spaceTour.isPlaying) return spaceTour.stop();
+  if (places.elsewhere) {
+    openPanel(null);
+    return spaceTour.play();
+  }
   if (cinema.isPlaying) return cinema.stop();
   if (tour.isRunning) tour.stop();
   setKeys(false);
@@ -1547,7 +1564,7 @@ function toggleAutopilot(): void {
 $('autopilot').addEventListener('click', toggleAutopilot);
 $('record').addEventListener('click', () => cinema.toggleRecording());
 cinema.onChange = () => {
-  $('autopilot').setAttribute('aria-pressed', String(cinema.isPlaying));
+  $('autopilot').setAttribute('aria-pressed', String(cinema.isPlaying || spaceTour.isPlaying));
   $('record').setAttribute('aria-pressed', String(cinema.isRecording));
 };
 
@@ -1574,6 +1591,7 @@ function setAway(away: boolean): void {
   if (!away) {
     jumpTo(clock.time, true);
     viewKey = '';
+    filters.nudge(); // back at the Earth with part of it hidden: say so before the empty globe alarms anyone
   }
   openPanel(null);
   setResting(false);
@@ -1639,7 +1657,7 @@ window.addEventListener('keydown', (event) => {
     return;
   }
   if (places.atPlace && event.key.toLowerCase() === 'g') return setGrid(!gridOn);
-  if (places.elsewhere && !['0', 'r', '[', ']', 'n', 'p', 'm', 'f', 'h', '/', ' ', 'escape', '?'].includes(event.key.toLowerCase())) return;
+  if (places.elsewhere && !['0', 'r', '[', ']', 'n', 'p', 'a', 'm', 'f', 'h', '/', ' ', 'escape', '?'].includes(event.key.toLowerCase())) return;
   switch (event.key.toLowerCase()) {
     case '0': goHome(); break;
     case '1': preset(1); break;
@@ -1687,7 +1705,10 @@ window.addEventListener('keydown', (event) => {
       else if (places.elsewhere) places.back();
       else if (encPanel.isOpen) closeEncounter();
       else if (selected) select(null);
-      else openPanel(null);
+      else if (openPanelName) openPanel(null);
+      // Nothing left to close: one step out, to the solar system beside the Earth's dot, as
+      // Escape does at every other world (the owner asked for the Earth to behave the same).
+      else if (!rig.flying) places.openSystem();
       break;
     case '?': setKeys(keysOverlay.classList.contains('is-hidden')); break;
   }
@@ -2079,6 +2100,8 @@ const app: App = {
   search: (query, limit) => (catalog ? searchCatalog(catalog, query, limit) : []),
   addSearch: (provider) => void searchProviders.push(provider),
   showFlyby: (name) => places.showFlyby(name),
+  showDeepCraft: (code) => places.showByDsn(code),
+  goEarth: () => (places.elsewhere ? places.visit('earth') : Promise.resolve()),
   focusSearch: (text) => search.focus(text),
   flyToGround: (latDeg, lonDeg, altitudeKm = 2500) => {
     if (fp.mode !== 'off') fp.exit();
@@ -2126,7 +2149,7 @@ const app: App = {
   },
   toast: (text) => toast(text),
   ready: () => !landing.showing && !$('hud').classList.contains('hud-hidden'),
-  setFilter: (key, keep) => filters.setExtra(key, keep),
+  setFilter: (key, keep, about) => filters.setExtra(key, keep, about),
 
   position: (index, out) => sim.getPosition(index, out),
   earth: globe.earth,
@@ -2150,7 +2173,7 @@ const search = new Search(app, searchProviders);
 
 // One line per module. A module that throws while setting itself up is reported and skipped:
 // an optional extra must never stop the tracker from starting.
-for (const install of [installRadio, installChanges, installWeather, installLaunches, installTonight, installReport, installGrowth, installCommands, installFlybys, installFireballs, installShowers, installDsn]) {
+for (const install of [installRadio, installChanges, installWeather, installLaunches, installTonight, installReport, installGrowth, installCommands, installFlybys, installFireballs, installShowers, installDsn, installBell]) {
   try {
     install(app);
   } catch (error) {

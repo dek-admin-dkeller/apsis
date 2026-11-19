@@ -55,6 +55,8 @@ export const FEATURES: FeatureGroup[] = [
       { name: 'Views and time', text: 'Whole Earth, low orbit, the geostationary ring, Earth with the Moon. Pause time, run it backwards, or up to a thousand times faster.' },
       { name: 'Growth by year', text: 'Drag a slider from 1957 to today and see what is still up there from each year.', fresh: true },
       { name: 'Data age', text: 'Colour every object by how recently its orbit was measured, so stale ones stand out.', fresh: true },
+      { name: 'Live and coming up', text: 'The bell in the top bar lists what is happening now — spacecraft in contact with NASA’s dishes, a rocket lifting off, an active meteor shower — and what is next. Choose one to go and see it.', fresh: true },
+      { name: 'A filter you cannot miss', text: 'While anything is hidden, a banner at the top says how many objects are shown, what is hiding the rest, and puts everything back in one click.', fresh: true },
       { name: 'Always current', text: 'The tracking data is refreshed every three hours, and a tab you leave open picks up the new data by itself.', fresh: true },
     ],
   },
@@ -88,7 +90,8 @@ export const FEATURES: FeatureGroup[] = [
     title: 'Go beyond Earth orbit',
     summary: 'Zoom out of the Earth into the solar system, and into any other world in it.',
     items: [
-      { name: 'The solar system', text: 'Zoom out and the satellites fade away, leaving the Earth among the planets, each on the right side of the Sun for today’s date.', fresh: true },
+      { name: 'The solar system', text: 'Zoom out, or press Escape, and the satellites fade away, leaving the Earth among the planets, each on the right side of the Sun for today’s date.', fresh: true },
+      { name: 'Autoplay', text: 'Press play on the solar system and sit back: a hands-free trip from the Sun out to Pluto, stopping at each world with a line about it. Any key or click stops it where it is.', fresh: true },
       { name: 'Other worlds', text: 'Click a planet or a moon, then go in: the Moon, Mars, Jupiter and its four big moons, Saturn and its rings, out to Pluto, each lit and turning as it is right now.', fresh: true },
       { name: 'Thirty-five moons', text: 'Every moon that is round or well known, from Phobos to Pluto’s Hydra, each where it really is today. Twenty-one are mapped from NASA’s pictures and open to visit; what no camera has seen is left blank rather than made up.', fresh: true },
       { name: 'Spacecraft out there', text: 'The Webb telescope, the orbiters and rovers at Mars, Juno, the Voyagers: fifty craft placed from NASA’s own trajectory data, with how far away each is and how long its signal takes.', fresh: true },
@@ -98,7 +101,7 @@ export const FEATURES: FeatureGroup[] = [
       { name: 'A full card for every craft', text: 'A photo, what it is for, its orbit, how far its signal has to travel, and switches for its orbit, its path over the ground and the ground that can see it.', fresh: true },
       { name: 'Close approaches at every world', text: 'The same screening as round the Earth, on the craft at Mars or the Moon: who is nearest whom now, the closest passes of the coming day, and the grid that finds them.', fresh: true },
       { name: 'Views of every world', text: 'The whole of it, low over the day side, the night side, or far enough back to take in its moons.', fresh: true },
-      { name: 'Your choice of what is drawn', text: 'Orbits, names, moons, spacecraft, landing sites and constellation names can each be switched off, on the solar system as at any world.', fresh: true },
+      { name: 'Your choice of what is drawn', text: 'Planet orbits, spacecraft orbits, names, moons, spacecraft, landing sites and constellation names can each be switched off, on the solar system as at any world.', fresh: true },
     ],
   },
   {

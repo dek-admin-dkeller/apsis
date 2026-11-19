@@ -381,7 +381,7 @@ export class Search {
     // means the same objects after the catalogue has been replaced by a newer download.
     const keep = new Set(members.map((index) => catalog.sats[index].noradId));
     this.app.view('earth'); // deselects, and steps back to where the whole set can be seen
-    this.app.setFilter('search', (sat) => keep.has(sat.noradId));
+    this.app.setFilter('search', (sat) => keep.has(sat.noradId), { label, clear: () => this.showEverything() });
     this.filtered = true;
     this.chip.querySelector('span')!.textContent = label;
     this.chip.title = `Showing only ${label} (${fmtInt(members.length)} objects). Click to show everything again.`;

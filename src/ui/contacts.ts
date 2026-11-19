@@ -255,6 +255,7 @@ export class Contacts {
     if (!this.isOpen) return;
     if (event.key === 'Escape') {
       event.preventDefault();
+      event.stopImmediatePropagation(); // Escape closes the timeline only (in the tracker it would otherwise also go out to the solar system)
       this.close();
     } else if (event.key === 'Enter' && this.form.contains(event.target as Node)) {
       event.preventDefault();

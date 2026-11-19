@@ -15,7 +15,7 @@
 
 /* ---------- what does not apply away from the Earth ---------- */
 
-body.away :is(.readouts, .statusbar, .dock-right, #labels, #reticle, #range-tag, #tooltip, #locate-top, #autopilot, #m-sky, #panel-objects) { display: none !important; }
+body.away :is(.readouts, .statusbar, .dock-right, #labels, #reticle, #range-tag, #locate-top, #m-sky, #panel-objects) { display: none !important; }
 body.away .rail :is([data-view], #view-sky) { display: none; }
 body.away .rail { bottom: 0; }
 /* Each place has views of its own in the rail's View group: the Earth's, another world's, the solar system's. */
@@ -33,7 +33,7 @@ body.on-map #panel-layers [data-place] { display: none !important; } /* nothing 
 body:not(.away) :is([data-away], .away-only), body.away .here-only { display: none; }
 body.away #panel-layers .panel-body > :not([data-everywhere]):not([data-away]),
 body.away #panel-layers .layer-tiles:not([data-away]) > .layer-tile:not([data-everywhere]) { display: none; }
-body.away #m-views :is(.m-views-row:not(.m-views-place):not(.m-views-map), [data-proxy='#autopilot'], [data-proxy='#locate-top']) { display: none; }
+body.away #m-views :is(.m-views-row:not(.m-views-place):not(.m-views-map), [data-proxy='#locate-top']) { display: none; }
 
 /* ---------- where you are ---------- */
 
@@ -76,6 +76,9 @@ body.away #m-views :is(.m-views-row:not(.m-views-place):not(.m-views-map), [data
 /* ---------- names over the picture ---------- */
 
 #space-tags { position: fixed; inset: 0; z-index: 5; overflow: hidden; pointer-events: none; }
+/* Coming back into the tracker: its name tags wait for its picture (ui/places.ts, chrome), then fade in. */
+#labels { transition: opacity 0.4s ease; }
+body.arriving #labels { opacity: 0; transition: none; }
 body:not(.away) #space-tags, body.ui-hidden #space-tags { display: none; }
 .sp-tag {
   position: absolute;
@@ -236,4 +239,16 @@ body.ui-hidden #place-hud { display: none; }
 @media (prefers-reduced-motion: reduce) {
   #place-hud { animation: none; }
   .sp-tag.is-linked::after, .pc-contact.is-live::before { animation: none; }
+}
+
+/* The solar system's autoplay (ui/spaceTour.ts): the autopilot's caption and hint (ui/cinema.css) in a layer of its own. */
+#space-tour { position: fixed; inset: 0; z-index: 16; pointer-events: none; }
+#space-tour.is-playing::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 36vh;
+  background: linear-gradient(to top, rgba(2, 4, 10, 0.62), rgba(2, 4, 10, 0));
 }

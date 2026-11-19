@@ -252,10 +252,12 @@ it (the owner found a text-only page bland):
   time and only while the page is neither being touched nor has just scrolled (each one holds
   the main thread for a moment). Figures used to be appended as they were drawn, and on a
   phone the page grew and hitched under the finger.
-- The bar is one row at every width; below 600 px its three shortcuts are hidden (mark on the
+- The bar is one row at every width; below 600 px its two shortcuts are hidden (mark on the
   left, "Open the tracker" on the right). Two rows were "big and smooshed" on an iPhone.
-- A deliberately quiet "Games" row, then a small section that explains the name (the orbit
-  drawing with its two apsides marked, `.ld-name`), then the footer.
+- A small section that explains the name (the orbit drawing with its two apsides marked,
+  `.ld-name`), then the footer. (A placeholder "Games" row was removed at the owner's request.)
+- The headline and lede cover both halves of the app (Earth orbit AND the solar system);
+  keep them that way when either half changes.
 Navigation inside the page uses buttons, never `#anchor` links: any `#hash` in the address
 means "share link" (an inline script in `index.html` then skips the page on arrival, as it
 does when `Settings.landing` is off). "About" in the top bar (`#landing-open`, the round **i**
@@ -462,8 +464,8 @@ How the pieces fit:
   planet was currently drawn at, a chosen moon slid into its shrinking planet and ballooned.
 - **Layers away from the tracker** (`SpaceOptions`, set from `applySettings`): the sky tiles
   and the selected craft's switches (`data-everywhere`), the ground (`data-place`: not on the
-  solar system), and a group that exists only out here (`data-away`): Orbits, Names,
-  Spacecraft, Landing sites, Every craft on the solar system (`spaceOrbits`, `spaceNames`,
+  solar system), and a group that exists only out here (`data-away`): Planet orbits, Craft orbits, Names,
+  Spacecraft, Landing sites, Every craft on the solar system (`spaceOrbits` for planets and moons, `spaceCraftOrbits` for craft, separate at the owner's request; `spaceNames`,
   `spaceCraft`, `spaceMoons`, `landingSites`, `spaceAllCraft`). The solar system has no menu of planets, but
   it does keep the rail's Layers and Settings: the owner asked to be able to turn the orbits
   off there.
@@ -599,6 +601,7 @@ tracker. Each module draws inside an empty element reserved for it in `index.htm
 | `fireballs.ts` | `#fireballs-body` | Recent fireballs from deep.json; marks on the globe (it reuses `PadMarkers`) only while the section is on screen |
 | `showers.ts` | `#showers-body` | Meteor showers active / next on the SIMULATED clock (`space/showers.ts`); rebuilt when the simulated day changes |
 | `dsn.ts` | `#dsn-body` | Live Deep Space Network links (`space/dsn.ts`): one read 4 s after start for the tile, then once a minute only while on screen |
+| `bell.ts` | `#bell`, `#bell-menu` (top bar; phones: the menu's "Live and coming up") | Three kinds of row on the REAL clock: alerts (a launch in flight or within 20 min, a shower within a day of its peak, an asteroid within 6 h; counted on the bell), ongoing (DSN contacts, a shower in its active weeks: routine, never counted, the owner's rule) and coming up (next launches, asteroid, shower peak); each row goes there (`app.showDeepCraft`, `app.goEarth`). Launch list through `loadLaunches()` (its hour-old copy, so at most one request an hour), DSN feed once every 5 min while the tab is visible |
 
 To add a feature: write the module, reserve an element if it needs one (in the Objects panel:
 a `<details class="sec" data-tab data-section>` in the right tab), add one import and one name
@@ -610,6 +613,33 @@ add its entry to `featureList.ts`.
 `document.getElementById('landing')`; when the home page stopped being removed from the
 document, the bar silently never opened again. The search field's shortcut asks `app.ready()`.
 If a module needs to know something `App` cannot tell it, add a getter.
+
+## Small rules added in the polish pass (Nov 2026)
+
+- **Escape in the tracker**, with nothing left to close (overlay, selection, panel), goes out to
+  the solar system like Escape at any other world. Overlays that close on Escape stop the key
+  (`stopImmediatePropagation`) so closing one does not also leave the Earth.
+- **Autoplay** (`ui/spaceTour.ts`): away from the tracker the autopilot button and `A` play a
+  trip from the Sun to Pluto made only of `Places` journeys (`visit`, `visitSystem`); any real
+  input stops it where it is. The tracker's own autopilot (`cinema.ts`) is unchanged.
+- **Coming back into the tracker** its name tags wait (`body.arriving`, set in `Places.chrome`,
+  removed when the dissolve ends): they used to appear at once over the solar system's dive.
+- **Distances to a focus use `item.base`** (full size), never `item.radius`: on the solar
+  system a nearby dot is drawn shrunk, and the camera stopped five times too close to it.
+- **Things on the ground stand on the ground actually drawn** (`groundRadius` in
+  `spaceView.ts`: one ray down onto the body's sphere and the shown tile patches, twice a
+  second) and get two soft shadow quads (`groundShadow`): a contact patch, and one stretched
+  away from the Sun that fades out at night. Opacities are high on purpose: blending is in
+  linear light, so 0.78 read as barely there.
+- **Closed craft orbits are sampled by turn, not only by time** (`sampleOrbit`): Juno's line
+  ran straight through Jupiter with 240 even steps.
+- **Hover away from the Earth**: each `SpaceView` runs its click test on `pointermove` (mouse
+  only, every 50 ms), sets the hand cursor, and `Places.hover` fills the tracker's own
+  `#tooltip` (a lit ball for a world, the model's thumbnail for a craft, distance from Earth).
+  It follows `Settings.hoverCard` and hides on every change of scene.
+- **A filter is announced** (`#filter-banner`, `ui/filters.ts`): count, reasons (`FilterAbout`
+  labels from `app.setFilter`, plus types / orbits / height), and "Show all", which calls each
+  module's `clear`. It pulses when the visitor comes back to the Earth.
 
 ## The search field (`src/ui/search.ts`)
 
@@ -657,10 +687,10 @@ and the query API when an object's own name is tried as a title; cached per arti
 (`src/data/crew.ts`), NASA GIBS map tiles (`src/render/tiles.ts`, only while zoomed in and
 only with the `sharpGround` setting on) and, at the Moon, Mars and Mercury, NASA Solar System
 Treks map tiles under the same two conditions (plus eight coarse tiles once per visit, to match
-their tone to the body's map), Launch Library 2 from The Space Devs (only when the
-launches section is opened; about 15 requests an hour are allowed, the answer is kept for an
-hour), NASA's DSN Now feed (`src/space/dsn.ts`: one read shortly after start, then once a
-minute only while the Deep Space Network section is on screen), NASA Solar System Treks map
+their tone to the body's map), Launch Library 2 from The Space Devs (when the
+launches section is opened, and by the bell a few seconds after start; about 15 requests an hour are allowed, the answer is kept for an
+hour, so a visitor asks at most once an hour), NASA's DSN Now feed (`src/space/dsn.ts`: one read shortly after start, once a
+minute while the Deep Space Network section or the bell's list is on screen, and once every five minutes for the bell's badge while the tab is visible), NASA Solar System Treks map
 tiles (the layers in `src/space/imagery.ts`, for whatever draws other bodies close up),
 nothing else from the browser. SatNOGS is read at BUILD time only
 (`scripts/fetch-radio.mjs`, 5.5 h guard, at most 22 requests; its API sends no CORS headers,
@@ -967,6 +997,6 @@ Beyond Earth orbit: a camera lock switch on a craft's card (today closing the ca
 of it), the paths of rovers across the ground, eclipses and transits called out as they happen.
 
 Multiplayer games on a separate `/play` page (needs a small real-time service such as
-Firebase or Supabase; Pages cannot provide one; the home page has a placeholder "Games" row),
+Firebase or Supabase; Pages cannot provide one),
 a rewind of historic collisions, a congestion dashboard, poster export, pointing the phone
 sky view at a chosen pass.

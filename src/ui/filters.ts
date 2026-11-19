@@ -7,10 +7,16 @@
  * Toggling a category or orbit class uses the catalogue's hash indexes
  * (Map<Category, Set<index>> / Map<OrbitClass, Set<index>>): only the members of the set
  * that was toggled are touched — not all ~20,000 objects.
+ *
+ * Whenever anything is hidden, a banner at the top of the globe says so: how many are shown,
+ * what is hiding the rest, and a "Show all" that undoes every filter at once. (The owner went
+ * into space with a type filter on, came back to an empty Earth and reloaded the page before
+ * remembering it: the amber chip in the search field and "of 19,572" were too easy to miss.)
  */
 
 import type { Catalog } from '../data/catalog.ts';
 import { CATEGORIES, CATEGORY_COLORS, ORBIT_CLASSES, ORBIT_COLORS, type Category, type OrbitClass, type Satellite } from '../data/types.ts';
+import type { FilterAbout } from './app.ts';
 import { $, fmtInt, fmtKm, lengthUnit, lengthValue } from './dom.ts';
 
 const SLIDER_MAX = 1000;
@@ -27,6 +33,10 @@ export class Filters {
   private catalog: Catalog | null = null;
   private visible: Uint8Array = new Uint8Array(0);
   private readonly extra = new Map<string, (sat: Satellite) => boolean>(); // tests added by feature modules
+  private readonly about = new Map<string, FilterAbout>(); // their names in the banner, and how to undo them
+  private readonly chips: { category: Map<Category, HTMLElement>; orbit: Map<OrbitClass, HTMLElement> } = { category: new Map(), orbit: new Map() };
+  private readonly banner = $('filter-banner');
+  private pulseTimer = 0;
   private readonly categoryOn = new Map<Category, boolean>(CATEGORIES.map((c) => [c, true]));
   private readonly orbitOn = new Map<OrbitClass, boolean>(ORBIT_CLASSES.map((o) => [o, true]));
   private altMin = -Infinity;
@@ -40,6 +50,7 @@ export class Filters {
     const categoryBox = $('category-chips');
     for (const category of CATEGORIES) {
       const chip = this.chip(category, CATEGORY_COLORS[category]);
+      this.chips.category.set(category, chip);
       this.counts.set(category, chip.querySelector('.count') as HTMLElement);
       chip.addEventListener('click', () => {
         const on = !this.categoryOn.get(category);
@@ -54,6 +65,7 @@ export class Filters {
     const orbitBox = $('orbit-chips');
     for (const orbit of ORBIT_CLASSES) {
       const chip = this.chip(orbit, ORBIT_COLORS[orbit], false);
+      this.chips.orbit.set(orbit, chip);
       chip.addEventListener('click', () => {
         const on = !this.orbitOn.get(orbit);
         this.orbitOn.set(orbit, on);
@@ -79,6 +91,52 @@ export class Filters {
     };
     min.addEventListener('input', () => onRange(min));
     max.addEventListener('input', () => onRange(max));
+    $('fb-clear').addEventListener('click', () => this.showAll());
+  }
+
+  /** Undo every filter: types, orbits, height, and whatever feature modules registered (a search type, a year). */
+  showAll(): void {
+    for (const [category, chip] of this.chips.category) {
+      this.categoryOn.set(category, true);
+      chip.classList.remove('is-off');
+      chip.setAttribute('aria-pressed', 'true');
+    }
+    for (const [orbit, chip] of this.chips.orbit) {
+      this.orbitOn.set(orbit, true);
+      chip.classList.remove('is-off');
+      chip.setAttribute('aria-pressed', 'true');
+    }
+    const min = $<HTMLInputElement>('alt-min'), max = $<HTMLInputElement>('alt-max');
+    min.value = min.min;
+    max.value = max.max;
+    this.altMin = -Infinity;
+    this.altMax = Infinity;
+    this.refreshUnits();
+    for (const about of [...this.about.values()]) about.clear(); // each module takes its own test away
+    this.extra.clear();
+    this.about.clear();
+    this.reapply();
+  }
+
+  /** Draw attention to the banner (coming back to the Earth with something hidden). */
+  nudge(): void {
+    if (this.banner.classList.contains('is-hidden')) return;
+    this.banner.classList.remove('is-pulse');
+    void this.banner.offsetWidth; // restart the animation
+    this.banner.classList.add('is-pulse');
+    clearTimeout(this.pulseTimer);
+    this.pulseTimer = window.setTimeout(() => this.banner.classList.remove('is-pulse'), 2600);
+  }
+
+  /** What is hiding objects just now, in a few words each. */
+  private reasons(): string[] {
+    const reasons = [...this.about.values()].map((about) => about.label);
+    const offTypes = CATEGORIES.filter((category) => !this.categoryOn.get(category));
+    if (offTypes.length) reasons.push(offTypes.length <= 2 ? `no ${offTypes.join(' or ').toLowerCase()}` : `${offTypes.length} types hidden`);
+    const offOrbits = ORBIT_CLASSES.filter((orbit) => !this.orbitOn.get(orbit));
+    if (offOrbits.length) reasons.push(offOrbits.length <= 2 ? `no ${offOrbits.join(' or ')}` : `only ${ORBIT_CLASSES.filter((orbit) => this.orbitOn.get(orbit)).join(', ') || 'no orbits'}`);
+    if (Number.isFinite(this.altMin) || Number.isFinite(this.altMax)) reasons.push(`height ${$('alt-label').textContent}`);
+    return reasons;
   }
 
   /**
@@ -129,9 +187,11 @@ export class Filters {
    * An extra test from a feature module (the growth-by-year slider, say): objects must pass
    * every registered test as well as the orbit and altitude filters. null removes a test.
    */
-  setExtra(key: string, keep: ((sat: Satellite) => boolean) | null): void {
+  setExtra(key: string, keep: ((sat: Satellite) => boolean) | null, about?: FilterAbout): void {
     if (keep) this.extra.set(key, keep);
     else this.extra.delete(key);
+    if (keep && about) this.about.set(key, about);
+    else this.about.delete(key);
     this.reapply();
   }
 
@@ -156,6 +216,14 @@ export class Filters {
     }
     $('visible-count').textContent = fmtInt(shown);
     $('readout-objects').classList.toggle('is-all', shown === catalog.sats.length); // "of 19,572" only while something is hidden
+    const hiding = shown < catalog.sats.length;
+    this.banner.classList.toggle('is-hidden', !hiding);
+    document.body.classList.toggle('is-filtered', hiding);
+    if (hiding) {
+      $('fb-count').textContent = `Showing ${fmtInt(shown)} of ${fmtInt(catalog.sats.length)}`;
+      const why = this.reasons();
+      $('fb-why').textContent = why.length ? why.join(' · ') : 'filtered';
+    }
     this.onChange();
   }
 }

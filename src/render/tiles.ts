@@ -445,6 +445,10 @@ const bodyFragmentShader = (occluders: number): string => /* glsl */ `
 
 export class GroundTiles {
   enabled = true;
+  /** The patches drawn just now, for finding where the ground the visitor sees really is (a rover stands on it). */
+  shownPatches(): THREE.Object3D[] {
+    return this.group.children.filter((patch) => patch.visible);
+  }
   private readonly group = new THREE.Group();
   private readonly tiles = new Map<string, Tile>();
   // One uniform object shared by every tile for each value that is the same for all of them.

@@ -65,8 +65,10 @@ export interface Pose {
 
 /** What is drawn besides the bodies themselves: the Layers switches that apply away from the tracker. */
 export interface SpaceOptions {
-  /** The paths of planets, moons and spacecraft. */
+  /** The paths of planets and moons. */
   orbits: boolean;
+  /** The paths of spacecraft (other than the one being looked at, which has its own switch). */
+  craftOrbits: boolean;
   /** Names over the picture. */
   names: boolean;
   /** Spacecraft at all. */
@@ -95,6 +97,8 @@ export interface SpaceHost {
   onOpen(target: Target): void;
   /** The visitor zoomed out as far as this view goes and kept going. */
   onOut(): void;
+  /** The pointer is over something that can be clicked (null: over nothing), at screen x, y. */
+  onHover(target: Target | null, x: number, y: number): void;
   /** The constellation figures: name and direction among the stars (star axes). */
   figures(): { name: string; direction: THREE.Vector3 }[];
   isPhone(): boolean;
@@ -208,6 +212,14 @@ export class SpaceView {
   private readonly sunLight = new THREE.DirectionalLight(0xfff4e0, 2.4);
   private readonly fillLight = new THREE.DirectionalLight(0xbcd6ff, 0.9);
   private readonly modelHolder = new THREE.Group();
+  // Under something standing on the ground: a soft dark patch where it touches, and a longer
+  // one stretched away from the Sun (see groundModel). Two textured quads; no shadow map.
+  private readonly shadow = new THREE.Group();
+  private readonly contact: THREE.Mesh;
+  private readonly cast: THREE.Mesh;
+  private footprint2 = { size: 1, x: 0, z: 0, base: -0.5 }; // the model's outline on the ground, in its own units
+  private groundAt = { key: '', radius: 0, checked: -Infinity }; // the drawn ground's radius under it, measured now and then
+  private readonly ray = new THREE.Raycaster();
   private modelKey = '';
   private modelKind: ModelKind = 'probe';
   private dots: THREE.Points | null = null;
@@ -228,7 +240,7 @@ export class SpaceView {
   private ground: GroundTiles | null = null; // close-up ground of the place's body, where its map is served in tiles
   private sharpGround = true; // the Layers switch (Settings.sharpGround)
   private lastT = 0; // the clock at the previous frame, to tell how fast time is running
-  private options: SpaceOptions = { orbits: true, names: true, craft: true, moons: true, allCraft: false, sites: true, skyNames: true, selOrbit: true, selTrack: false, selFootprint: false, selModel: true };
+  private options: SpaceOptions = { orbits: true, craftOrbits: true, names: true, craft: true, moons: true, allCraft: false, sites: true, skyNames: true, selOrbit: true, selTrack: false, selFootprint: false, selModel: true };
   private skyRoot: HTMLElement | null = null; // constellation names, made on first use
   private readonly skyTags: { tag: HTMLElement; direction: THREE.Vector3 }[] = [];
   private track: THREE.Line | null = null; // the selected craft's path over the ground (a child of the body, so it turns with it)
@@ -245,7 +257,18 @@ export class SpaceView {
     VIEWS.push(this);
     host.tags.append(this.tagRoot);
     this.tagRoot.hidden = true;
-    this.scene.add(backdrop, this.content, this.modelHolder);
+    this.scene.add(backdrop, this.content, this.modelHolder, this.shadow);
+    const blob = shadowTexture();
+    const shadowMaterial = (opacity: number) => new THREE.MeshBasicMaterial({
+      map: blob, color: 0x000000, transparent: true, opacity, depthWrite: false,
+      polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -16, // over the ground patches, which have their own nudge
+    });
+    const quad = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2); // lying flat: x along the ground, z across it
+    this.contact = new THREE.Mesh(quad, shadowMaterial(0.5));
+    this.cast = new THREE.Mesh(quad, shadowMaterial(0.5));
+    this.contact.renderOrder = this.cast.renderOrder = 2;
+    this.shadow.add(this.contact, this.cast);
+    this.shadow.visible = false;
     this.scene.add(this.sunLight, this.sunLight.target, this.fillLight, this.fillLight.target, new THREE.AmbientLight(0x8fb0e0, 0.45));
 
     const glow = glowTexture();
@@ -283,6 +306,25 @@ export class SpaceView {
 
     canvas.addEventListener('pointerdown', (event) => {
       if (this.live) this.downAt = { x: event.clientX, y: event.clientY, time: performance.now() };
+    });
+    // Pointing at something that can be clicked: the hand cursor and a hover card (the same
+    // test as a click, at most every 50 ms; a mouse only, a finger has no hover).
+    let hoverAt = 0;
+    canvas.addEventListener('pointermove', (event) => {
+      if (!this.live || event.pointerType === 'touch') return;
+      if (event.buttons !== 0) {
+        this.host.onHover(null, 0, 0); // dragging the view
+        return;
+      }
+      const now = performance.now();
+      if (now - hoverAt < 50) return;
+      hoverAt = now;
+      const item = this.pick(event.clientX, event.clientY);
+      canvas.style.cursor = item ? 'pointer' : '';
+      this.host.onHover(item ? item.target : null, event.clientX, event.clientY);
+    });
+    canvas.addEventListener('pointerleave', () => {
+      if (this.live) this.host.onHover(null, 0, 0);
     });
     canvas.addEventListener('pointerup', (event) => {
       const down = this.downAt;
@@ -431,6 +473,8 @@ export class SpaceView {
     this.content.clear();
     this.modelHolder.clear();
     this.modelHolder.visible = false;
+    this.shadow.visible = false;
+    this.groundAt.key = '';
     this.modelKey = '';
     this.flight = null;
     this.where = null;
@@ -663,6 +707,34 @@ export class SpaceView {
     return points;
   }
 
+  /**
+   * One period of a closed orbit, with points added wherever the path turns quickly as seen
+   * from the body it circles. Evenly spaced in time alone, a stretched orbit was cut short:
+   * Juno (e = 0.97) spends two hours of its 33 days close to Jupiter, so 240 even steps put
+   * one point near the planet and the line ran straight THROUGH it (the owner asked whether
+   * Juno was "going through Jupiter"; the craft itself was always placed right).
+   */
+  private sampleOrbit(period: number, tMs: number, at: (t: number) => THREE.Vector3): Float32Array {
+    const BASE = 240, TURN = 0.04, DEPTH = 8; // a point at least every 2.3° round the centre
+    const out: number[] = [];
+    const fill = (t0: number, p0: THREE.Vector3, t1: number, p1: THREE.Vector3, depth: number): void => {
+      if (depth >= DEPTH || p0.angleTo(p1) <= TURN) return;
+      const tm = (t0 + t1) / 2, pm = at(tm).clone();
+      fill(t0, p0, tm, pm, depth + 1);
+      out.push(pm.x, pm.y, pm.z);
+      fill(tm, pm, t1, p1, depth + 1);
+    };
+    let t0 = tMs, p0 = at(tMs).clone();
+    for (let i = 1; i <= BASE; i++) {
+      out.push(p0.x, p0.y, p0.z);
+      const t1 = tMs + (period * i) / BASE, p1 = at(t1).clone();
+      fill(t0, p0, t1, p1, 0);
+      t0 = t1;
+      p0 = p1;
+    }
+    return new Float32Array(out);
+  }
+
   private craftLine(item: Item, tMs: number, toScene: (v: Vec) => THREE.Vector3): void {
     if (item.target.kind !== 'craft') return;
     const craft = item.target.craft;
@@ -679,7 +751,7 @@ export class SpaceView {
     } else {
       const period = craftPeriodMs(craft);
       if (period !== null && period < 40 * 365.25 * DAY) {
-        points = this.sample(period, 240, tMs, at);
+        points = this.sampleOrbit(period, tMs, at);
         closed = true;
       } else {
         // Leaving for good (or on a very long orbit): where it has come from and where it is going.
@@ -956,7 +1028,7 @@ export class SpaceView {
       const craft = owner?.target.kind === 'craft' ? owner.target.craft : null;
       const pathless = map && craft !== null && !this.options.allCraft && !LEAVING.has(craft.id);
       // The craft being looked at follows its own switch ("Orbit"), like a selected satellite in the tracker.
-      line.visible = (owner?.shown ?? true) && (craft && owner === focusItem ? this.options.selOrbit : this.options.orbits && !pathless);
+      line.visible = (owner?.shown ?? true) && (craft && owner === focusItem ? this.options.selOrbit : craft ? this.options.craftOrbits && !pathless : this.options.orbits);
       (line.material as THREE.LineBasicMaterial).opacity = focusItem?.key === key ? 0.85 : map ? 0.26 : 0.32;
     }
     if (this.dots) {
@@ -1305,7 +1377,7 @@ export class SpaceView {
   private limits(): void {
     const map = this.where?.kind === 'system';
     const item = this.focus ? this.item(targetKey(this.focus)) : null;
-    if (item && !item.centre) this.controls.minDistance = item.radius > 0 ? item.radius * (map ? 2.2 : 1.15) : map ? 0.6 : 0.03;
+    if (item && !item.centre) this.controls.minDistance = item.base > 0 ? item.base * (map ? 2.2 : 1.15) : map ? 0.6 : 0.03; // full size, as in setFocus
     else this.controls.minDistance = map ? 12 : R * (1 + this.lowest);
   }
 
@@ -1365,8 +1437,12 @@ export class SpaceView {
       return;
     }
     this.sharpen(item);
-    // Stop a comfortable distance from it, on the side the camera is already on.
-    const distance = item.radius > 0 ? item.radius / (map ? MAP_REST : 1 / 3.6) : map ? 5 : 0.13;
+    // Stop a comfortable distance from it, on the side the camera is already on. Measured from
+    // its FULL size (`base`), the size it grows back to once it is the one looked at: on the
+    // solar system a dot the camera is near but not looking at is drawn shrunk (to a fifth),
+    // and measured from that, the Moon chosen after a craft beside the Earth stopped five times
+    // too close and then swelled to fill the screen (the owner: "it is just huge").
+    const distance = item.base > 0 ? item.base / (map ? MAP_REST : 1 / 3.6) : map ? 5 : 0.13;
     const away = this.camera.position.clone().sub(item.pos);
     if (away.lengthSq() < 1e-9) away.set(0, 0.3, 1);
     away.normalize();
@@ -1469,6 +1545,7 @@ export class SpaceView {
 
   private updateModel(focusItem: Item | null, tMs: number, realSeconds: number): void {
     const craft = focusItem?.target.kind === 'craft' ? focusItem.target.craft : null;
+    this.shadow.visible = false;
     if (!craft || !focusItem || !this.options.selModel) {
       this.modelHolder.visible = false;
       return;
@@ -1478,7 +1555,12 @@ export class SpaceView {
       this.modelHolder.clear();
       // The data file names its model; an unknown name falls back to the generic probe.
       this.modelKind = isModelKind(craft.model) ? craft.model : 'probe';
-      this.modelHolder.add(buildModel(this.modelKind));
+      const model = buildModel(this.modelKind);
+      this.modelHolder.add(model);
+      // Its outline seen from above, for the shadow (the model's own frame: +Y up, one unit across).
+      model.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(model);
+      this.footprint2 = { size: Math.max(box.max.x - box.min.x, box.max.z - box.min.z), x: (box.min.x + box.max.x) / 2, z: (box.min.z + box.max.z) / 2, base: modelBase(this.modelKind) };
     }
     const map = this.where?.kind === 'system';
     const position = focusItem.pos;
@@ -1493,7 +1575,9 @@ export class SpaceView {
     const surface = grounded;
     const up = position.lengthSq() > 1e-9 && !map ? position.clone().normalize() : UP.clone();
     this.modelHolder.position.copy(position);
-    if (surface) this.modelHolder.position.addScaledVector(up, -modelBase(this.modelKind) * size); // standing on the ground, not half sunk in it
+    // Standing ON the ground, not half sunk in it and not hovering: its lowest point is put on
+    // the ground actually drawn there (the sphere's facets, or a close-up patch lifted above it).
+    if (surface) this.modelHolder.position.copy(up).multiplyScalar(this.groundRadius(craft.id, position, realSeconds)).addScaledVector(up, -this.footprint2.base * size);
     // Which way it is travelling: where it will be a moment from now.
     const ahead = new THREE.Vector3();
     if (surface) ahead.crossVectors(UP, up);
@@ -1505,12 +1589,64 @@ export class SpaceView {
     this.modelHolder.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(forward, up, new THREE.Vector3().crossVectors(forward, up)));
     if (map && craft.status === 'silent') this.modelHolder.rotateY(realSeconds * 0.05); // a dead craft turns slowly
     if (craft.passing) this.modelHolder.rotation.set(realSeconds * 0.11, realSeconds * 0.17, 0); // a rock tumbles
+    if (surface && !map) this.groundShadow();
 
     const sunDir = map ? this.scratch.copy(position).multiplyScalar(-1).normalize() : this.sunDir;
     this.sunLight.position.copy(position).addScaledVector(sunDir, 50);
     this.sunLight.target.position.copy(position);
     this.fillLight.position.copy(this.camera.position);
     this.fillLight.target.position.copy(position);
+  }
+
+  /**
+   * How far from the centre the ground the visitor SEES is under a point: the body's sphere is
+   * drawn with flat facets that lie a little inside the true radius, and close-up patches
+   * float up to 0.11 % above it, each level at its own height. Both are more than a lander
+   * drawn at its smallest is tall, so it was found hovering. One ray straight down, at most
+   * twice a second (the craft is fixed to the ground, and the patches change only as they load).
+   */
+  private groundRadius(key: string, position: THREE.Vector3, realSeconds: number): number {
+    const at = this.groundAt;
+    if (at.key === key && realSeconds - at.checked < 0.5) return at.radius;
+    at.key = key;
+    at.checked = realSeconds;
+    at.radius = position.length() / 1.0014; // the true surface, if nothing is hit
+    const globe = this.items.find((item) => item.centre)?.mesh?.mesh;
+    if (!globe) return at.radius;
+    const down = position.clone().normalize().negate();
+    this.ray.set(position.clone().multiplyScalar(1.01), down);
+    this.ray.far = R * 0.02;
+    globe.updateMatrixWorld(true);
+    const hits = this.ray.intersectObjects([globe, ...(this.ground?.enabled ? this.ground.shownPatches() : [])], false);
+    if (hits.length) at.radius = hits[0].point.length();
+    return at.radius;
+  }
+
+  /** The shadow under a craft standing on the ground: where it touches, and cast away from the Sun. */
+  private groundShadow(): void {
+    const holder = this.modelHolder;
+    const shadow = this.shadow;
+    const f = this.footprint2;
+    shadow.position.copy(holder.position);
+    shadow.quaternion.copy(holder.quaternion);
+    shadow.scale.copy(holder.scale);
+    shadow.visible = true;
+    // The Sun in the craft's own frame (+Y straight up): how high it stands, and which way the shadow falls.
+    const sun = this.sunDir.clone().applyQuaternion(holder.quaternion.clone().invert());
+    const day = THREE.MathUtils.smoothstep(sun.y, -0.03, 0.12); // no shadow from a Sun below the horizon
+    const width = f.size * 1.05;
+    this.contact.position.set(f.x, f.base + 0.004, f.z);
+    this.contact.scale.set(width * 0.95, 1, width * 0.95);
+    (this.contact.material as THREE.MeshBasicMaterial).opacity = 0.8 + 0.17 * day; // blended in linear light: 0.9 reads as about two-thirds dark
+    // Long when the Sun is low (1 / tan of its height), capped so it never runs off to the horizon.
+    const length = width * Math.min(3.2, 1 + 0.6 / Math.max(0.12, sun.y));
+    const away = Math.atan2(sun.z, -sun.x); // turn about +Y that points the quad's +x away from the Sun
+    this.cast.visible = day > 0.01;
+    this.cast.rotation.set(0, away, 0);
+    const reach = (length - width) / 2;
+    this.cast.position.set(f.x + Math.cos(away) * reach, f.base + 0.003, f.z - Math.sin(away) * reach); // a turn θ about +Y sends +x to (cos θ, 0, −sin θ)
+    this.cast.scale.set(length, 1, width * 0.9);
+    (this.cast.material as THREE.MeshBasicMaterial).opacity = 0.94 * day;
   }
 
   // ---- name tags and picking -----------------------------------------------------------------
@@ -1617,4 +1753,20 @@ export class SpaceView {
     if (item && again) this.host.onOpen(item.target);
     else this.host.onPick(item ? item.target : null);
   }
+}
+
+/** A soft round shadow: dark in the middle, fading to nothing at the edge (shared by both shadow quads). */
+function shadowTexture(): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 64;
+  const g = canvas.getContext('2d')!;
+  const gradient = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gradient.addColorStop(0, 'rgba(255,255,255,1)');
+  gradient.addColorStop(0.5, 'rgba(255,255,255,0.85)');
+  gradient.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gradient;
+  g.fillRect(0, 0, 64, 64);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
 }

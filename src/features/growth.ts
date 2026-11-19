@@ -122,7 +122,10 @@ export function installGrowth(app: App): void {
     const chosen = next === null || next >= lastYear ? null : Math.max(FIRST_YEAR, Math.round(next));
     if (chosen === year) return;
     year = chosen;
-    app.setFilter('growth', year === null ? null : keep);
+    app.setFilter('growth', year === null ? null : keep, { label: `launched by ${year}`, clear: () => {
+      stop();
+      setYear(null);
+    } });
     render();
   }
 

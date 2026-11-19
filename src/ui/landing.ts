@@ -14,7 +14,7 @@
  *     orbit, and a button to the catalogue of all of them;
  *   - the complete list of features (FEATURES in featureList.ts — the one place to keep it
  *     current), as a compact index;
- *   - a small corner for games, and a small drawing that explains the name.
+ *   - a small drawing that explains the name.
  *
  * The bar at the top sits outside the element that scrolls (#landing-scroll), so nothing the
  * visitor does to the page — the elastic bounce past its top included — can move the bar.

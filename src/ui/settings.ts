@@ -22,7 +22,8 @@ export interface Settings {
   footprint: boolean;
   model: boolean;
   // away from the tracker (the solar system and other worlds; ui/places.ts)
-  spaceOrbits: boolean; // the paths of planets, moons and spacecraft
+  spaceOrbits: boolean; // the paths of planets and moons
+  spaceCraftOrbits: boolean; // the paths of spacecraft (a separate switch: the owner wanted the planets' orbits without every craft's)
   spaceNames: boolean; // names over the picture
   spaceCraft: boolean; // spacecraft at all
   spaceMoons: boolean; // moons, beside their planets and round the world being visited
@@ -74,6 +75,7 @@ const DEFAULTS: Settings = {
   footprint: true,
   model: true,
   spaceOrbits: true,
+  spaceCraftOrbits: true,
   spaceNames: true,
   spaceCraft: true,
   spaceMoons: true,
