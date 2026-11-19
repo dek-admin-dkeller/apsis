@@ -25,11 +25,12 @@
  * visible (and once a minute while the list is open). Nothing is asked while the tab is hidden.
  */
 
+import { findPasses, makeSatrec, type Pass } from '../data/ephemeris.ts';
 import { loadLaunches, type Launch } from '../data/launches.ts';
 import { loadDeep } from '../space/deep.ts';
 import { latestDsn, watchDsn } from '../space/dsn.ts';
 import { activeShowers, nextShowers } from '../space/showers.ts';
-import { skyEvents, type SkyEvent } from '../space/skyEvents.ts';
+import { eclipses, jupiterEvents, planetTransits, type SkyEvent } from '../space/skyEvents.ts';
 import type { DsnLink, Flyby } from '../space/types.ts';
 import type { App } from '../ui/app.ts';
 import { $ } from '../ui/dom.ts';
@@ -43,7 +44,7 @@ const AFTER_MS = 15 * 60000;
 const DSN_EVERY_MS = 5 * 60000;
 const LAUNCHES_EVERY_MS = 15 * 60000; // loadLaunches() answers from its hour-old copy in between
 
-type Icon = 'dish' | 'rocket' | 'shower' | 'rock' | 'eclipse';
+type Icon = 'dish' | 'rocket' | 'shower' | 'rock' | 'eclipse' | 'station';
 type Kind = 'alert' | 'ongoing' | 'coming';
 /** A shower counts as news within this long of its peak; the rest of its weeks it is routine. */
 const PEAK_NEWS_MS = 24 * 3600000;
@@ -51,6 +52,8 @@ const PEAK_NEWS_MS = 24 * 3600000;
 const ROCK_NOW_MS = 6 * 3600000;
 interface Row {
   kind: Kind;
+  /** Stable for the same event (a notification is sent once per id). */
+  id?: string;
   icon: Icon;
   title: string;
   note: string;
@@ -64,6 +67,7 @@ const ICONS: Record<Icon, string> = {
   rocket: '<path d="M10 2.5c2.4 2 3.4 4.8 3 8.5H7c-.4-3.7.6-6.5 3-8.5z" /><path d="M7 11l-2 3h3M13 11l2 3h-3M9 14.5h2l-1 3z" />',
   shower: '<path d="M15.5 3.5 9 10M12.5 2.5 8 7M16.5 7 12 11.5" /><circle cx="6.5" cy="13.5" r="2.2" />',
   rock: '<path d="M5 6.5 9 4l5 1.5 2 4-1.5 4.5L10 16l-4.5-1.5L3.5 10z" />',
+  station: '<path d="M3 10h14M6 7v6M14 7v6M8.5 8.5h3v3h-3z" />',
   eclipse: '<circle cx="8.5" cy="10" r="5.5" /><path d="M12.6 5.6a5.5 5.5 0 1 1 0 8.8 5.5 5.5 0 0 0 0-8.8z" fill="currentColor" stroke="none" opacity="0.7" />',
 };
 
@@ -89,6 +93,94 @@ export function installBell(app: App): void {
   let launches: Launch[] = [];
   let flybys: Flyby[] = [];
   let open = false;
+
+  // ---- the Space Station over the visitor (data/ephemeris.ts findPasses) ----------------------
+
+  type IssPass = Pass & { dark: boolean }; // dark: the Sun is below −6° at the visitor at the peak (a bright pass can be seen)
+  let issPasses: IssPass[] = [];
+  let issAt = 0;
+  const hasLocation = (): boolean => app.hasOwnLocation();
+  /** The next passes in 24 h, worked out in an idle moment at most every ten minutes (a few ms of SGP4). */
+  function refreshIss(): void {
+    if (!hasLocation() || Date.now() - issAt < 10 * 60000) return;
+    issAt = Date.now();
+    const work = (): void => {
+      const iss = app.catalog()?.byName.get('ISS (ZARYA)')?.[0];
+      if (!iss) return;
+      const observer = app.observer();
+      issPasses = findPasses(makeSatrec(iss), observer, Date.now() - 15 * 60000, 24, 6).map((pass) => ({ ...pass, dark: sunAltitudeDeg(observer.latDeg, observer.lonDeg, pass.peakMs) < -6 }));
+      render();
+    };
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(work, { timeout: 4000 });
+    else setTimeout(work, 300);
+  }
+
+  // ---- notifications (only if the visitor turns them on, from the bell) -----------------------
+
+  const NOTIFY_KEY = 'apsis.bell.notify';
+  const SENT_KEY = 'apsis.bell.sent';
+  const notifyWanted = (): boolean => {
+    try {
+      return localStorage.getItem(NOTIFY_KEY) === 'yes' && 'Notification' in window && Notification.permission === 'granted';
+    } catch {
+      return false;
+    }
+  };
+  /** Ids already notified (kept two days, so a reload does not repeat them). */
+  function sent(): Map<string, number> {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SENT_KEY) ?? '{}') as Record<string, number>;
+      return new Map(Object.entries(saved).filter(([, at]) => Date.now() - at < 2 * 86400000));
+    } catch {
+      return new Map();
+    }
+  }
+  function notify(all: Row[]): void {
+    if (!notifyWanted()) return;
+    const done = sent();
+    for (const row of all) {
+      if (row.kind !== 'alert' || !row.id || done.has(row.id)) continue;
+      done.set(row.id, Date.now());
+      try {
+        const note = new Notification(row.title, { body: row.note, tag: row.id, icon: './icons/icon-192.png' });
+        note.onclick = () => {
+          window.focus();
+          row.run();
+          note.close();
+        };
+      } catch { /* some browsers allow notifications only from a service worker: then the bell alone says it */ }
+    }
+    try {
+      localStorage.setItem(SENT_KEY, JSON.stringify(Object.fromEntries(done)));
+    } catch { /* storage unavailable */ }
+  }
+  /** The footer switch: asks the browser (from the click itself) and remembers the choice. */
+  function notifyFooter(): HTMLElement {
+    const foot = el('div', 'bell-foot');
+    if (!('Notification' in window)) return foot;
+    const on = notifyWanted();
+    const button = el('button', 'bell-notify', on ? 'Notifications on · turn off' : 'Notify me when something happens');
+    button.type = 'button';
+    button.title = 'A browser notification for alerts only (a launch, an eclipse, a close asteroid, the Station overhead), never for routine things';
+    button.addEventListener('click', () => {
+      if (notifyWanted()) {
+        try { localStorage.setItem(NOTIFY_KEY, 'no'); } catch { /* storage unavailable */ }
+        render();
+        return;
+      }
+      void Notification.requestPermission().then((permission) => {
+        try { localStorage.setItem(NOTIFY_KEY, permission === 'granted' ? 'yes' : 'no'); } catch { /* storage unavailable */ }
+        if (permission !== 'granted') app.toast('Notifications are blocked for this site in the browser’s settings.');
+        // What is already happening is not news to someone looking at it: mark it as sent.
+        const done = sent();
+        for (const row of rows()) if (row.kind === 'alert' && row.id) done.set(row.id, Date.now());
+        try { localStorage.setItem(SENT_KEY, JSON.stringify(Object.fromEntries(done))); } catch { /* storage unavailable */ }
+        render();
+      });
+    });
+    foot.append(button);
+    return foot;
+  }
 
   // ---- what there is to show ----------------------------------------------------------------
 
@@ -119,7 +211,7 @@ export function installBell(app: App): void {
       if (launch.state === 'done' || launch.state === 'failed') continue;
       if (!flying && !imminent && (until < 0 || !exact)) continue;
       out.push({
-        kind: flying || imminent ? 'alert' : 'coming',
+        kind: flying || imminent ? 'alert' : 'coming', id: `launch-${launch.id}`,
         icon: 'rocket',
         title: `${launch.rocket} · ${launch.mission}`,
         note: flying ? `${until < 0 ? `Lifted off ${duration(-until)} ago` : 'In flight'} from ${launch.place}`
@@ -140,7 +232,7 @@ export function installBell(app: App): void {
     for (const time of activeShowers(now)) {
       const toPeak = time.peakMs - now;
       out.push({
-        kind: Math.abs(toPeak) < PEAK_NEWS_MS ? 'alert' : 'ongoing', icon: 'shower', title: `${time.shower.name} meteor shower`, at: now,
+        kind: Math.abs(toPeak) < PEAK_NEWS_MS ? 'alert' : 'ongoing', id: `shower-${time.shower.code}-${new Date(time.peakMs).getUTCFullYear()}`, icon: 'shower', title: `${time.shower.name} meteor shower`, at: now,
         note: Math.abs(toPeak) < 36 * 3600000 ? `Active now · peak ${fromNow(toPeak)}` : `Active now · ${toPeak < 0 ? 'peaked' : 'peak'} ${clockStamp(time.peakMs)}`,
         run: () => app.openSection('showers'),
       });
@@ -151,6 +243,35 @@ export function installBell(app: App): void {
         kind: 'coming', icon: 'shower', title: `${next.shower.name} meteor shower`, at: next.peakMs,
         note: `Peak ${fromNow(next.peakMs - now)} · up to ${next.shower.rate} an hour`,
         run: () => app.openSection('showers'),
+      });
+    }
+
+    // The Space Station over the visitor (only with their own location): passing now or rising
+    // within ten minutes, high enough to matter (20°), is an alert; the next pass is coming up.
+    // Without a location, one row offers to use it.
+    for (const pass of issPasses) {
+      const live = now >= pass.startMs - 10 * 60000 && now <= pass.endMs && pass.peakElDeg >= 20;
+      if (!live && (pass.startMs < now || out.some((row) => row.icon === 'station' && row.kind === 'coming'))) continue;
+      const eye = pass.sunlit && pass.dark ? ' · bright to the eye' : '';
+      out.push({
+        kind: live ? 'alert' : 'coming', icon: 'station', id: `iss-${pass.startMs}`, at: pass.startMs,
+        title: 'Space Station over you',
+        note: `${now >= pass.startMs ? 'Up now' : live ? `Rises ${fromNow(pass.startMs - now)}` : clockStamp(pass.startMs)} · up to ${Math.round(pass.peakElDeg)}° high${eye}`,
+        run: () => void app.goEarth().then(() => {
+          if (pass.startMs > Date.now() + 120000) app.jumpTo(pass.startMs - 30000); // to just before it rises
+          const iss = app.catalog()?.byName.get('ISS (ZARYA)')?.[0];
+          if (iss) app.select(iss);
+        }),
+      });
+    }
+    if (!hasLocation()) {
+      out.push({
+        kind: 'coming', icon: 'station', at: now + 365 * 86400000, title: 'Space Station over you',
+        note: 'Share your location to see when it next flies over',
+        run: () => void app.useMyLocation().then(() => {
+          issAt = 0;
+          render();
+        }),
       });
     }
 
@@ -174,21 +295,30 @@ export function installBell(app: App): void {
       if (!live && (event.startMs < now || nextOf.has(key))) continue;
       if (!live) nextOf.add(key);
       out.push({
-        kind: live ? (event.rare ? 'alert' : 'ongoing') : 'coming', icon: 'eclipse', title: event.title, at: event.peakMs,
+        kind: live ? (event.rare ? 'alert' : 'ongoing') : 'coming', id: event.id, icon: 'eclipse', title: event.title, at: event.peakMs,
         note: live ? `Now · ${event.detail}` : `${clockStamp(event.peakMs)} · ${event.detail}`,
         run: () => showSkyEvent(event),
       });
     }
 
-    const rock = flybys.filter((flyby) => flyby.timeMs > now - ROCK_NOW_MS).sort((a, b) => a.timeMs - b.timeMs)[0];
-    if (rock) {
+    // Asteroids. A rock passes within a dozen Moon-distances nearly every day, so passing alone
+    // is not news: only one coming closer than two Moon-distances is an alert. And only the
+    // closest few have a path in the data (JPL is asked for those), so "coming up" names the
+    // next one that can actually be followed; a click on one without a path says so.
+    const known = (flyby: Flyby): boolean => !!(flyby as Flyby & { motion?: unknown }).motion;
+    const passingNow = flybys.filter((flyby) => Math.abs(flyby.timeMs - now) < ROCK_NOW_MS).sort((a, b) => a.distanceKm - b.distanceKm)[0];
+    const nextKnown = flybys.filter((flyby) => flyby.timeMs > now && known(flyby)).sort((a, b) => a.timeMs - b.timeMs)[0];
+    for (const rock of [passingNow, nextKnown]) {
+      if (!rock || (rock === nextKnown && rock === passingNow)) continue;
       const lunar = rock.distanceKm / 384400;
-      const passing = Math.abs(rock.timeMs - now) < ROCK_NOW_MS;
+      const passing = rock === passingNow;
       out.push({
-        kind: passing ? 'alert' : 'coming', icon: 'rock', title: `Asteroid ${rock.name}`, at: rock.timeMs,
+        kind: passing ? (lunar < 2 ? 'alert' : 'ongoing') : 'coming', id: `rock-${rock.name}`, icon: 'rock', title: `Asteroid ${rock.name}`, at: rock.timeMs,
         note: `${passing ? 'Passing the Earth now · closest' : 'Passes the Earth'} ${fromNow(rock.timeMs - now)} · ${lunar < 10 ? lunar.toFixed(1) : Math.round(lunar)} times the Moon's distance`,
         run: () => {
-          if (!app.showFlyby(rock.name)) app.openSection('flybys');
+          if (app.showFlyby(rock.name)) return;
+          app.openSection('flybys');
+          app.toast(`${rock.name} is too far out for its path to be in the data (only the closest few are followed). Its time and distance are in the list.`);
         },
       });
     }
@@ -203,29 +333,73 @@ export function installBell(app: App): void {
   }
 
   /** The clock to the event's peak, at the world where it shows: the shadows are drawn there. */
+  let shownEvent: SkyEvent | null = null;
   function showSkyEvent(event: SkyEvent): void {
+    shownEvent = event;
     app.jumpTo(event.peakMs);
     if (event.kind === 'solar-eclipse') {
       void app.goEarth().then(() => {
-        if (event.latDeg !== undefined && event.lonDeg !== undefined) app.flyToGround(event.latDeg, event.lonDeg, 12000);
+        // Two frames later: the globe must first have turned to the new time, or the camera
+        // aims at where that longitude WAS (it landed 26° off before).
+        if (event.latDeg !== undefined && event.lonDeg !== undefined) {
+          const { latDeg, lonDeg } = event;
+          requestAnimationFrame(() => requestAnimationFrame(() => app.flyToGround(latDeg, lonDeg, 9000)));
+        }
       });
     } else {
       app.goWorld(event.body);
     }
   }
 
-  // Worked out for the next two months; kept for ten minutes (the bell asks every 30 s).
-  let skyCache: { at: number; events: SkyEvent[] } | null = null;
-  function sky(now: number): SkyEvent[] {
-    if (!skyCache || now - skyCache.at > 10 * 60000) {
-      try {
-        skyCache = { at: now, events: skyEvents(now - 12 * 3600000, now + 60 * 86400000) };
-      } catch (error) {
-        console.error('Sky events could not be worked out', error);
-        skyCache = { at: now, events: [] };
+  // Share links: "#event=solar-2027-02-06" opens that eclipse (or transit) at its peak. The id
+  // carries its date, so it is found by working out only the days round it.
+  app.addShareLink({
+    add: (q) => {
+      const t = app.time();
+      if (!shownEvent || t < shownEvent.startMs - 3600000 || t > shownEvent.endMs + 3600000) return false;
+      q.set('event', shownEvent.id);
+      return true;
+    },
+    apply: (q) => {
+      const id = q.get('event') ?? '';
+      const date = /(\d{4}-\d{2}-\d{2})(T\d{2}:\d{2})?/.exec(id);
+      if (!date) return false;
+      const at = Date.parse(`${date[1]}${date[2] ?? 'T12:00'}:00Z`);
+      const near = [...eclipses(at - 2 * 86400000, at + 2 * 86400000), ...planetTransits(at - 2 * 86400000, at + 2 * 86400000), ...jupiterEvents(at - 86400000, at + 86400000)];
+      const event = near.find((candidate) => candidate.id === id);
+      if (!event) {
+        app.toast('That event could not be found.');
+        return true;
       }
+      showSkyEvent(event);
+      return true;
+    },
+  });
+
+  // Eclipses and transits a year ahead (they are rare), Jupiter's routine shadows a few days.
+  // The first working-out takes some tens of milliseconds, so it is done in an idle moment and
+  // never inside a frame; it is kept for ten minutes (the bell redraws every 30 s).
+  let skyCache: { at: number; events: SkyEvent[] } | null = null;
+  let skyPending = false;
+  function sky(now: number): SkyEvent[] {
+    if ((!skyCache || now - skyCache.at > 10 * 60000) && !skyPending) {
+      skyPending = true;
+      const work = (): void => {
+        const t = Date.now();
+        try {
+          const rare = [...eclipses(t - 12 * 3600000, t + 400 * 86400000), ...planetTransits(t - 12 * 3600000, t + 400 * 86400000)];
+          skyCache = { at: t, events: [...rare, ...jupiterEvents(t - 12 * 3600000, t + 4 * 86400000)].sort((a, b) => a.startMs - b.startMs) };
+        } catch (error) {
+          console.error('Sky events could not be worked out', error);
+          skyCache = { at: t, events: [] };
+        }
+        skyPending = false;
+        render();
+      };
+      if (typeof requestIdleCallback === 'function') requestIdleCallback(work, { timeout: 5000 });
+      else setTimeout(work, 200);
     }
-    return skyCache.events;
+    return skyCache?.events ?? [];
   }
 
   // ---- drawing ------------------------------------------------------------------------------
@@ -242,8 +416,10 @@ export function installBell(app: App): void {
   }
 
   function render(): void {
+    refreshIss();
     const all = rows();
     badge(all);
+    notify(all);
     if (!open) return;
     const parts: HTMLElement[] = [];
     const section = (title: string, items: Row[]) => {
@@ -269,6 +445,7 @@ export function installBell(app: App): void {
     section('Ongoing', all.filter((row) => row.kind === 'ongoing'));
     section('Coming up', all.filter((row) => row.kind === 'coming'));
     if (parts.length === 0) parts.push(el('p', 'bell-empty', 'Nothing to report just now. Contacts, launches and meteor showers appear here as they happen.'));
+    parts.push(notifyFooter());
     list.replaceChildren(...parts);
   }
 
@@ -350,4 +527,20 @@ export function installBell(app: App): void {
     }
     render();
   }, 30000);
+}
+
+/** The Sun's altitude at a place, degrees (low precision: enough to tell night from twilight). */
+function sunAltitudeDeg(latDeg: number, lonDeg: number, tMs: number): number {
+  const d = (tMs - Date.UTC(2000, 0, 1, 12)) / 86400000;
+  const rad = Math.PI / 180;
+  const g = (357.529 + 0.98560028 * d) * rad;
+  const q = 280.459 + 0.98564736 * d;
+  const lambda = (q + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) * rad;
+  const eps = (23.439 - 0.00000036 * d) * rad;
+  const ra = Math.atan2(Math.cos(eps) * Math.sin(lambda), Math.cos(lambda));
+  const dec = Math.asin(Math.sin(eps) * Math.sin(lambda));
+  const gmst = (280.46061837 + 360.98564736629 * d) * rad;
+  const hour = gmst + lonDeg * rad - ra;
+  const lat = latDeg * rad;
+  return Math.asin(Math.sin(lat) * Math.sin(dec) + Math.cos(lat) * Math.cos(dec) * Math.cos(hour)) / rad;
 }

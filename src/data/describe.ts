@@ -17,7 +17,8 @@ export type ModelKind =
   | 'lasersphere' | 'relay' | 'phasedarray'
   // Particular constellations and vehicles common enough to deserve their own shape
   // (render/constellationModels.ts, render/vehicleModels.ts).
-  | 'starlinkv2' | 'kuiper' | 'iridium' | 'o3b' | 'galileo' | 'glonass' | 'goes'
+  | 'starlinkv2' | 'kuiper' | 'qianfan' | 'guowang' | 'iridium' | 'globalstar' | 'o3b' | 'galileo' | 'glonass' | 'goes'
+  | 'iceye' | 'capella' | 'dove'
   | 'shenzhou' | 'starliner' | 'orion' | 'dreamchaser' | 'roadster'
   // Launch vehicles standing on their pad (render/rocketModels.ts): +Y is up the rocket's axis
   // and y = 0 is the bottom of its engine bells, so modelBase() stands one on the ground.
@@ -132,6 +133,12 @@ const SHAPES: [RegExp, ModelKind][] = [
   [/^STARLINK-\d{5}\b/, 'starlinkv2'],
   [/^STARLINK/, 'starlink'],
   [/^KUIPER/, 'kuiper'],
+  [/^QIANFAN/, 'qianfan'],
+  [/^HULIANWANG/, 'guowang'], // the Guowang satellites (DIGUI) and their test flights (JISHU SHIYAN)
+  [/^GLOBALSTAR/, 'globalstar'],
+  [/^ICEYE/, 'iceye'],
+  [/^CAPELLA/, 'capella'],
+  [/^(FLOCK|DOVE|SUPERDOVE)/, 'dove'], // Planet's Doves (must come before the CubeSat line, which used to claim them)
   [/^IRIDIUM 1\d\d$/, 'iridium'], // Iridium NEXT (100–180); the first generation, numbered below 100, keeps the comsat shape
   [/^O3B/, 'o3b'],
   [/GALILEO/, 'galileo'],
@@ -203,7 +210,13 @@ export const KIND_LABEL: Record<ModelKind, string> = {
   phasedarray: 'Direct-to-phone satellite',
   starlinkv2: 'Starlink V2 Mini',
   kuiper: 'Amazon Kuiper satellite',
+  qianfan: 'Qianfan broadband satellite',
+  guowang: 'Guowang broadband satellite',
   iridium: 'Iridium NEXT satellite',
+  globalstar: 'Globalstar satellite',
+  iceye: 'ICEYE radar satellite',
+  capella: 'Capella radar satellite',
+  dove: 'Planet Dove',
   o3b: 'O3b medium-orbit satellite',
   galileo: 'Galileo navigation satellite',
   glonass: 'GLONASS navigation satellite',

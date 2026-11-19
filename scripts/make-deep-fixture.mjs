@@ -6,6 +6,9 @@
 //   node scripts/make-deep-fixture.mjs --fit    also fit every moon's orbit and write moonOrbits.ts
 //        … --fit --cache <folder>               keep the sixty years of samples in a folder and reuse
 //                                               them (to work on the fit without asking Horizons again)
+//   node scripts/make-deep-fixture.mjs --planets [--cache <folder>]
+//                                               write src/space/planetSeries.ts, the planets' series
+//                                               (truncated VSOP87B, downloaded from IMCCE; see below)
 //
 // `npm run check` must be able to say "the planets and moons are where NASA says they are"
 // without the network. So this script asks JPL Horizons for the truth on twelve dates between
@@ -30,6 +33,15 @@
 // Everything is by averaging over the sixty years, never from one instant: an osculating
 // ellipse is off by up to twice the eccentricity everywhere else. The script prints how far
 // each fitted orbit strays from the samples; the independent test is check-deep.mjs.
+//
+// With --planets it downloads the eight VSOP87B files (Bretagnon & Francou 1988: heliocentric
+// longitude, latitude and distance, ecliptic and equinox J2000; one request each, 1.1 s apart,
+// from ftp.imcce.fr) and keeps only the terms that can move a planet by more than PLANET_EPS
+// within 1900–2100 (a term A·τ^α·cos(B + Cτ) is kept when A·0.1^α ≥ ε). Each number is written
+// with only the digits that matter at that level, which keeps the file small. The script
+// prints how far the cut series is from the whole one; the independent test is check-deep.mjs
+// against Horizons. (This script imports ephem.ts, which imports planetSeries.ts: the file
+// must exist to regenerate it.)
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -41,6 +53,7 @@ import { bodyAxes, bodyPosition } from '../src/space/ephem.ts';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = join(HERE, 'fixtures/deep-truth.json');
 const ORBITS = join(HERE, '../src/space/moonOrbits.ts');
+const SERIES = join(HERE, '../src/space/planetSeries.ts');
 
 // Awkward times on purpose (never midnight), spread over the years the app will be used in.
 const DATES = [
@@ -480,4 +493,137 @@ if (process.argv.includes('--fit')) {
   for (const id of MOONS) if (id !== 'moon') lines.push(await fitMoon(id));
   await writeFile(ORBITS, `${ORBITS_HEAD}${lines.join('\n')}\n};\n`);
   console.log('  wrote src/space/moonOrbits.ts');
+}
+
+// ── --planets: the series of the planets ────────────────────────────────────────────────
+
+/**
+ * How much a dropped term may move each planet, radians of longitude or latitude (and the same
+ * times the planet's mean distance, in AU, for the distance). Chosen so the cut series is
+ * within about half an arcsecond of the whole one for Mercury to Saturn (what transits and
+ * Jupiter's moons need) and a little over an arcsecond for Uranus and Neptune, where VSOP87
+ * itself is 1.5″ from today's JPL ephemeris anyway.
+ */
+const PLANET_EPS = { mercury: 1e-7, venus: 1e-7, earth: 1e-7, mars: 1e-7, jupiter: 2e-7, saturn: 3e-7, uranus: 1e-6, neptune: 1e-6 };
+const PLANET_FILE = { mercury: 'mer', venus: 'ven', earth: 'ear', mars: 'mar', jupiter: 'jup', saturn: 'sat', uranus: 'ura', neptune: 'nep' };
+const MEAN_AU = { mercury: 0.387, venus: 0.723, earth: 1, mars: 1.524, jupiter: 5.2, saturn: 9.55, uranus: 19.2, neptune: 30.1 };
+/** The series are cut for |τ| ≤ 0.1 (Julian millennia from J2000): 1900–2100. */
+const TAU_MAX = 0.1;
+
+async function vsopText(id) {
+  const name = `VSOP87B.${PLANET_FILE[id]}`;
+  const at = process.argv.indexOf('--cache');
+  const file = at > 0 ? join(process.argv[at + 1], name) : null;
+  if (file) {
+    try { return await readFile(file, 'utf8'); } catch { /* not there yet */ }
+  }
+  await new Promise((resolve) => setTimeout(resolve, 1100)); // one request at a time, politely
+  const res = await fetch(`https://ftp.imcce.fr/pub/ephem/planets/vsop87/${name}`);
+  if (!res.ok) throw new Error(`${name}: HTTP ${res.status}`);
+  const text = await res.text();
+  if (file) {
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, text);
+  }
+  return text;
+}
+
+/** [variable 0–2 = L, B, R][power α] → [[A, B, C], …], from the fixed columns the VSOP87 notice gives. */
+function parseVsop(text) {
+  const series = [[], [], []];
+  let v = 0, power = 0;
+  for (const line of text.split('\n')) {
+    if (line.startsWith(' VSOP87')) {
+      v = Number(line[41]) - 1;
+      power = Number(line[59]);
+      series[v][power] = [];
+    } else if (line.length > 120) {
+      series[v][power].push([Number(line.slice(79, 97)), Number(line.slice(97, 111)), Number(line.slice(111, 131))]);
+    }
+  }
+  return series;
+}
+
+function sumSeries(series, tau) {
+  return series.map((powers) => powers.reduce((sum, terms, a) => sum + terms.reduce((s, [A, B, C]) => s + A * Math.cos(B + C * tau), 0) * tau ** a, 0));
+}
+
+function lbrDirection([L, B]) {
+  return [Math.cos(B) * Math.cos(L), Math.cos(B) * Math.sin(L), Math.sin(B)];
+}
+
+/** A number with just enough decimals that rounding it moves the sum by less than `step`. */
+function digits(value, step) {
+  const places = Math.min(11, Math.max(0, Math.ceil(-Math.log10(step))));
+  return String(Number(value.toFixed(places)));
+}
+
+async function writePlanetSeries() {
+  const blocks = [];
+  let total = 0;
+  for (const [id, eps] of Object.entries(PLANET_EPS)) {
+    const full = parseVsop(await vsopText(id));
+    const limits = [eps, eps, eps * MEAN_AU[id]];
+    // The same rounding as written, so what is measured below is exactly what ephem.ts gets.
+    const cut = full.map((powers, v) => powers.map((terms, a) => {
+      const reach = TAU_MAX ** a, tol = limits[v] / 50;
+      return terms.filter(([A]) => A * reach >= limits[v]).map(([A, B, C]) => [
+        digits(A, tol / reach), digits(B, tol / (A * reach)), digits(C, tol / (A * reach * TAU_MAX)),
+      ]);
+    }));
+    const count = cut.flat().reduce((n, terms) => n + terms.length, 0);
+    total += count;
+    let worst = 0;
+    for (let tau = -TAU_MAX; tau <= TAU_MAX; tau += 0.00071) {
+      const a = lbrDirection(sumSeries(cut.map((p) => p.map((t) => t.map((x) => x.map(Number)))), tau)), b = lbrDirection(sumSeries(full, tau));
+      worst = Math.max(worst, Math.acos(Math.min(1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2])) * 206264.806);
+    }
+    console.log(`  ${id}: ${count} of ${full.flat().reduce((n, t) => n + t.length, 0)} terms; within ${worst.toFixed(2)}″ of the whole series, 1900–2100`);
+    const variable = (powers) => `[${powers.map((terms) => `[${terms.map((t) => t.join(',')).join(',')}]`).join(',\n    ')}]`;
+    blocks.push(`  ${id}: {\n    L: ${variable(cut[0])},\n    B: ${variable(cut[1])},\n    R: ${variable(cut[2])},\n  },`);
+  }
+  await writeFile(SERIES, `${SERIES_HEAD}${blocks.join('\n')}\n};\n`);
+  console.log(`  wrote src/space/planetSeries.ts (${total} terms)`);
+}
+
+const SERIES_HEAD = `/**
+ * Where the planets are: the series of the planetary theory VSOP87 (version B), cut short.
+ *
+ * GENERATED by \`node scripts/make-deep-fixture.mjs --planets\` from the files VSOP87B.mer …
+ * VSOP87B.nep (P. Bretagnon, G. Francou, "Planetary theories in rectangular and spherical
+ * variables: VSOP87 solutions", A&A 202, 309, 1988; IMCCE, ftp.imcce.fr/pub/ephem/planets/vsop87);
+ * do not edit the numbers by hand. ephem.ts turns them into positions.
+ *
+ * For each planet, three series: heliocentric ecliptic longitude L and latitude B (radians) and
+ * distance R (AU), on the dynamical ecliptic and equinox of J2000. Each is a list by power α of
+ * τ, the time in Julian millennia of uniform time (TDB) from J2000; each list holds triples
+ * A, B, C, and the value is the sum of A · cos(B + C·τ) · τ^α.
+ *
+ * Only terms that can move the planet by more than ε within 1900–2100 are kept (ε per planet
+ * in make-deep-fixture.mjs: 0.02″ for Mercury to Mars, 0.04″ Jupiter, 0.06″ Saturn, 0.2″
+ * Uranus and Neptune); the cut series is within about half an arcsecond of the whole one for
+ * Mercury to Saturn and a little over an arcsecond for Uranus and Neptune. Outside 1900–2100
+ * ephem.ts goes back to JPL's table of approximate elements. The Earth here is the Earth
+ * itself, not the Earth–Moon barycentre; the giant planets are their systems' barycentres
+ * (a few hundred km from the planet's centre: 0.1″).
+ */
+
+import type { BodyId } from './types.ts';
+
+/** One planet: [power α][A, B, C, A, B, C …] for each of L, B, R. */
+export interface PlanetSeries {
+  L: number[][];
+  B: number[][];
+  R: number[][];
+}
+
+/** Uniform time from J2000 within which the series were cut, days (±100 years). */
+export const SERIES_SPAN_DAYS = 36525;
+
+export const PLANET_SERIES: Partial<Record<BodyId, PlanetSeries>> = {
+`;
+
+if (process.argv.includes('--planets')) {
+  console.log("\nThe planets' series (VSOP87B), cut short:");
+  await writePlanetSeries();
 }

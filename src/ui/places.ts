@@ -1089,7 +1089,10 @@ export class Places {
       });
     }
     // The switches a selected satellite has in the tracker, for a craft in orbit at a place.
-    $('pc-acts').classList.toggle('is-hidden', !(craft && this.spot === 'place' && craft.motion.type !== 'surface' && !craft.passing));
+    // A rover on the ground has its own: where it has driven, and its model.
+    const onGround = !!craft && craft.motion.type === 'surface' && !craft.site;
+    $('pc-acts').classList.toggle('is-hidden', !(craft && this.spot === 'place' && !craft.passing && !craft.site && (craft.motion.type !== 'surface' || onGround)));
+    $('pc-acts').classList.toggle('is-ground', onGround);
 
     const about = (into: HTMLElement, text: string) => {
       into.append(el('p', 'pc-blurb', text));

@@ -51,6 +51,7 @@ const KIND_NOTE: Partial<Record<ModelKind, string>> = {
   smallsat: 'Satellite', cubesat: 'CubeSat', observer: 'Earth imaging', radarsat: 'Radar imaging', weather: 'Weather',
   spinner: 'Weather', telescope: 'Telescope', iss: 'Space station', tiangong: 'Space station', station: 'Space station',
   dragon: 'Spacecraft', soyuz: 'Spacecraft', cygnus: 'Spacecraft', capsule: 'Spacecraft', rocketbody: 'Rocket stage', debris: 'Debris',
+  qianfan: 'Qianfan', guowang: 'Guowang', globalstar: 'Communications', iceye: 'Radar imaging', capella: 'Radar imaging', dove: 'Earth imaging',
   starlinkv2: 'Starlink', kuiper: 'Amazon Kuiper', iridium: 'Communications', o3b: 'Communications', galileo: 'Navigation',
   glonass: 'Navigation', goes: 'Weather', shenzhou: 'Spacecraft', starliner: 'Spacecraft', orion: 'Spacecraft', dreamchaser: 'Spacecraft',
 };

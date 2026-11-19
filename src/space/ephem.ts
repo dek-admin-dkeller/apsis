@@ -8,10 +8,17 @@
  * Frame and units as in types.ts: ICRF / J2000 equatorial, kilometres, Unix milliseconds.
  *
  * Three methods, by how the thing actually moves:
- *   planets   Keplerian elements that change linearly with time: JPL's "approximate positions
- *             of the planets" (Standish), the table valid 1800–2050. Good to about 0.01° for
- *             the inner planets; Jupiter and Saturn pull on each other with a 900-year rhythm
- *             the table does not carry and are the worst, at about 0.07°.
+ *   planets   1900–2100: the planetary theory VSOP87 (Bretagnon & Francou), its series cut to
+ *             the terms that matter at a few hundredths of an arcsecond (planetSeries.ts, about
+ *             2,000 cosines in all). Within half an arcsecond of JPL's DE441 for Mercury to
+ *             Saturn, about 2″ for Uranus and Neptune (VSOP87 itself was fitted to an older JPL
+ *             ephemeris). Outside those years, and always for Pluto, Keplerian elements that
+ *             change linearly with time: JPL's "approximate positions of the planets"
+ *             (Standish), the table valid 1800–2050, good to about 0.01° for the inner planets
+ *             and 0.07° for Jupiter and Saturn, whose 900-year tug-of-war it does not carry.
+ *             That was the only method until the eclipse and transit predictions
+ *             (skyEvents.ts) needed better: 0.07° of Jupiter is two minutes on Callisto's
+ *             transits, 0.01° of Venus six minutes on a transit of Venus.
  *   the Moon  a trigonometric series (the largest terms of Meeus's abridged ELP-2000/82): the
  *             Sun disturbs the Moon's orbit far too much for an ellipse to do.
  *   moons     an ellipse about the planet that turns and swings at rates fitted to sixty years
@@ -26,6 +33,7 @@
 
 import { BODIES } from './bodies.ts';
 import { MOON_ORBITS, SWING_EPOCH_MS, type MoonOrbit } from './moonOrbits.ts';
+import { PLANET_SERIES, SERIES_SPAN_DAYS } from './planetSeries.ts';
 import type { BodyId, Motion, Vec } from './types.ts';
 
 export type ElementsMotion = Extract<Motion, { type: 'elements' }>;
@@ -196,6 +204,60 @@ function planetFromTable(id: BodyId, d: number, out: Vec): Vec {
   const [xp, yp] = solveInPlane(a * AU_KM, e, (meanLon - periLon) * DEG);
   fromOrbitPlane(xp, yp, inc, nodeLon * DEG, (periLon - nodeLon) * DEG, out);
   return eclipticToEquator(out);
+}
+
+/**
+ * Heliocentric position (km, ICRF) from the planet's VSOP87 series at `d` days of uniform time
+ * past J2000: longitude, latitude and distance on VSOP87's ecliptic of J2000, then the rotation
+ * the VSOP87 notice gives to the FK5 equator (FK5 and ICRF differ by 0.02″). One planet is
+ * often asked for several times at one instant (each of its moons adds it to its own offset),
+ * so the last answer for each planet is kept.
+ */
+const seriesKept: Partial<Record<BodyId, { d: number; v: Vec }>> = {};
+function planetFromSeries(id: BodyId, d: number, out: Vec): Vec {
+  let kept = seriesKept[id];
+  if (!kept || kept.d !== d) {
+    const series = PLANET_SERIES[id]!;
+    const tau = d / 365250;
+    const sum = (powers: number[][]) => {
+      let total = 0, power = 1;
+      for (const terms of powers) {
+        let s = 0;
+        for (let i = 0; i < terms.length; i += 3) s += terms[i] * Math.cos(terms[i + 1] + terms[i + 2] * tau);
+        total += s * power;
+        power *= tau;
+      }
+      return total;
+    };
+    const L = sum(series.L), B = sum(series.B), R = sum(series.R) * AU_KM;
+    const x = R * Math.cos(B) * Math.cos(L), y = R * Math.cos(B) * Math.sin(L), z = R * Math.sin(B);
+    kept = seriesKept[id] = {
+      d,
+      v: [x + 0.00000044036 * y - 0.000000190919 * z, -0.000000479966 * x + 0.917482137087 * y - 0.397776982902 * z, 0.397776982902 * y + 0.917482137087 * z],
+    };
+  }
+  out[0] = kept.v[0];
+  out[1] = kept.v[1];
+  out[2] = kept.v[2];
+  return out;
+}
+
+/**
+ * Where a planet is by the old table alone (km from the Sun, ICRF), whatever the year; the Earth
+ * as the table's Earth–Moon barycentre less the Moon's share. Only for comparison
+ * (scripts/check-deep.mjs prints what the series gained over it).
+ */
+export function planetByTable(id: BodyId, tMs: number, out: Vec = [0, 0, 0]): Vec {
+  const d = daysTT(tMs);
+  planetFromTable(id, d, out);
+  if (id === 'earth') {
+    const m: Vec = [0, 0, 0];
+    moonGeocentric(d, m);
+    out[0] -= m[0] * MOON_SHARE;
+    out[1] -= m[1] * MOON_SHARE;
+    out[2] -= m[2] * MOON_SHARE;
+  }
+  return out;
 }
 
 /** Rotate a J2000 ecliptic vector into the ICRF equatorial frame (about x, by the obliquity). */
@@ -463,6 +525,7 @@ function aboutParent(id: BodyId, tMs: number, out: Vec): Vec {
   }
   const d = daysTT(tMs);
   if (id === 'moon') return moonGeocentric(d, out);
+  if (PLANET_SERIES[id] && Math.abs(d) <= SERIES_SPAN_DAYS) return planetFromSeries(id, d, out);
   if (id === 'earth') {
     // The table gives the Earth–Moon barycentre; step back from it to the Earth itself.
     planetFromTable('earth', d, out);

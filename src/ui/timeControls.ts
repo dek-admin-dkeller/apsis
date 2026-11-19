@@ -169,7 +169,7 @@ export class TimeControls {
     this.reverse.setAttribute('aria-pressed', String(clock.speed < 0));
     this.play.closest<HTMLElement>('.timebar')!.dataset.direction = clock.speed < 0 ? 'back' : 'forward';
     for (const button of this.speeds) button.classList.toggle('is-on', Number(button.dataset.speed) === Math.abs(clock.speed));
-    const rate = Math.abs(clock.speed) >= 1 ? `${Math.round(Math.abs(clock.speed))}×` : `${Math.abs(clock.speed).toFixed(2)}× slow motion`;
+    const rate = speedText(Math.abs(clock.speed));
     $('sb-rate').textContent = clock.paused ? 'paused' : (clock.speed < 0 ? '−' : '') + rate;
     this.shownSecond = -1;
   }
@@ -213,4 +213,12 @@ export class TimeControls {
     marker.style.display = nowAt >= 0 && nowAt <= 1 ? '' : 'none';
     marker.style.left = `${(nowAt * 100).toFixed(2)}%`;
   }
+}
+
+/** A speed in words: "1000×", and for the solar system's speeds "1 day a second", "1 year a second". */
+export function speedText(speed: number): string {
+  const named: [number, string][] = [[31557600, '1 year'], [2629800, '1 month'], [604800, '1 week'], [86400, '1 day']];
+  const name = named.find(([value]) => Math.abs(speed - value) < 1)?.[1];
+  if (name) return `${name} a second`;
+  return speed >= 1 ? `${Math.round(speed)}×` : `${speed.toFixed(2)}× slow motion`;
 }

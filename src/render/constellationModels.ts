@@ -1,8 +1,9 @@
 /**
  * 3D models of particular satellite families common enough in the catalogue to be worth a
  * shape of their own, instead of the generic ones in satModels.ts: Starlink V2 Mini (most of
- * the Starlinks now flying), Amazon Kuiper, Iridium NEXT, O3b, Galileo, GLONASS-M and the
- * GOES-R weather satellites. One builder per kind, made from the kit in modelParts.ts and
+ * the Starlinks now flying), Amazon Kuiper, Qianfan, Guowang, Iridium NEXT, Globalstar, O3b,
+ * Galileo, GLONASS-M, the GOES-R weather satellites, the ICEYE and Capella radar satellites
+ * and Planet's Doves. One builder per kind, made from the kit in modelParts.ts and
  * handed to satModels.ts, which merges, centres, scales and caches every model the same way.
  * describe.ts (SHAPES) says which catalogue names get which.
  *
@@ -14,7 +15,7 @@
 import * as THREE from 'three';
 import type { ModelKind } from '../data/describe.ts';
 import {
-  TAU, arrayPanel, ball, box, buildWing, bus, cyl, dish, helix, hoop, lattice, nozzle, plate, prism, slab, strut, thrusters, tileUV, tracker, whip, wingPair,
+  TAU, arrayPanel, ball, box, buildWing, bus, cyl, dish, helix, hoop, lattice, mesh, nozzle, plate, prism, slab, solarPanel, strut, thrusters, tileUV, tracker, whip, wingPair,
   type Builder, type Materials,
 } from './modelParts.ts';
 
@@ -50,11 +51,13 @@ export const CONSTELLATION_BUILDERS = {
   /**
    * Amazon Kuiper: a compact box, its Earth face given over to two large phased-array antennas
    * for the user beams and a gateway antenna, one long solar wing, laser links to its neighbours.
-   * (Amazon has published few pictures of the production satellites: the layout is approximate.)
+   * Amazon has described phased-array and parabolic antennas, optical links and the mirror-film
+   * coating, but published few pictures of the production satellites: the layout is approximate.
    */
   kuiper(g, m) {
-    bus(g, m.foilBlack, 1.15, 0.55, 0.85, { bevel: 0.04 });
-    bus(g, m.foilSilver, 1.19, 0.12, 0.89, { y: 0.22, bevel: 0.02 });
+    // Amazon coats them in a dielectric mirror film so they look dimmer from the ground: silver, not foil-gold
+    bus(g, m.foilSilver, 1.15, 0.55, 0.85, { bevel: 0.04 });
+    bus(g, m.dark, 1.19, 0.08, 0.89, { y: 0.24, bevel: 0.02 });
     for (const s of [-1, 1]) plate(g, m, m.mirror, 0.8, 0.36, [0, -0.04, s * 0.426], [0, 0, s], 5);
     for (const x of [-0.28, 0.28]) { // user-beam arrays
       const antenna = arrayPanel(m, 0.5, 0.62, 12);
@@ -223,5 +226,155 @@ export const CONSTELLATION_BUILDERS = {
     nozzle(g, m, 0.12, 0.18, [0, 0.58, 0], [0, 1, 0]);
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) thrusters(g, m, [sx * 0.5, 0.55, sz * 0.45], [sx, 1, sz]);
     tracker(g, m, [0.3, 0.58, 0.3], [0.4, 1, 0.5]);
+  },
+
+  /**
+   * Qianfan ("Thousand Sails", the G60 constellation): flat-panel satellites launched in stacks
+   * like Starlinks. What has been published (and what their reflections suggest) is a flat
+   * antenna face towards the Earth and ONE solar wing standing straight up from the top deck,
+   * turning about a single horizontal axis. The details here are a reasoned guess.
+   */
+  qianfan(g, m) {
+    bus(g, m.foilBlack, 1.5, 0.2, 0.95, { bevel: 0.03, tile: 0.6 });
+    box(g, m.dark, 1.44, 0.06, 0.97);
+    plate(g, m, m.array, 1.3, 0.8, [0, -0.106, 0], [0, -1, 0], 6); // one big antenna face
+    plate(g, m, m.radiator, 0.6, 0.5, [-0.4, 0.106, 0.15], [0, 1, 0], 3);
+    for (const [x, z] of [[0.65, 0.38], [-0.65, -0.38]]) laserTerminal(g, m, x, 0.1, z);
+    tracker(g, m, [0.45, 0.1, -0.3], [0.3, 1, -0.4], 0.8);
+    nozzle(g, m, 0.05, 0.07, [-0.76, 0, -0.25], [-1, 0, 0]);
+    // the wing: a short mast from the middle of the top deck, the array rising above it
+    cyl(g, m.metal, 0.05, 0.06, 0.2, 0, 0.2, 0, 'y', false, 12);
+    const wing = buildWing(m, { width: 1.2, length: 2.6, panels: 4, yoke: 0.25, tile: 0.26 });
+    wing.position.set(0, 0.28, 0);
+    wing.rotation.set(-Math.PI / 2, 0, 0); // runs up (+Y) instead of along +Z
+    wing.rotateZ(0.35); // turned about its mast towards the Sun
+    g.add(wing);
+  },
+
+  /**
+   * Guowang (China SatNet's low-orbit broadband constellation; catalogued as HULIANWANG):
+   * the only picture released, a render in mission control, shows a tapering trapezoidal body
+   * with two solar wings. The antennas on its Earth face are a reasoned guess.
+   */
+  guowang(g, m) {
+    bus(g, m.foilGold, 1.3, 0.9, 1.0, { top: 0.68, bevel: 0.05 });
+    bus(g, m.dark, 1.36, 0.06, 1.06, { y: -0.48, bevel: 0.015 });
+    for (const x of [-0.32, 0.32]) plate(g, m, m.array, 0.55, 0.8, [x, -0.515, 0], [0, -1, 0], 7); // user beams
+    dish(g, m, 0.12, [0.55, -0.6, 0.38], [0.2, -1, 0.3]); // gateway
+    dish(g, m, 0.12, [-0.55, -0.6, -0.38], [-0.2, -1, -0.3]);
+    for (const [x, z] of [[0.38, 0.25], [-0.38, -0.25]]) laserTerminal(g, m, x, 0.45, z);
+    plate(g, m, m.radiator, 0.6, 0.45, [0, 0.452, 0], [0, 1, 0], 3);
+    wingPair(g, m, { width: 0.85, length: 2.4, panels: 3, root: 0.42, y: 0.05, yoke: 0.3, tilt: 0.3, tile: 0.24 });
+    nozzle(g, m, 0.05, 0.08, [-0.62, 0.1, 0], [-1, 0, 0]);
+    tracker(g, m, [0.25, 0.45, -0.25], [0.3, 1, -0.5]);
+  },
+
+  /**
+   * Globalstar (second generation, and the replacements since): a trapezoidal body that six
+   * at a time fit round a cone-shaped dispenser, its broad Earth deck carrying the S- and L-band
+   * antennas for the phone calls, two solar wings that follow the Sun.
+   */
+  globalstar(g, m) {
+    bus(g, m.white, 1.1, 1.0, 0.8, { top: 0.6, bevel: 0.04 });
+    for (const s of [-1, 1]) plate(g, m, m.mirror, 0.5, 0.6, [0, 0.0, s * 0.33], [0, 0.25, s], 5);
+    bus(g, m.foilBlack, 1.18, 0.06, 0.86, { y: -0.53, bevel: 0.015 }); // the Earth deck
+    prism(g, m.dark, 6, 0.3, 0.3, 0.04, 0.27, -0.58, 0, 0.5); // S-band (down to the phones) …
+    plate(g, m, m.array, 0.42, 0.42, [0.27, -0.602, 0], [0, -1, 0], 10);
+    prism(g, m.dark, 6, 0.24, 0.24, 0.04, -0.3, -0.58, 0, 0.5); // … and L-band (up from them)
+    plate(g, m, m.array, 0.32, 0.32, [-0.3, -0.602, 0], [0, -1, 0], 8);
+    for (const z of [-0.33, 0.33]) helix(g, m, [0, -0.56, z], [0, -1, 0], 0.14, 0.04); // C-band feeder links
+    wingPair(g, m, { width: 0.6, length: 1.7, panels: 2, root: 0.3, y: 0.1, yoke: 0.3, tilt: 0.35 });
+    nozzle(g, m, 0.05, 0.07, [0, 0.52, 0], [0, 1, 0]);
+    tracker(g, m, [0.2, 0.5, 0.1], [0.4, 1, 0.3]);
+    whip(g, m, [-0.2, 0.5, -0.1], [0, 1, 0], 0.3);
+  },
+
+  /**
+   * ICEYE: a radar satellite of about 100 kg — a small box, and a flat radar antenna 3.2 m long
+   * and 0.4 m wide that unfolds in five leaves along the direction of travel, looking down and
+   * to one side. Solar cells on the box's back. (1 unit = 1 m.)
+   */
+  iceye(g, m) {
+    const radar = new THREE.Group();
+    for (let i = -2; i <= 2; i++) {
+      const leaf = arrayPanel(m, 0.62, 0.4, 20, m.radar);
+      leaf.position.x = i * 0.64;
+      radar.add(leaf);
+      box(radar, m.foilBlack, 0.58, 0.36, 0.02, i * 0.64, 0, -0.025);
+      if (i < 2) for (const y of [-0.12, 0.12]) cyl(radar, m.metal, 0.012, 0.012, 0.06, i * 0.64 + 0.32, y, -0.02);
+    }
+    radar.rotation.x = Math.PI / 2 + 0.5; // face down, tipped to look sideways
+    radar.position.y = -0.24;
+    g.add(radar);
+    bus(g, m.foilSilver, 0.6, 0.4, 0.42, { y: 0.03, bevel: 0.03 });
+    plate(g, m, m.cellsBlue, 0.56, 0.38, [0, 0.235, 0], [0, 1, 0], 1 / 0.14);
+    const flap = solarPanel(m, 0.56, 0.4, m.cellsBlue, m.panelBack, 0.14); // a deployed panel off the back
+    flap.position.set(0, 0.22, 0.42);
+    flap.rotation.x = 0.35;
+    g.add(flap);
+    strut(g, m.dark, [0, 0.22, 0.21], [0, 0.2, 0.25], 0.01);
+    tracker(g, m, [0.22, 0.24, -0.12], [0.4, 1, -0.4], 0.6);
+    helix(g, m, [-0.22, 0.24, -0.12], [0, 1, 0], 0.06, 0.025);
+    nozzle(g, m, 0.025, 0.04, [-0.31, 0.03, 0], [-1, 0, 0]);
+  },
+
+  /**
+   * Capella (Acadia): a small radar satellite whose antenna is a 3.5 m umbrella of fine gold
+   * mesh, unfurled on a boom below the body and lit by a feed at its focus, with solar wings
+   * either side. (1 unit = 1 m; the reflector is drawn at its true size.)
+   */
+  capella(g, m) {
+    bus(g, m.foilBlack, 0.7, 0.55, 0.6, { y: 0.55, bevel: 0.04 });
+    plate(g, m, m.radiator, 0.5, 0.4, [0, 0.83, 0], [0, 1, 0], 3);
+    wingPair(g, m, { width: 0.55, length: 1.3, panels: 2, root: 0.3, y: 0.55, yoke: 0.15, tilt: 0.3, tile: 0.16 });
+    strut(g, m.metal, [0, 0.28, 0], [0, -0.05, 0], 0.03);
+    // the umbrella: a shallow bowl of gold mesh on twelve ribs, opening downwards
+    const bowl = new THREE.Group();
+    const R = 1.75, depth = 0.38;
+    const profile: THREE.Vector2[] = [];
+    for (let i = 0; i <= 8; i++) profile.push(new THREE.Vector2((R * i) / 8, depth * (i / 8) ** 2));
+    mesh(bowl, new THREE.LatheGeometry(profile, 24), m.foilTorn); // two-sided gold film stands in for the mesh
+    for (let k = 0; k < 12; k++) {
+      const a = (k * TAU) / 12;
+      for (let i = 0; i < 8; i++) {
+        const r0 = (R * i) / 8, r1 = (R * (i + 1)) / 8;
+        strut(bowl, m.dark, [r0 * Math.cos(a), depth * (i / 8) ** 2 + 0.01, r0 * Math.sin(a)], [r1 * Math.cos(a), depth * ((i + 1) / 8) ** 2 + 0.01, r1 * Math.sin(a)], 0.012);
+      }
+    }
+    hoop(bowl, m.dark, R, 0.014, 0, depth, 0, 'y', 24);
+    cyl(bowl, m.dark, 0.12, 0.15, 0.12, 0, 0, 0, 'y', false, 12); // hub
+    for (let k = 0; k < 3; k++) { // feed on its tripod at the focus
+      const a = (k * TAU) / 3;
+      strut(bowl, m.metal, [R * 0.55 * Math.cos(a), depth * 0.3, R * 0.55 * Math.sin(a)], [0, 1.6, 0], 0.012);
+    }
+    cyl(bowl, m.metal, 0.08, 0.12, 0.16, 0, 1.6, 0, 'y', false, 10);
+    bowl.rotation.x = Math.PI; // opening towards the Earth
+    bowl.position.y = -0.05;
+    g.add(bowl);
+  },
+
+  /**
+   * Planet's Dove / SuperDove: a 10 × 10 × 33 cm CubeSat whose long axis points at the Earth,
+   * the telescope looking out of the bottom end, two solar panels opened out flat on either
+   * side in the plane of its orbit. (1 unit = 10 cm.)
+   */
+  dove(g, m) {
+    box(g, m.dark, 1.0, 3.3, 1.0);
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(g, m.metal, 0.12, 3.36, 0.12, sx * 0.47, 0, sz * 0.47); // rails
+    for (const s of [-1, 1]) plate(g, m, m.cellsBlue, 0.84, 3.1, [0, 0, s * 0.51], [0, 0, s], 1 / 0.5); // body cells
+    plate(g, m, m.foilGold, 0.84, 3.1, [0.51, 0, 0], [1, 0, 0], 1);
+    // the two panels, hinged along the body's long edges and opened flat (in the X–Y plane)
+    for (const s of [-1, 1]) {
+      const panel = solarPanel(m, 2.6, 3.0, m.cellsBlue, m.panelBack, 0.5);
+      panel.rotation.x = Math.PI / 2; // lying in the X–Y plane, cells towards −Z
+      panel.position.set(s * 1.85, 0, -0.5);
+      g.add(panel);
+      for (const y of [-1.1, 1.1]) cyl(g, m.yellow, 0.05, 0.05, 0.25, s * 0.55, y, -0.5, 'x', false, 8); // hinges
+    }
+    cyl(g, m.dark, 0.4, 0.4, 0.15, 0, -1.72, 0, 'y', false, 16); // telescope mouth, looking down
+    cyl(g, m.lens, 0.33, 0.33, 0.02, 0, -1.8, 0, 'y', false, 16);
+    const cover = cyl(g, m.foilGold, 0.42, 0.42, 0.04, 0.42, -1.75, 0, 'y', false, 16); // aperture cover, sprung open
+    cover.rotation.z = 1.2;
+    whip(g, m, [0.4, 1.65, 0.4], [0.5, 1, 0.5], 1.2, 0.03);
   },
 } satisfies Partial<Record<ModelKind, Builder>>;

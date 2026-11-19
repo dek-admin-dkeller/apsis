@@ -19,19 +19,20 @@
 //
 // What is asserted:
 //   eclipses     the same eclipses (none missing, none extra), type exact, greatest eclipse within
-//                3 min, magnitude and gamma within 0.01, place of greatest eclipse within 2° (NASA
-//                gives it to the whole degree), lunar phase durations within 3 min (except phases
+//                1.5 min, gamma within 0.006 and magnitude within 0.015 (both limited by the Moon's
+//                series in ephem.ts: about 25 km of the Moon's place), place of greatest eclipse within 2° (NASA
+//                gives it to the whole degree), lunar phase durations within 2 min (except phases
 //                less than 0.15 of the Moon's width deep, whose length swings with any small error)
-//   transits     the same transits 2000–2045, contacts and greatest within 4 min for Mercury and
-//                8 min for Venus (the limit is the planetary table in ephem.ts: 0.01° heliocentric
-//                is up to half a minute of arc seen from the Earth, and Venus crawls at 4″ a minute),
-//                least separation within 30″
-//   Galilean     every IMCCE shadow / transit ingress and egress matched, and nothing extra; Io and
-//                Europa within 3 min, Ganymede 4, Callisto 6.5. The outer moons are slow, so the few
-//                hundredths of a degree the planetary table has Jupiter out by become minutes: in
-//                2026–27 Callisto's events come out about 2.5 min late on average. IMCCE prints
-//                whole minutes (all our times average about 0.6 min late, which looks like the
-//                table cutting the seconds off rather than rounding them).
+//   transits     the same transits 2000–2045, contacts and greatest within 1.5 min (NASA gives
+//                whole minutes), least separation within 2″. (With the old planetary table these
+//                were 3 min for Mercury and 6 min for Venus; the planets now come from VSOP87.)
+//   Galilean     every IMCCE shadow / transit ingress and egress matched, and nothing extra; Io
+//                within 1.5 min, Europa 2, Ganymede and Callisto 3. IMCCE prints whole minutes, and
+//                Io's times come out 0.45 min late on average with the spread of a uniform
+//                0–1 min error: the table cuts the seconds off. What is left for the outer moons
+//                is their fitted orbits (moonOrbits.ts: Ganymede within 0.09°, Callisto 0.02°),
+//                which a slow moon turns into minutes. (With the old planetary table Jupiter was
+//                0.06° out and Callisto's events were 2.6 min late on average, worst 5.9 min.)
 // Also printed: how long skyEvents() takes for the next 60 days (the notification bell's call).
 
 import { performance } from 'node:perf_hooks';
@@ -145,10 +146,10 @@ function pair(rows, kind) {
   check('solar: type exact (total / annular / hybrid / partial)', !wrongType.length, wrongType.map((p) => `${p.row[0]} ${p.e.subtype} ≠ ${SOLAR_TYPE[p.row[2]]}`).join(', '));
   const worst = (f) => got.reduce((w, p) => { const v = f(p); return v > w.v ? { v, at: p.row[0] } : w; }, { v: 0, at: '' });
   const time = worst((p) => Math.abs(p.e.peakMs + TT_MINUS_UTC_MS - p.td));
-  check('solar: greatest eclipse within 3 min', time.v < 3 * MIN, `worst ${(time.v / 1000).toFixed(0)} s (${time.at})`);
+  check('solar: greatest eclipse within 1.5 min', time.v < 1.5 * MIN, `worst ${(time.v / 1000).toFixed(0)} s (${time.at})`);
   const mag = worst((p) => Math.abs(p.e.magnitude - p.row[4]));
   const gamma = worst((p) => Math.abs(p.e.gamma - p.row[3]));
-  check('solar: magnitude and gamma within 0.01', mag.v < 0.01 && gamma.v < 0.01, `worst magnitude ${mag.v.toFixed(4)} (${mag.at}), gamma ${gamma.v.toFixed(4)} (${gamma.at})`);
+  check('solar: magnitude within 0.015, gamma within 0.006', mag.v < 0.015 && gamma.v < 0.006, `worst magnitude ${mag.v.toFixed(4)} (${mag.at}), gamma ${gamma.v.toFixed(4)} (${gamma.at})`);
   const place = worst((p) => Math.max(Math.abs(p.e.latDeg - signed(p.row[5])), Math.abs(wrap180(p.e.lonDeg - signed(p.row[6]))) * Math.cos((p.e.latDeg * Math.PI) / 180)));
   check('solar: place of greatest eclipse within 2° (NASA rounds to 1°)', place.v < 2, `worst ${place.v.toFixed(2)}° (${place.at})`);
 }
@@ -162,10 +163,10 @@ function pair(rows, kind) {
   check('lunar: type exact (total / partial / penumbral)', !wrongType.length, wrongType.map((p) => `${p.row[0]} ${p.e.subtype} ≠ ${LUNAR_TYPE[p.row[2]]}`).join(', '));
   const worst = (f) => got.reduce((w, p) => { const v = f(p); return v > w.v ? { v, at: p.row[0] } : w; }, { v: 0, at: '' });
   const time = worst((p) => Math.abs(p.e.peakMs + TT_MINUS_UTC_MS - p.td));
-  check('lunar: greatest eclipse within 3 min', time.v < 3 * MIN, `worst ${(time.v / 1000).toFixed(0)} s (${time.at})`);
+  check('lunar: greatest eclipse within 1.5 min', time.v < 1.5 * MIN, `worst ${(time.v / 1000).toFixed(0)} s (${time.at})`);
   const mag = worst((p) => Math.max(Math.abs(p.e.penumbralMagnitude - p.row[4]), Math.abs(p.e.magnitude - p.row[5])));
   const gamma = worst((p) => Math.abs(p.e.gamma - p.row[3]));
-  check('lunar: penumbral and umbral magnitude, gamma within 0.01', mag.v < 0.01 && gamma.v < 0.01, `worst magnitude ${mag.v.toFixed(4)} (${mag.at}), gamma ${gamma.v.toFixed(4)} (${gamma.at})`);
+  check('lunar: penumbral and umbral magnitude within 0.015, gamma within 0.006', mag.v < 0.015 && gamma.v < 0.006, `worst magnitude ${mag.v.toFixed(4)} (${mag.at}), gamma ${gamma.v.toFixed(4)} (${gamma.at})`);
   const span = (a, b) => (a === undefined ? 0 : (b - a) / MIN);
   // A phase that only just happens (less than 0.15 of the Moon's width deep) lasts a time that swings with
   // the square root of how deep it goes: 20 km of error in the Moon's place (0.003 Earth radii,
@@ -178,7 +179,7 @@ function pair(rows, kind) {
   ];
   const dur = worst((p) => Math.max(...phases(p).map(([a, b], i) => (grazing(p)[i] ? 0 : Math.abs(a - b)))));
   const shown = got.flatMap((p) => phases(p).filter((_, i) => grazing(p)[i]).map(([a, b]) => `${p.row[0]} ${a.toFixed(1)} min (NASA ${b})`));
-  check('lunar: penumbral, partial and total durations within 3 min', dur.v < 3, `worst ${dur.v.toFixed(2)} min (${dur.at}); grazing, not judged: ${shown.join(', ')}`);
+  check('lunar: penumbral, partial and total durations within 2 min', dur.v < 2, `worst ${dur.v.toFixed(2)} min (${dur.at}); grazing, not judged: ${shown.join(', ')}`);
   const place = worst((p) => Math.max(Math.abs(p.e.latDeg - signed(p.row[9])), Math.abs(wrap180(p.e.lonDeg - signed(p.row[10]))) * Math.cos((p.e.latDeg * Math.PI) / 180)));
   check('lunar: point under the Moon within 2° (NASA rounds to 1°)', place.v < 2, `worst ${place.v.toFixed(2)}° (${place.at})`);
 }
@@ -220,14 +221,14 @@ const TRANSITS = [
         if (v > worst.v) worst = { v, at: r.date };
       }
     }
-    const limit = planet === 'mercury' ? 4 : 8;
+    const limit = 1.5;
     check(`${planet}: contacts I, IV and greatest within ${limit} min`, worst.v <= limit * MIN, `worst ${minutes(worst.v)} (${worst.at})`);
   }
   const sepWorst = pairs.filter((p) => p.e).reduce((w, { r, e }) => {
     const v = Math.abs(e.separationArcsec - r.sep);
     return v > w.v ? { v, at: r.date } : w;
   }, { v: 0, at: '' });
-  check('least separation from the Sun\'s centre within 30″', sepWorst.v < 30, `worst ${sepWorst.v.toFixed(1)}″ (${sepWorst.at})`);
+  check('least separation from the Sun\'s centre within 2″', sepWorst.v < 2, `worst ${sepWorst.v.toFixed(1)}″ (${sepWorst.at})`);
 }
 
 // ── 3. Jupiter's moons ──────────────────────────────────────────────────────────────────
@@ -265,7 +266,7 @@ const TRANSITS = [
   // Per moon: the farther out, the slower it moves, so the same small error in where Jupiter
   // is (the planetary table in ephem.ts is good to a few hundredths of a degree for Jupiter)
   // becomes more minutes. IMCCE prints these times to the whole minute.
-  const LIMIT = { io: 3, europa: 3, ganymede: 4, callisto: 6.5 };
+  const LIMIT = { io: 1.5, europa: 2, ganymede: 3, callisto: 3 };
   const all = [...errors['shadow-transit'].map((x) => ({ ...x, kind: 'shadow' })), ...errors['moon-transit'].map((x) => ({ ...x, kind: 'transit' }))];
   for (const [sat, moon] of Object.entries(SAT)) {
     const list = all.filter((x) => x.line.split(' ')[1] === sat);

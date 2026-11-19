@@ -256,3 +256,8 @@ body.ui-hidden #place-hud { display: none; }
 /* The search field's type filter applies to the Earth's catalogue only: away from it the chip is put by. */
 body.away .search-filter { display: none; }
 body.away .search.has-filter input { padding-right: 10px !important; }
+
+/* A craft card's switches: one in orbit has Orbit / Track / Footprint; a rover has Path driven. */
+#pc-acts .act-ground { display: none; }
+#pc-acts.is-ground .act-ground { display: flex; }
+#pc-acts.is-ground .act:has([data-setting=orbitPath]), #pc-acts.is-ground .act:has([data-setting=groundTrack]), #pc-acts.is-ground .act:has([data-setting=footprint]) { display: none; }

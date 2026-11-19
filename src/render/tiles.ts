@@ -58,6 +58,7 @@
  */
 
 import * as THREE from 'three';
+import { ECLIPSE_GLSL } from './globe.ts';
 import { EARTH_RADIUS, EARTH_RADIUS_KM, KM } from './scene.ts';
 
 const SHARP_REACH_MAX = 4; // the sharpest level reaches at most this many tiles out from the centre (9 × 9 tiles)
@@ -98,6 +99,8 @@ export interface EarthLight {
   like: 'earth';
   night: { value: THREE.Texture | null };
   hasNight: { value: number };
+  /** The globe's eclipse uniforms (uEclipse, uMoonPos, uShadowSun): the same objects, so the shadow falls on the tiles too. */
+  eclipse: Record<string, THREE.IUniform>;
 }
 
 /**
@@ -277,9 +280,11 @@ export interface Destination {
 const vertexShader = /* glsl */ `
   varying vec2 vUv;
   varying vec3 vNormalLocal;
+  varying vec3 vPosW;
   void main() {
     vUv = uv;
     vNormalLocal = normalize(position); // the patch is part of a sphere centred on the Earth
+    vPosW = (modelMatrix * vec4(position, 1.0)).xyz; // for the Moon's shadow (an eclipse), in world space as the globe has it
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }`;
 
@@ -296,6 +301,8 @@ const fragmentShader = /* glsl */ `
   uniform vec2 uEdge;     // fade out between these two distances from uCentre (y = 0: no fade)
   varying vec2 vUv;
   varying vec3 vNormalLocal;
+  varying vec3 vPosW;
+  ${ECLIPSE_GLSL}
 
   // The city-lights picture read with a cubic B-spline: the 4 × 4 neighbouring cells blended
   // by a smooth bell curve, on a grid twice as coarse as the picture's pixels (its real
@@ -348,7 +355,7 @@ const fragmentShader = /* glsl */ `
       lights *= mix(1.0, 0.62, uClose);
     }
 
-    vec3 color = mix(night, lit, day) + lights * lightsOn;
+    vec3 color = mix(night, lit, day * eclipseLight(vPosW)) + lights * lightsOn; // a solar eclipse darkens the tiles as it does the globe
     // The outer rim of the covered area melts into the globe instead of ending in a line.
     float rim = uEdge.y > uEdge.x ? 1.0 - smoothstep(uEdge.x, uEdge.y, length(N - uCentre)) : 1.0;
     gl_FragColor = vec4(clamp(color, 0.0, 4.0), clamp(uOpacity * uCover * rim, 0.0, 1.0));
@@ -808,7 +815,7 @@ export class GroundTiles {
     const shared = { uMap: { value: null }, uOpacity: { value: 0 }, uCover: this.cover, uCentre: this.centre, uEdge: this.edge(z) };
     const material = new THREE.ShaderMaterial({
       uniforms: light.like === 'earth'
-        ? { ...shared, uNight: light.night, uHasNight: light.hasNight, uNightTexel: this.nightTexel, uSun: this.sun, uClose: this.close }
+        ? { ...shared, ...light.eclipse, uNight: light.night, uHasNight: light.hasNight, uNightTexel: this.nightTexel, uSun: this.sun, uClose: this.close }
         : {
           ...shared,
           // the body's own uniform objects: whatever the view sets for the globe holds for its tiles
@@ -1037,7 +1044,14 @@ export class EarthTiles extends GroundTiles {
       source: GIBS,
       radiusKm: 6371,
       circumferenceKm: 40075,
-      light: { like: 'earth', night: globeUniforms?.uNight ?? { value: null }, hasNight: globeUniforms?.uHasNight ?? { value: 0 } },
+      light: {
+        like: 'earth', night: globeUniforms?.uNight ?? { value: null }, hasNight: globeUniforms?.uHasNight ?? { value: 0 },
+        eclipse: {
+          uEclipse: globeUniforms?.uEclipse ?? { value: 0 },
+          uMoonPos: globeUniforms?.uMoonPos ?? { value: new THREE.Vector3(0, 0, 384) },
+          uShadowSun: globeUniforms?.uShadowSun ?? { value: new THREE.Vector3(1, 0, 0) },
+        },
+      },
       farCover: 0.6,
     });
   }

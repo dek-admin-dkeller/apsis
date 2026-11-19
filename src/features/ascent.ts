@@ -19,7 +19,7 @@
  */
 
 import * as THREE from 'three';
-import { planAscent, ascentSpanS, ascentState, type Ascent } from '../data/ascent.ts';
+import { planAscent, ascentSpanS, ascentState, boosterState, type Ascent } from '../data/ascent.ts';
 import { rocketKind, type ModelKind } from '../data/describe.ts';
 import { loadLaunches, type Launch } from '../data/launches.ts';
 import { buildModel } from '../render/satModels.ts';
@@ -91,6 +91,12 @@ interface Flight {
   stage: HTMLElement;
   world: THREE.Vector3; // where the rocket is, scene units (for the camera and the card)
   shown: boolean;
+  /** The first stage on its way down (when it lands), and the spot it comes down on. */
+  booster: THREE.Group | null;
+  landing: THREE.Sprite | null;
+  /** "Now tracked: …": the real objects of this launch, once they are in the catalogue. */
+  real: HTMLElement;
+  realFor: string;
 }
 
 let watchHandler: ((launch: Launch) => boolean) | null = null;
@@ -156,9 +162,22 @@ export function installAscent(app: App): void {
     watch.rel = 'noopener noreferrer';
     watch.title = launch.webcast ? 'The webcast Launch Library lists for this launch' : 'No webcast is listed yet: search for one';
     buttons.append(follow, watch);
-    tag.append(head, live, stage, note, buttons);
+    // The booster's way down (estimated): a small first stage, and a mark where it lands.
+    let booster: THREE.Group | null = null;
+    let landing: THREE.Sprite | null = null;
+    if (ascent.booster) {
+      booster = new THREE.Group();
+      booster.add(rocketModel(kind));
+      booster.visible = false;
+      landing = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, color: 0x7fe3ff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+      landing.visible = false;
+      group.add(booster, landing);
+      note.textContent += ` Booster: lands on ${ascent.booster.where}${ascent.booster.estimated ? ' (usual for this rocket; not confirmed)' : ''}.`;
+    }
+    const real = el('div', 'at-real');
+    tag.append(head, live, stage, note, real, buttons);
     root.append(tag);
-    return { ascent, group, flown, ahead, holder, model, glow: sprite, kind, staged: false, tag, live, stage, world: new THREE.Vector3(), shown: false };
+    return { ascent, group, flown, ahead, holder, model, glow: sprite, kind, staged: false, tag, live, stage, world: new THREE.Vector3(), shown: false, booster, landing, real, realFor: '' };
   }
 
   function drop(id: string): void {
@@ -227,6 +246,54 @@ export function installAscent(app: App): void {
     for (const id of [...flights.keys()]) if (!launches.some((launch) => launch.id === id)) drop(id);
   }
 
+  /**
+   * The real objects of a launch: a launch group of the last few days (app.freshLaunches) from
+   * the same UTC day (± one), the one whose orbit tilt is nearest the estimate's. Then the card
+   * says how the estimate did, and offers to show them.
+   */
+  let realCheck = 0;
+  function matchReal(flight: Flight): void {
+    realCheck = performance.now() / 1000;
+    const catalog = app.catalog();
+    if (!catalog) return;
+    const day = flight.ascent.liftoffMs;
+    const candidates = app.freshLaunches().filter((group) => group.date && Math.abs(Date.parse(`${group.date}T12:00:00Z`) - day) < 1.5 * 86400000);
+    if (candidates.length === 0) return;
+    const tilt = (group: (typeof candidates)[number]) => catalog.sats[group.lead].inclinationDeg;
+    const best = candidates.sort((a, b) => Math.abs(tilt(a) - flight.ascent.inclinationDeg) - Math.abs(tilt(b) - flight.ascent.inclinationDeg))[0];
+    if (flight.realFor === best.id) return;
+    flight.realFor = best.id;
+    flight.real.replaceChildren();
+    const line = el('span', '', `Now tracked: ${best.members.length} object${best.members.length === 1 ? '' : 's'} at ${tilt(best).toFixed(1)}° (the estimate flew at ${flight.ascent.inclinationDeg.toFixed(1)}°). `);
+    const show = el('button', 'at-link', 'Show them');
+    show.type = 'button';
+    show.addEventListener('click', () => app.showLaunchGroup(best.members));
+    flight.real.append(line, show);
+  }
+
+  // Share links: "#launch=<id>&t=…" opens the climb being followed, at that moment.
+  app.addShareLink({
+    add: (q) => {
+      if (!following || !flights.has(following)) return false;
+      q.set('launch', following);
+      q.set('t', String(Math.round(app.time() / 1000)));
+      return true;
+    },
+    apply: (q) => {
+      const id = q.get('launch');
+      if (!id) return false;
+      const t = Number(q.get('t'));
+      void loadLaunches().then(({ list }) => {
+        const launch = list?.launches.find((candidate) => candidate.id === id);
+        if (!launch) return app.toast('That launch is no longer in the list of launches.');
+        if (!launches.some((known) => known.id === id)) launches = [...launches, launch];
+        if (Number.isFinite(t) && t > 0) app.jumpTo(t * 1000);
+        watchLaunch(launch);
+      });
+      return true;
+    },
+  });
+
   let checkAt = 0;
   app.onFrame((frame) => {
     if (frame.realSeconds - checkAt > 1) {
@@ -267,7 +334,24 @@ export function installAscent(app: App): void {
       flight.world.setFromMatrixPosition(flight.holder.matrixWorld);
       // Drawn larger than life, like a satellite's model: a fixed share of the distance to the camera.
       const distance = app.camera.position.distanceTo(flight.world);
-      flight.holder.scale.setScalar(THREE.MathUtils.clamp(distance * 0.045, 0.004, 0.4) * 1000); // km: the group's parent shrinks by 1000
+      const size = THREE.MathUtils.clamp(distance * 0.045, 0.004, 0.4) * 1000; // km: the group's parent shrinks by 1000
+      flight.holder.scale.setScalar(size);
+      // The booster coming down, nose up (it lands standing), and the spot it lands on.
+      const down = boosterState(ascent, frame.timeMs);
+      if (flight.booster && flight.landing) {
+        flight.booster.visible = !!down && !down.landed;
+        const end = boosterState(ascent, ascent.liftoffMs + (ascent.booster!.landS + 1) * 1000);
+        flight.landing.visible = state.t > ascent.stagingS - 60 && state.t < ascent.booster!.landS + 1800 && !!end;
+        if (end) flight.landing.position.set(...end.pos);
+        flight.landing.scale.setScalar(size * 0.5);
+        if (down) {
+          flight.booster.position.set(...down.pos);
+          flight.booster.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...down.pos).normalize());
+          flight.booster.scale.setScalar(size * 0.8);
+        }
+      }
+      // Once the launch's own objects are in the catalogue (data/fresh.ts), say so and offer them.
+      if (frame.realSeconds - realCheck > 2) matchReal(flight);
       flight.shown = !away;
 
       // The card, beside the rocket on screen.

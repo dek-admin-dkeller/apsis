@@ -32,6 +32,46 @@ const FADE_SECONDS = 1.6; // how long a late layer takes to appear
 
 const ATMOSPHERE_SCALE = 1.1; // glow shell radius relative to the Earth
 
+/**
+ * The Moon's shadow during a solar eclipse (render/eclipseShadow.ts sets the uniforms). Shared,
+ * word for word, by the globe and its close-up tiles (render/tiles.ts), whose lighting must match.
+ */
+export const ECLIPSE_GLSL = /* glsl */ `
+  uniform float uEclipse;    // 1 near new Moon, when the Moon's shadow may fall on the Earth
+  uniform vec3 uMoonPos;     // the Moon, world space (scene units)
+  uniform vec3 uShadowSun;   // the Sun's direction, precise (world space)
+  // How much sunlight reaches point P, 0…1, with the Moon in the way: the share of the Sun's
+  // disc NOT covered by the Moon's as seen from P (the area where two small discs overlap). One
+  // formula gives the total eclipse's dark core, an annular ring and the wide partial shadow.
+  // NaN-safe: every acos/asin argument is clamped, the square root's argument kept ≥ 0, and the
+  // one division by d happens only when the discs cross (d > |rs − rm| ≥ 0, and d > 0 there).
+  float eclipseLight(vec3 P) {
+    if (uEclipse < 0.5) return 1.0;
+    vec3 toMoon = uMoonPos - P;
+    float dm = max(length(toMoon), 1e-3);
+    vec3 m = toMoon / dm;
+    if (dot(m, uShadowSun) < 0.995) return 1.0; // the Moon is not near the Sun in this place's sky
+    float rs = 0.004652;                                   // the Sun's angular radius (rad)
+    float rm = asin(clamp(1.7374 / dm, 0.0, 1.0));         // the Moon's, from here (it varies ~10 %)
+    float d = 2.0 * asin(clamp(length(m - uShadowSun) * 0.5, 0.0, 1.0)); // angle between their centres
+    if (d >= rs + rm) return 1.0;
+    float covered;
+    if (d <= abs(rs - rm)) {
+      covered = min(1.0, (rm * rm) / (rs * rs)); // one disc inside the other: total, or annular
+    } else {
+      float a = clamp((d * d + rs * rs - rm * rm) / (2.0 * d * rs), -1.0, 1.0);
+      float b = clamp((d * d + rm * rm - rs * rs) / (2.0 * d * rm), -1.0, 1.0);
+      float k = max(0.0, (-d + rs + rm) * (d + rs - rm) * (d - rs + rm) * (d + rs + rm));
+      covered = (rs * rs * acos(a) + rm * rm * acos(b) - 0.5 * sqrt(k)) / (3.14159265 * rs * rs);
+    }
+    // Squared: the picture is lit in linear light, where 11 % of the sunlight (an annular
+    // eclipse's centre) shows as barely a third darker; squared, the shadow reads on screen.
+    float light = clamp(1.0 - covered, 0.0, 1.0);
+    return light * light;
+  }
+
+`;
+
 const earthVertex = /* glsl */ `
   varying vec2 vUv;
   varying vec3 vNormalW;
@@ -73,6 +113,7 @@ const earthFragment = /* glsl */ `
     return mix(mix(mix(hash(i), hash(i + vec3(1,0,0)), f.x), mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
                mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x), mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z);
   }
+  ${ECLIPSE_GLSL}
   float fbm(vec3 p) {
     float v = 0.0, a = 0.5;
     for (int i = 0; i < 5; i++) { v += a * noise(p); p *= 2.03; a *= 0.5; }
@@ -216,7 +257,10 @@ const earthFragment = /* glsl */ `
     vec3 night = dayColor * vec3(0.030, 0.038, 0.060) + vec3(0.0022, 0.0030, 0.0055);
     night = mix(night, vec3(0.034, 0.042, 0.066), cloud * 0.6);
 
-    vec3 color = mix(night, lit, day) + lights * lightsOn * (1.0 - cloud * 0.75);
+    // A solar eclipse: the day side darkens under the Moon's shadow (totality is as dark as night).
+    float eclipse = eclipseLight(vPosW);
+    float dayLit = day * eclipse;
+    vec3 color = mix(night, lit, dayLit) + lights * lightsOn * (1.0 - cloud * 0.75);
 
     // ---- Air: a warm band along the terminator (sunset/sunrise) and haze towards the
     //      limb, blue in daylight and reddening where the sun is low.
@@ -224,7 +268,7 @@ const earthFragment = /* glsl */ `
     color += vec3(0.95, 0.42, 0.16) * twilight * 0.07;
     float fresnel = pow(clamp(1.0 - dot(N, V), 0.0, 1.0), 3.2); // clamp: a negative base would make pow() return NaN
     vec3 haze = mix(vec3(0.80, 0.40, 0.20), vec3(0.22, 0.52, 1.0), smoothstep(0.0, 0.30, sun));
-    color += haze * fresnel * 0.80 * day + vec3(0.022, 0.052, 0.10) * fresnel * (1.0 - day);
+    color += haze * fresnel * 0.80 * dayLit + vec3(0.022, 0.052, 0.10) * fresnel * (1.0 - day);
 
     gl_FragColor = vec4(clamp(color, 0.0, 8.0), 1.0);
   }`;
@@ -280,6 +324,8 @@ export interface Globe {
   sunDirection: THREE.Vector3;
   setClouds(on: boolean): void;
   setAtmosphere(on: boolean): void;
+  /** The Moon (world, scene units) and the Sun's precise direction for the eclipse shadow (render/eclipseShadow.ts); null switches it off. */
+  setEclipse(moonWorld: THREE.Vector3 | null, sunWorld: THREE.Vector3 | null): void;
   /** The node that turns with the planet — parent map overlays to it so they rotate too. */
   readonly earth: THREE.Object3D;
 }
@@ -292,6 +338,9 @@ export interface Globe {
 export function createGlobe(scene: THREE.Scene, onProgress: () => void, holdRest: Promise<unknown> = Promise.resolve()): { globe: Globe; ready: Promise<void>; essential: Promise<void> } {
   const uniforms: Record<string, THREE.IUniform> = {
     uSunDir: { value: new THREE.Vector3(1, 0, 0) },
+    uEclipse: { value: 0 },
+    uMoonPos: { value: new THREE.Vector3(0, 0, 384) },
+    uShadowSun: { value: new THREE.Vector3(1, 0, 0) },
     uCloudShift: { value: 0 },
     uFade: { value: 1 },
     uCloudsOn: { value: 1 },
@@ -364,6 +413,11 @@ export function createGlobe(scene: THREE.Scene, onProgress: () => void, holdRest
     sunDirection,
     setClouds: (on) => (uniforms.uCloudsOn.value = on ? 1 : 0),
     setAtmosphere: (on) => (atmosphere.visible = on),
+    setEclipse: (moonWorld, sunWorld) => {
+      uniforms.uEclipse.value = moonWorld && sunWorld ? 1 : 0;
+      if (moonWorld) (uniforms.uMoonPos.value as THREE.Vector3).copy(moonWorld);
+      if (sunWorld) (uniforms.uShadowSun.value as THREE.Vector3).copy(sunWorld);
+    },
     update(date, realSeconds, cameraDistance) {
       // Seen from inside, the glow shell would fog the whole sky — fade it out as the camera descends.
       const shell = EARTH_RADIUS * ATMOSPHERE_SCALE;

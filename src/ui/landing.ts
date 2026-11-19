@@ -10,7 +10,7 @@
  *   - a showcase of real screens that changes by itself like a slideshow (SHOTS in
  *     featureList.ts; retaken with `npm run shots`);
  *   - a live drawing of the search that runs the project's own hash table (hashDemo.ts);
- *   - a plate of six of the tracker's 3D models, drawn by the same code that draws them in
+ *   - a row of every one of the tracker's 3D models (scrolled sideways), drawn by the same code that draws them in
  *     orbit, and a button to the catalogue of all of them;
  *   - the complete list of features (FEATURES in featureList.ts — the one place to keep it
  *     current), as a compact index;
@@ -28,6 +28,7 @@
 
 import './landing.css';
 import { KIND_LABEL, type ModelKind } from '../data/describe.ts';
+import { kindGroups } from '../data/spacecraft.ts';
 import { modelThumbnail } from '../render/satModels.ts';
 import { $, fmtInt } from './dom.ts';
 import { FEATURES, SHOTS, WHATS_NEW, type Shot } from './featureList.ts';
@@ -38,7 +39,7 @@ export interface LandingHost {
   howItWorks(): void;
 }
 
-/** The plate: six kinds that look nothing like one another. The rest are a button away. */
+/** The first squares of the plate: six kinds that look nothing like one another; every other kind follows. */
 const PLATE: ModelKind[] = ['iss', 'telescope', 'starlinkv2', 'falcon9', 'dragon', 'roadster'];
 
 const SLIDE_HOLD_MS = 20000; // after the visitor chooses a screen themselves, how long the slideshow leaves it alone
@@ -266,23 +267,39 @@ export class Landing {
   // ---- the plate of spacecraft ------------------------------------------------------------
 
   /**
-   * The plate's layout, made once and complete: a square and a caption for each of the six
-   * kinds shown. The pictures arrive later, but the page already has its final length, so
-   * nothing moves under the visitor's finger when they do. (Figures used to be added one by
-   * one as they were drawn; on a phone the page grew while it was being scrolled. And the
-   * plate used to show every kind: the owner asked for a few, and a way to the rest.)
+   * The plate: EVERY kind of model, in one row that scrolls sideways (the owner asked to be able
+   * to look through all of them here): the six favourites first, then the catalogue's groups. Its
+   * layout is made once and complete — a square and a caption per kind — so the page never
+   * changes length; the row's own height is fixed. Pictures fade into their squares as they are
+   * drawn (see drawPlate). Arrow buttons scroll a pageful for a mouse without a sideways wheel.
    */
   private layPlate(): Map<ModelKind, HTMLImageElement> {
     const slots = new Map<ModelKind, HTMLImageElement>();
     const figures: HTMLElement[] = [];
-    for (const kind of PLATE) {
+    const order = [...new Set<ModelKind>([...PLATE, ...kindGroups().flatMap(([, kinds]) => kinds)])];
+    for (const kind of order) {
       const figure = document.createElement('figure');
+      figure.dataset.kind = kind;
       const image = Object.assign(document.createElement('img'), { alt: '' });
       figure.append(image, Object.assign(document.createElement('figcaption'), { textContent: KIND_LABEL[kind] }));
       figures.push(figure);
       slots.set(kind, image);
     }
-    $('ld-plate').replaceChildren(...figures);
+    const plate = $('ld-plate');
+    plate.replaceChildren(...figures);
+    $('ld-kind-count').textContent = String(order.length);
+    const step = (direction: number) => plate.scrollBy({ left: direction * plate.clientWidth * 0.85, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    $('ld-plate-back').addEventListener('click', () => step(-1));
+    $('ld-plate-on').addEventListener('click', () => step(1));
+    const ends = () => {
+      $<HTMLButtonElement>('ld-plate-back').disabled = plate.scrollLeft < 4;
+      $<HTMLButtonElement>('ld-plate-on').disabled = plate.scrollLeft > plate.scrollWidth - plate.clientWidth - 4;
+    };
+    plate.addEventListener('scroll', () => {
+      ends();
+      this.plateMoved = performance.now();
+    }, { passive: true });
+    requestAnimationFrame(ends);
     // "See all models" presses the button that opens the catalogue of models. That catalogue is
     // another module's; if its button is not on the page there is nothing to open, and no button here.
     $('landing-models').addEventListener('click', () => document.getElementById('gallery-open')?.click());
@@ -295,22 +312,37 @@ export class Landing {
     $('landing-models').hidden = !document.getElementById('gallery-open');
   }
 
+  private plateMoved = 0; // when the row was last scrolled sideways
+  private readonly nearView = new Set<ModelKind>(); // squares in or near the row's visible part
+
   /**
-   * Draw the pictures with the tracker's own renderer, one at a time, in quiet moments.
-   * Drawing one takes the main thread for a moment (a dozen renders to find its best side),
-   * which a finger on the page would feel as a hitch. So nothing is drawn while the page is
-   * being touched or has just moved; the queue simply waits.
+   * Draw the pictures with the tracker's own renderer, one at a time, in quiet moments, the
+   * squares in view first. Drawing one takes the main thread for a moment (a dozen renders to
+   * find its best side), which a finger on the page would feel as a hitch: so nothing is drawn
+   * while the page or the row is being moved; the queue simply waits. Squares far along the
+   * row are drawn only as the row is scrolled towards them.
    */
   private drawPlate(): void {
     if (this.plateDrawn || !this.plateWanted || !this.loaded) return;
     this.plateDrawn = true;
-    const queue = [...this.slots];
-    const quiet = (): boolean => this.quiet;
+    const plate = $('ld-plate');
+    const pending = new Map(this.slots);
+    const watcher = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        const kind = (entry.target as HTMLElement).dataset.kind as ModelKind;
+        if (entry.isIntersecting) this.nearView.add(kind);
+        else this.nearView.delete(kind);
+      }
+    }, { root: plate, rootMargin: '0px 400px' });
+    for (const figure of plate.children) watcher.observe(figure);
+    const quiet = (): boolean => this.quiet && performance.now() - this.plateMoved > 350;
     const later = (work: () => void, ms: number) => ('requestIdleCallback' in window ? window.requestIdleCallback(work, { timeout: ms * 4 }) : setTimeout(work, ms));
     const next = () => {
-      if (queue.length === 0) return;
-      if (!quiet()) return void setTimeout(next, 250);
-      const [kind, image] = queue.shift()!;
+      if (pending.size === 0) return watcher.disconnect();
+      const kind = [...pending.keys()].find((candidate) => this.nearView.has(candidate));
+      if (!kind || !quiet()) return void setTimeout(next, 250); // nothing in view to draw, or the page is moving
+      const image = pending.get(kind)!;
+      pending.delete(kind);
       const url = modelThumbnail(kind);
       if (url) {
         image.onload = () => image.classList.add('is-in');

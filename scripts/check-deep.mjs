@@ -12,7 +12,10 @@
 //                                         download (rewritten by fetch-deep.mjs)
 //
 // What is asserted (the tolerances the project set itself):
-//   planets and Pluto   direction within 0.1°, distance within 0.5 %
+//   planets             1900–2100 from the VSOP87 series (planetSeries.ts): Mercury to Saturn within
+//                       1″ of direction from the Sun, Uranus and Neptune within 3″, distance within
+//                       10 parts per million; the old table's errors are printed beside them
+//   Pluto               (and any planet outside 1900–2100) the table: within 0.1°, distance 0.5 %
 //   the Moon            within 0.5°
 //   other moons         within 2° of direction from their planet: the 34 in the table over all
 //                       twelve dates, and again over the ten days after the download
@@ -31,7 +34,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BODIES, BODY_LIST } from '../src/space/bodies.ts';
 import { craftPeriodMs, craftPosition, motionPosition } from '../src/space/deep.ts';
-import { bodyAxes, bodyPosition, bodyRelative, elementsPosition, hasRotationModel, setMoonElements, stateToElements } from '../src/space/ephem.ts';
+import { bodyAxes, bodyPosition, bodyRelative, elementsPosition, hasRotationModel, planetByTable, setMoonElements, stateToElements } from '../src/space/ephem.ts';
+import { PLANET_SERIES } from '../src/space/planetSeries.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const read = (path) => JSON.parse(readFileSync(join(HERE, path), 'utf8'));
@@ -110,17 +114,38 @@ const truth = read('fixtures/deep-truth.json');
 console.log(`\nAgainst JPL Horizons on ${truth.dates.length} dates, ${day(truth.dates[0])} … ${day(truth.dates.at(-1))} (built-in orbits only):`);
 
 {
-  let worstDir = { v: 0 }, worstDist = { v: 0 };
+  // Each planet's worst error over the twelve dates: now (the VSOP87 series) and with the old
+  // table of approximate elements that was the only method before (planetByTable).
+  const rows = [];
   for (const [id, list] of Object.entries(truth.planets)) {
+    let dir = 0, dist = 0, oldDir = 0, oldDist = 0;
     list.forEach((want, i) => {
-      const got = bodyPosition(id, truth.dates[i]);
-      const a = angle(got, want), d = Math.abs(norm(got) / norm(want) - 1) * 100;
-      if (a > worstDir.v) worstDir = { v: a, id, t: truth.dates[i] };
-      if (d > worstDist.v) worstDist = { v: d, id, t: truth.dates[i] };
+      const got = bodyPosition(id, truth.dates[i]), old = planetByTable(id, truth.dates[i]);
+      dir = Math.max(dir, angle(got, want) * 3600);
+      dist = Math.max(dist, Math.abs(norm(got) / norm(want) - 1) * 1e6);
+      oldDir = Math.max(oldDir, angle(old, want) * 3600);
+      oldDist = Math.max(oldDist, Math.abs(norm(old) / norm(want) - 1) * 1e6);
     });
+    rows.push({ id, dir, dist, oldDir, oldDist });
   }
-  check('planets and Pluto from the Sun: direction within 0.1°', worstDir.v < 0.1, `worst ${worstDir.v.toFixed(4)}° (${worstDir.id}, ${day(worstDir.t)})`);
-  check('planets and Pluto from the Sun: distance within 0.5 %', worstDist.v < 0.5, `worst ${worstDist.v.toFixed(4)} % (${worstDist.id}, ${day(worstDist.t)})`);
+  const series = rows.filter((r) => PLANET_SERIES[r.id]);
+  const inner = series.filter((r) => !['uranus', 'neptune'].includes(r.id)), outer = series.filter((r) => ['uranus', 'neptune'].includes(r.id));
+  const worst = (list, key) => list.reduce((a, b) => (b[key] > a[key] ? b : a));
+  check('Mercury to Saturn from the Sun: direction within 1″', worst(inner, 'dir').dir < 1, `worst ${worst(inner, 'dir').dir.toFixed(3)}″ (${worst(inner, 'dir').id}); with the old table ${worst(inner, 'oldDir').oldDir.toFixed(0)}″ (${worst(inner, 'oldDir').id})`);
+  check('Uranus and Neptune from the Sun: direction within 3″', worst(outer, 'dir').dir < 3, `worst ${worst(outer, 'dir').dir.toFixed(3)}″ (${worst(outer, 'dir').id}); with the old table ${worst(outer, 'oldDir').oldDir.toFixed(0)}″`);
+  check('the eight planets from the Sun: distance within 10 ppm', worst(series, 'dist').dist < 10, `worst ${worst(series, 'dist').dist.toFixed(2)} ppm (${worst(series, 'dist').id}); with the old table ${worst(series, 'oldDist').oldDist.toFixed(0)} ppm`);
+  const pluto = rows.find((r) => r.id === 'pluto');
+  check('Pluto from the Sun (the table): direction within 0.1°, distance 0.5 %', pluto.dir < 360 && pluto.dist < 5000, `${(pluto.dir / 3600).toFixed(4)}°, ${(pluto.dist / 1e4).toFixed(4)} %`);
+  console.log(`     worst direction now / with the old table: ${rows.map((r) => `${r.id} ${r.dir.toFixed(2)}″ / ${r.oldDir.toFixed(1)}″`).join(', ')}`);
+  // The cost: one planet at a new moment (the answer for the same moment is kept), microseconds.
+  const micro = (f) => {
+    const t0 = performance.now();
+    for (let k = 0; k < 4000; k++) f(Date.UTC(2026, 0, 1) + k * 3600000);
+    return (((performance.now() - t0) / 4000) * 1000).toFixed(1);
+  };
+  for (const r of series) micro((t) => bodyPosition(r.id, t) && planetByTable(r.id, t)); // let the compiler settle first
+  const cost = series.map((r) => `${r.id} ${micro((t) => bodyPosition(r.id, t))} (table ${micro((t) => planetByTable(r.id, t))})`);
+  console.log(`     cost of one planet at a new moment, µs (the same moment again is kept): ${cost.join(', ')}`);
 }
 
 {

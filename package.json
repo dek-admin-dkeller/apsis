@@ -15,6 +15,7 @@
     "fetch-radio": "node scripts/fetch-radio.mjs",
     "fetch-deep": "node scripts/fetch-deep.mjs",
     "fetch-rovers": "node scripts/fetch-rovers.mjs",
+    "smoke": "node scripts/smoke.mjs",
     "shots": "node scripts/shots.mjs",
     "build-borders": "node scripts/build-borders.mjs",
     "bench": "node scripts/bench.mjs",

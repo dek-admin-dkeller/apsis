@@ -71,6 +71,11 @@ export interface SearchHit {
 /** Given what has been typed (trimmed, as typed), the hits a source has for it, best first. */
 export type SearchProvider = (query: string) => SearchHit[];
 
+export interface ShareLink {
+  add(q: URLSearchParams): boolean;
+  apply(q: URLSearchParams): boolean;
+}
+
 export interface App {
   // ---- what is loaded, selected and open -------------------------------------------------
   /** The catalogue in use (null only for the first moments after start-up). */
@@ -97,6 +102,8 @@ export interface App {
   // ---- place and preferences --------------------------------------------------------------
   /** The ground station (the visitor's own position once they have allowed it). */
   observer(): Observer;
+  /** Is the ground station the visitor's own position (they shared it, or typed their own)? */
+  hasOwnLocation(): boolean;
   settings(): Settings;
   setSetting<K extends keyof Settings>(name: K, value: Settings[K]): void;
 
@@ -112,6 +119,13 @@ export interface App {
   showFlyby(name: string): boolean;
   /** Go and look at a craft beyond Earth orbit, named by its Deep Space Network code ('JNO'). False if none has that code. */
   showDeepCraft(dsnCode: string): boolean;
+  /**
+   * A feature's part in share links: `add` writes its parameters when it is what is on screen
+   * (true = it did, and the default `sat`/`cam` are left out); `apply` restores them from a
+   * link (true = it handled it). A link that arrives before the feature is installed is kept
+   * and offered to it when it registers.
+   */
+  addShareLink(link: ShareLink): void;
   /** Go to a world (its place; the Earth is the tracker), as a click on it would. */
   goWorld(body: BodyId): void;
   /** Back to the Earth's tracker (a journey, if the visitor is elsewhere); resolves once there. */

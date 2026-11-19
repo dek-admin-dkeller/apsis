@@ -14,7 +14,7 @@ import * as THREE from 'three';
 import type { ModelKind } from '../data/describe.ts';
 import {
   TAU, ball, box, buildWing, cyl, dish, hoop, lathe, mesh, nozzle, slab, strut, thrusters, tileUV, whip, wingPair,
-  type Builder, type Materials, type V3,
+  type Builder, type Materials,
 } from './modelParts.ts';
 
 /** A docking port at +X: a ring with three guide petals round a hatch (the international standard's androgynous kind). */
@@ -40,6 +40,113 @@ function gloss(m: Materials, color: number): THREE.MeshStandardMaterial {
 function panel(g: THREE.Group, material: THREE.Material, outline: [number, number][], thick: number): void {
   const cx = outline.reduce((a, p) => a + p[0], 0) / outline.length, cz = outline.reduce((a, p) => a + p[1], 0) / outline.length;
   slab(g, material, outline.map(([x, z]) => [x - cx, z - cz] as const), thick, cx, 0, cz, 0.5);
+}
+
+// ---------------------------------------------------------------------------------------
+// The Roadster
+// ---------------------------------------------------------------------------------------
+
+const FRONT_AXLE = 1.19, REAR_AXLE = -1.16; // 2.35 m apart, 0.79 m and 0.82 m of overhang
+
+/** A bump of height 1 at 0, falling off over about `w` either side. */
+const bump = (d: number, w: number) => Math.exp(-((d / w) ** 2));
+/** 0 below a, 1 above b, smooth in between. */
+const ramp = (v: number, a: number, b: number) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+/**
+ * The body as one smooth skin, lofted through cross-sections from tail to nose. Each section
+ * is a rounded rectangle (a superellipse) whose width, floor and top change along the car:
+ * swelling over the wheels and pinched between them, the short nose sloping down, the open
+ * cockpit sunk into the top, the long flat deck behind it ending in a small ducktail lip. The
+ * wheel openings are pushed in to make wheel wells. Paint and black (cockpit tub, wells,
+ * side intakes, grille) are colours per corner, so the whole skin is one mesh.
+ */
+function roadsterBody(): THREE.BufferGeometry {
+  const SECTIONS = 96, AROUND = 56, L = 3.95;
+  const red = new THREE.Color('#8e1322'), black = new THREE.Color('#17181b');
+  const position: number[] = [], color: number[] = [], index: number[] = [];
+  for (let i = 0; i <= SECTIONS; i++) {
+    const u = i / SECTIONS, x = (u - 0.5) * L; // tail (−X) to nose (+X)
+    // rounded ends: the nose more rounded than the chopped tail
+    const end = u > 0.5 ? Math.pow(Math.max(0, 1 - ((u - 0.5) * 2) ** 3.2), 0.42) : Math.pow(Math.max(0, 1 - ((0.5 - u) * 2) ** 9), 0.3);
+    // half-width: wide over the wheels, pinched between them and at the ends
+    const half = (0.8 + 0.125 * bump(x - FRONT_AXLE, 0.62) + 0.13 * bump(x - REAR_AXLE, 0.66) - 0.04 * bump(x + 0.05, 0.5)) * Math.min(1, 0.55 + 0.45 * end) * (u > 0.97 ? end : 1) * (1 - 0.2 * ramp(x, 1.25, 1.98) ** 1.5); // the nose narrows in plan
+    const floor = 0.15 + 0.13 * ramp(x, 1.45, 1.98) + 0.12 * ramp(-x, 1.6, 1.98);
+    // the top line along the middle: low sloping nose, the scuttle at the windscreen, the deck
+    let top = x > 0.62 ? 0.82 - 0.36 * ramp(x, 0.62, 1.98) ** 1.4 : x > -0.75 ? 0.84 : 0.92 + 0.025 * bump(x + 1.86, 0.06) - 0.03 * ramp(-x, 1.88, 1.98);
+    top = floor + (top - floor) * Math.min(1, 0.4 + 0.6 * end);
+    const cockpit = ramp(x, -0.82, -0.68) * (1 - ramp(x, 0.5, 0.64)); // 1 where the seats are
+    for (let j = 0; j < AROUND; j++) {
+      const t = (j / AROUND) * TAU, c = Math.cos(t), sn = Math.sin(t);
+      const n = 5; // squareness of the section
+      const zN = Math.sign(c) * Math.abs(c) ** (2 / n), yN = Math.sign(sn) * Math.abs(sn) ** (2 / n);
+      let z = half * zN;
+      let y = (floor + top) / 2 + ((top - floor) / 2) * yN;
+      let dark = false;
+      const side = Math.abs(zN); // 1 on the flanks, 0 along the middle of top and floor
+      if (yN > 0) {
+        // humps over the front wheels and the haunches over the rear ones
+        y += side ** 3 * (0.07 * bump(x - FRONT_AXLE, 0.45) + 0.04 * bump(x - REAR_AXLE, 0.5)) * Math.min(1, end * 2);
+        // the open cockpit: the middle of the top sinks into a tub
+        const tub = cockpit * Math.max(0, 1 - (side / 0.86) ** 6);
+        if (tub > 0.02) { y -= tub * 0.42; dark = tub > 0.35; }
+      }
+      // wheel wells: everything on the flank inside a wheel's circle is pushed in and blackened
+      for (const [ax, r] of [[FRONT_AXLE, 0.29], [REAR_AXLE, 0.315]] as const) {
+        const d = Math.hypot(x - ax, y - r);
+        if (d < r + 0.07 && side > 0.55 && y < 0.72) { z = Math.sign(z) * Math.min(Math.abs(z), 0.62); dark = true; }
+      }
+      // the air intakes in the flanks just behind the doors
+      if (side > 0.8 && x < -0.66 && x > -0.98 && y > 0.4 && y < 0.66) { z *= 0.955; dark = true; }
+      // the grille: a shallow slot low in the nose
+      if (u > 0.965 && y > 0.25 && y < 0.36 && side < 0.75) dark = true;
+      position.push(x, y, z);
+      const col = dark ? black : red;
+      color.push(col.r, col.g, col.b);
+    }
+  }
+  for (let i = 0; i < SECTIONS; i++) for (let j = 0; j < AROUND; j++) {
+    const a = i * AROUND + j, b = i * AROUND + ((j + 1) % AROUND), c = a + AROUND, d = b + AROUND;
+    index.push(a, c, b, b, c, d);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(position, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(color, 3));
+  geometry.setIndex(index);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+let carPaint: THREE.MeshStandardMaterial | null = null;
+/** Glossy paint whose colour comes from the body's corners (red, or black where it is trim). */
+function roadsterPaint(m: Materials): THREE.MeshStandardMaterial {
+  return (carPaint ??= new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.4, roughness: 0.34, envMap: m.metal.envMap, envMapIntensity: 1.3 }));
+}
+
+/** Starman in the driver's seat at z0: white suit, dark visor, right hand on the wheel, left elbow on the door. */
+function starman(g: THREE.Group, m: Materials, z0: number): void {
+  const suit = m.white;
+  const torso = lathe(g, suit, [[0.13, 0], [0.17, 0.1], [0.18, 0.3], [0.16, 0.42], [0.08, 0.48]], -0.42, 0.5, z0, 'y', 16);
+  torso.rotation.z = 0.25; // leaning back into the seat
+  torso.scale.set(0.85, 1, 1);
+  cyl(g, m.dark, 0.06, 0.07, 0.06, -0.47, 0.98, z0, 'y', false, 12); // neck ring
+  ball(g, suit, 0.15, -0.48, 1.12, z0); // helmet
+  const visor = mesh(g, new THREE.SphereGeometry(0.152, 16, 10, -Math.PI / 2.4, Math.PI / 1.2, Math.PI * 0.28, Math.PI * 0.36), m.lens, -0.48, 1.12, z0);
+  visor.rotation.y = Math.PI / 2; // facing forwards (+X)
+  for (const s of [-1, 1]) ball(g, suit, 0.075, -0.47, 0.88, z0 + s * 0.19); // shoulders
+  // right arm (inboard, +Z side) reaching to the wheel
+  strut(g, suit, [-0.46, 0.86, z0 + 0.2], [-0.2, 0.74, z0 + 0.2], 0.055);
+  strut(g, suit, [-0.2, 0.74, z0 + 0.2], [0.14, 0.86, z0 + 0.1], 0.048);
+  ball(g, m.dark, 0.045, 0.15, 0.87, z0 + 0.09);
+  // left arm out over the door: elbow on the sill
+  strut(g, suit, [-0.46, 0.86, z0 - 0.2], [-0.25, 0.86, -0.82], 0.055);
+  strut(g, suit, [-0.25, 0.86, -0.82], [0.05, 0.88, -0.8], 0.048);
+  ball(g, m.dark, 0.045, 0.07, 0.88, -0.8);
+  // legs, running forwards under the dashboard
+  for (const s of [-1, 1]) {
+    strut(g, suit, [-0.3, 0.5, z0 + s * 0.09], [0.12, 0.58, z0 + s * 0.1], 0.07);
+    strut(g, suit, [0.12, 0.58, z0 + s * 0.1], [0.45, 0.36, z0 + s * 0.1], 0.06);
+  }
 }
 
 export const VEHICLE_BUILDERS = {
@@ -187,65 +294,69 @@ export const VEHICLE_BUILDERS = {
 
   /**
    * The Tesla Roadster that went to space on the first Falcon Heavy (February 2018): a
-   * cherry-red, first-generation Roadster (an open two-seater on a Lotus Elise chassis) with
-   * "Starman", a mannequin in a SpaceX pressure suit, at the wheel, its left arm on the door,
-   * still on the small black adapter that held it to the rocket. Real size 3.9 m long.
+   * first-generation Roadster (2008–2012, built on a Lotus Elise chassis) in midnight cherry
+   * red, with "Starman", a mannequin in a SpaceX pressure suit, at the wheel, still on the
+   * short black adapter that held it to the rocket. Nose at +X, wheels down. 1 unit = 1 m:
+   * 3.95 m long, 1.85 m wide, 1.13 m high, 2.35 m between the axles.
    */
   roadster(g, m) {
-    const red = gloss(m, 0x9c121c); // cherry red
-    // the body, drawn from its side view (nose at +X) and given its width
-    const side = new THREE.Group();
-    const profile: [number, number][] = [[-1.97, 0.24], [-1.93, 0.78], [-1.62, 0.86], [-0.95, 0.86], [0.45, 0.82], [1.82, 0.56], [1.98, 0.4], [1.9, 0.16], [-1.85, 0.13]];
-    slab(side, red, profile.map(([x, y]) => [x, y - 0.5] as const), 1.5, 0, 0, 0, 0.8);
-    side.rotation.x = -Math.PI / 2; // the slab's thickness (Y) now runs across the car (Z); its outline's Z is up
-    side.position.y = 0.5;
-    g.add(side);
-    for (const x of [-1.22, 1.25]) for (const s of [-1, 1]) { // wheel-arch lips over the wheels
-      mesh(g, new THREE.TorusGeometry(0.38, 0.06, 6, 14, Math.PI), red, x, 0.33, s * 0.8);
+    mesh(g, roadsterBody(), roadsterPaint(m));
+    const black = m.carbon, chrome = m.metal;
+    // wheels: black tyres, five silver spokes
+    for (const [x, r] of [[FRONT_AXLE, 0.29], [REAR_AXLE, 0.315]] as const) for (const s of [-1, 1]) {
+      const z = s * 0.76;
+      cyl(g, m.dark, r, r, 0.2, x, r, z, 'z', false, 24);
+      hoop(g, m.dark, r * 0.93, r * 0.12, x, r, z + s * 0.08, 'z', 24); // the tyre's rounded sidewall
+      cyl(g, chrome, r * 0.66, r * 0.66, 0.02, x, r, z + s * 0.095, 'z', false, 20); // rim lip …
+      cyl(g, m.dark, r * 0.6, r * 0.6, 0.022, x, r, z + s * 0.096, 'z', false, 20); // … and the dark wheel between the spokes
+      for (let k = 0; k < 5; k++) {
+        const a = (k * TAU) / 5 + 0.3;
+        const spoke = box(g, chrome, r * 0.56, r * 0.13, 0.03, x + Math.cos(a) * r * 0.3, r + Math.sin(a) * r * 0.3, z + s * 0.1);
+        spoke.rotation.z = a;
+      }
+      cyl(g, chrome, r * 0.14, r * 0.14, 0.04, x, r, z + s * 0.11, 'z', false, 10); // hub
     }
-    box(g, red, 1.5, 0.14, 0.14, 0.05, 0.62, -0.78); // door sills
-    box(g, red, 1.5, 0.14, 0.14, 0.05, 0.62, 0.78);
-    // cockpit: black interior, two seats, a roll hoop behind them
-    box(g, m.carbon, 1.35, 0.06, 1.38, -0.35, 0.83, 0);
-    for (const z of [-0.36, 0.36]) {
-      box(g, m.carbon, 0.42, 0.14, 0.5, -0.42, 0.9, z);
-      box(g, m.carbon, 0.12, 0.62, 0.5, -0.72, 1.12, z).rotation.z = 0.18; // seat back
-    }
-    hoop(g, m.dark, 0.32, 0.03, -0.95, 1.05, 0, 'x', 16);
-    // windscreen in a black frame
-    const screen = new THREE.Group();
-    box(screen, m.lens, 0.012, 0.36, 1.4);
-    for (const s of [-1, 1]) box(screen, m.dark, 0.03, 0.4, 0.03, 0, 0, s * 0.7);
-    box(screen, m.dark, 0.03, 0.03, 1.42, 0, 0.19, 0);
-    screen.position.set(0.55, 1.0, 0);
-    screen.rotation.z = 0.75; // raked back over the dashboard
-    g.add(screen);
-    box(g, m.carbon, 0.3, 0.12, 1.3, 0.33, 0.86, 0); // dashboard
-    // Starman: white suit, black visor, right hand on the wheel, left arm resting on the door (left-hand drive: driver on −Z)
-    const z0 = -0.36;
-    hoop(g, m.dark, 0.13, 0.016, 0.15, 1.02, z0, 'x', 16); // steering wheel
-    box(g, m.white, 0.24, 0.45, 0.34, -0.5, 1.15, z0).rotation.z = 0.2; // torso
-    ball(g, m.white, 0.15, -0.44, 1.48, z0); // helmet
-    box(g, m.lens, 0.04, 0.13, 0.2, -0.31, 1.49, z0); // visor
-    strut(g, m.white, [-0.45, 1.3, z0 + 0.15], [-0.15, 1.08, z0 + 0.1], 0.045); // right arm
-    strut(g, m.white, [-0.15, 1.08, z0 + 0.1], [0.12, 1.06, z0 + 0.05], 0.04);
-    strut(g, m.white, [-0.45, 1.3, z0 - 0.17], [-0.3, 0.95, -0.72], 0.045); // left arm, elbow on the door
-    strut(g, m.white, [-0.3, 0.95, -0.72], [0.0, 0.9, -0.74], 0.04);
-    for (const z of [z0 - 0.08, z0 + 0.08]) strut(g, m.white, [-0.35, 0.95, z], [0.25, 0.85, z], 0.06); // legs, under the dashboard
-    // wheels, lights
-    for (const x of [-1.22, 1.25]) for (const s of [-1, 1]) {
-      cyl(g, m.dark, 0.33, 0.33, 0.22, x, 0.33, s * 0.8, 'z', false, 20);
-      cyl(g, m.metal, 0.2, 0.2, 0.225, x, 0.33, s * 0.8, 'z', false, 10);
-    }
+    // headlights: two lenses set into the tops of the front wings
     for (const s of [-1, 1]) {
-      box(g, m.lens, 0.12, 0.08, 0.28, 1.88, 0.5, s * 0.5).rotation.z = -0.5; // headlights
-      ball(g, m.navRed, 0.05, -1.97, 0.68, s * 0.55, 0.6, 1, 1.2); // tail lights
+      const lamp = ball(g, m.metal, 0.15, 1.6, 0.555, s * 0.56, 1.5, 0.3, 0.6); // the chrome reflector behind clear glass, sunk into the wing
+      lamp.rotation.set(s * 0.25, s * 0.35, -0.38);
+      ball(g, m.navWhite, 0.04, 1.69, 0.545, s * 0.56);
     }
-    box(g, m.dark, 0.06, 0.12, 0.55, 1.98, 0.28, 0); // the small grille
-    // the adapter it was bolted to, a short black truss on a ring
-    cyl(g, m.dark, 0.55, 0.75, 0.32, 0, -0.18, 0, 'y', false, 24);
-    hoop(g, m.metal, 0.75, 0.02, 0, -0.34, 0, 'y', 24);
-    const feet: V3[] = [[-1.0, 0.13, -0.45], [-1.0, 0.13, 0.45], [1.0, 0.15, -0.45], [1.0, 0.15, 0.45]];
-    for (const [x, y, z] of feet) strut(g, m.dark, [x * 0.45, -0.02, z * 0.9], [x, y, z], 0.03);
+    // round tail lights, two each side, in the chopped tail
+    for (const s of [-1, 1]) for (const z of [0.46, 0.66]) {
+      cyl(g, m.navRed, 0.065, 0.065, 0.03, -1.955, 0.72, s * z, 'x', false, 14);
+    }
+    // windscreen: a raked black frame round dark glass
+    const screen = new THREE.Group();
+    const glass = box(screen, m.lens, 0.012, 0.5, 1.22);
+    glass.position.y = 0.25;
+    for (const s of [-1, 1]) box(screen, black, 0.04, 0.54, 0.05, 0, 0.26, s * 0.63);
+    box(screen, black, 0.05, 0.05, 1.3, 0, 0.52, 0);
+    screen.position.set(0.66, 0.84, 0);
+    screen.rotation.z = 0.98; // about 56° back from upright
+    g.add(screen);
+    for (const s of [-1, 1]) { // door mirrors
+      strut(g, black, [0.52, 0.8, s * 0.8], [0.5, 0.88, s * 0.88], 0.015);
+      ball(g, black, 0.06, 0.49, 0.89, s * 0.9, 0.7, 0.75, 1.1);
+    }
+    // cockpit: seats and the roll hoop behind them
+    for (const z of [-0.36, 0.36]) {
+      box(g, black, 0.46, 0.1, 0.46, -0.32, 0.42, z); // cushion
+      box(g, black, 0.12, 0.62, 0.46, -0.6, 0.72, z).rotation.z = 0.22; // back
+    }
+    for (const z of [-0.36, 0.36]) {
+      strut(g, black, [-0.82, 0.86, z - 0.2], [-0.82, 1.07, z - 0.14], 0.025);
+      strut(g, black, [-0.82, 1.07, z - 0.14], [-0.82, 1.07, z + 0.14], 0.025);
+      strut(g, black, [-0.82, 1.07, z + 0.14], [-0.82, 0.86, z + 0.2], 0.025);
+    }
+    box(g, black, 0.36, 0.14, 1.36, 0.38, 0.74, 0); // dashboard
+    // Starman: left-hand drive, so the driver's seat is on −Z
+    const z0 = -0.36;
+    hoop(g, black, 0.17, 0.018, 0.2, 0.84, z0, 'x', 18).rotation.z = 0.45; // steering wheel
+    starman(g, m, z0);
+    // the adapter it was bolted to: a short black cone, and the four arms holding the car
+    cyl(g, m.dark, 0.45, 0.62, 0.3, 0, -0.17, 0, 'y', false, 24);
+    hoop(g, m.metal, 0.62, 0.02, 0, -0.32, 0, 'y', 24);
+    for (const x of [-0.9, 0.9]) for (const z of [-0.5, 0.5]) strut(g, m.dark, [x * 0.4, -0.03, z * 0.7], [x, 0.17, z], 0.03);
   },
 } satisfies Partial<Record<ModelKind, Builder>>;

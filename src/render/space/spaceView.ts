@@ -643,21 +643,8 @@ export class SpaceView {
     for (const craft of this.crafts) if (craft.centre === id) this.addCraft(craft);
     this.roverPaths(id);
 
-    // Orbits: the path of everything here that circles something else here (moons round their
-    // planet; from the Sun, the planets themselves, at true scale), and each craft's round this body.
+    this.drawLines(tMs);
     let reach = R * 8;
-    for (const item of this.items) {
-      if (item.target.kind === 'body') {
-        const other = item.target.body;
-        if (item.centre || !other.parent) continue;
-        const anchor = other.parent === id ? null : this.items.find((candidate) => candidate.key === `body:${other.parent}`) ?? null;
-        if (other.parent !== id && !anchor) continue;
-        const points = this.sample(other.periodDays * DAY, 240, tMs, (t) => this.toWorld(bodyRelative(other.id, other.parent!, t, this.vec), this.unitsPerKm, this.scratch));
-        this.addLine(points, item.key, other.color, 0.3, anchor, true);
-      } else {
-        this.craftLine(item, tMs, (v) => this.toWorld(v, this.unitsPerKm, this.scratch));
-      }
-    }
     this.casters = this.items.filter((item) => item.mesh && item.target.kind === 'body' && item.target.body.id !== 'sun').sort((a, b) => b.radius - a.radius);
     this.place(tMs);
     for (const item of this.items) reach = Math.max(reach, item.pos.length() * 1.5);
@@ -679,11 +666,7 @@ export class SpaceView {
     for (const body of BODY_LIST) {
       const size = MAP_SIZE[body.id];
       if (size !== undefined) {
-        const item = this.addBody(body, size, body.id === 'sun', detail);
-        if (body.id !== 'sun') {
-          const points = this.sample(body.periodDays * DAY, 256, tMs, (t) => this.mapPoint(bodyPosition(body.id, t, this.vec), this.scratch));
-          this.addLine(points, item.key, body.color, 0.26, null, true);
-        }
+        this.addBody(body, size, body.id === 'sun', detail);
       } else if (body.visitable && body.parent && MAP_SIZE[body.parent] !== undefined) {
         // A moon that can be visited is drawn beside its planet — on its true side, but nothing
         // like its true distance, which at this scale is inside the planet's dot.
@@ -692,10 +675,8 @@ export class SpaceView {
         item.beside = beside;
       }
     }
-    for (const craft of this.crafts) {
-      if (craft.centre !== 'sun') continue;
-      this.craftLine(this.addCraft(craft), tMs, (v) => this.mapPoint(v, this.scratch));
-    }
+    for (const craft of this.crafts) if (craft.centre === 'sun') this.addCraft(craft);
+    this.drawLines(tMs);
     this.extent = 620;
     this.buildDots();
     this.corona.visible = true;
@@ -743,6 +724,48 @@ export class SpaceView {
       p0 = p1;
     }
     return new Float32Array(out);
+  }
+
+  /**
+   * Every path in this view, drawn from `tMs` on: at a place, everything here that circles
+   * something else here (moons round their planet; from the Sun, the planets, at true scale) and
+   * each craft round this body; on the map, each planet round the Sun and each craft between
+   * them. Separate from build() so that a clock running at a month a second can renew the
+   * paths alone (refreshLines) instead of rebuilding every world and reloading its map.
+   */
+  private drawLines(tMs: number): void {
+    const where = this.where;
+    if (!where) return;
+    for (const item of this.items) {
+      if (where.kind === 'system') {
+        if (item.target.kind === 'craft') this.craftLine(item, tMs, (v) => this.mapPoint(v, this.scratch));
+        else if (item.target.body.id !== 'sun' && item.beside === 0 && MAP_SIZE[item.target.body.id] !== undefined) {
+          const body = item.target.body;
+          this.addLine(this.sample(body.periodDays * DAY, 256, tMs, (t) => this.mapPoint(bodyPosition(body.id, t, this.vec), this.scratch)), item.key, body.color, 0.26, null, true);
+        }
+      } else if (item.target.kind === 'body') {
+        const other = item.target.body;
+        if (item.centre || !other.parent) continue;
+        const anchor = other.parent === where.body ? null : this.items.find((candidate) => candidate.key === `body:${other.parent}`) ?? null;
+        if (other.parent !== where.body && !anchor) continue;
+        const points = this.sample(other.periodDays * DAY, 240, tMs, (t) => this.toWorld(bodyRelative(other.id, other.parent!, t, this.vec), this.unitsPerKm, this.scratch));
+        this.addLine(points, item.key, other.color, 0.3, anchor, true);
+      } else {
+        this.craftLine(item, tMs, (v) => this.toWorld(v, this.unitsPerKm, this.scratch));
+      }
+    }
+  }
+
+  /** Renew the paths only (a long way on in time); the worlds, their maps and the camera stay as they are. */
+  private refreshLines(tMs: number): void {
+    for (const { line } of this.lines) {
+      line.removeFromParent();
+      line.geometry.dispose();
+      (line.material as THREE.Material).dispose();
+    }
+    this.lines = [];
+    this.drawLines(tMs);
+    this.builtAt = tMs;
   }
 
   private craftLine(item: Item, tMs: number, toScene: (v: Vec) => THREE.Vector3): void {
@@ -1026,7 +1049,7 @@ export class SpaceView {
   update(dt: number, tMs: number, realSeconds: number, slave: { key: string | null; pose: Pose } | null = null): void {
     if (!this.where) return;
     // Orbits are drawn from "now" for one period; after a long jump in time they would be stale.
-    if (Math.abs(tMs - this.builtAt) > 120 * DAY) this.build(this.where, tMs, true);
+    if (Math.abs(tMs - this.builtAt) > 120 * DAY) this.refreshLines(tMs);
     this.place(tMs, dt);
     const map = this.where.kind === 'system';
     const focusItem = this.focus ? this.item(targetKey(this.focus)) : null;
@@ -1246,7 +1269,11 @@ export class SpaceView {
       }
       const scale = mesh.scale.x || 1;
       const at = this.scratch.copy(path.anchor).applyMatrix4(mesh.matrixWorld);
-      const fade = 1 - THREE.MathUtils.smoothstep(at.distanceTo(this.camera.position) / (R * scale), 0.3, 0.6);
+      // Seen from up to a couple of radii away (a squiggle a few pixels long is still worth seeing:
+      // the owner looked from the usual close view and found nothing), and always for the rover
+      // being looked at.
+      const chosenNow = focusItem?.key === path.key;
+      const fade = chosenNow ? 1 : 1 - THREE.MathUtils.smoothstep(at.distanceTo(this.camera.position) / (R * scale), 1.4, 2.6);
       line.visible = fade > 0.01;
       if (!line.visible) continue;
       // The ground drawn here is the body's faceted sphere or a tile patch floating up to 0.11 %
@@ -1416,9 +1443,14 @@ export class SpaceView {
     const phone = this.host.isPhone();
     if (this.where?.kind === 'system') return new THREE.Vector3(0, 135, 190).multiplyScalar(phone ? 1.55 : 1);
     // From the sunlit side, a little above and to one side, so the edge of night is in view.
+    // A world with rings is seen from the side of the ring plane the Sun lights: from the other
+    // side its rings show their dark face (true, but Saturn looked "off" to the owner: since its
+    // 2025 equinox the Sun lights the rings' SOUTHERN face, while the view sat above the north).
     const side = new THREE.Vector3().crossVectors(UP, this.sunDir);
     if (side.lengthSq() < 1e-6) side.set(1, 0, 0);
-    return this.sunDir.clone().multiplyScalar(0.78).addScaledVector(side.normalize(), 0.55).addScaledVector(UP, 0.28).normalize().multiplyScalar(R / (phone ? PLACE_REST_PHONE : PLACE_REST));
+    const ringed = this.where?.kind === 'place' && !!IMAGERY[this.where.body]?.ring;
+    const above = ringed && this.sunDir.y < 0 ? -0.28 : 0.28;
+    return this.sunDir.clone().multiplyScalar(0.78).addScaledVector(side.normalize(), 0.55).addScaledVector(UP, above).normalize().multiplyScalar(R / (phone ? PLACE_REST_PHONE : PLACE_REST));
   }
 
   private homeCamera(): void {

@@ -35,6 +35,7 @@ npm run check        # the feature checks: orbit changes, visible passes, the re
                      # and the solar system against JPL Horizons (prints the worst errors)
 npm run fetch-radio  # refresh the SatNOGS radio records in public/data/radio.json (at most about every 6 hours)
 npm run fetch-deep   # refresh public/data/deep.json: spacecraft beyond Earth orbit, fly-bys, fireballs (JPL; at most about every 6 hours)
+npm run smoke        # the built site in headless Chrome: starts, the bell, the solar system, Mars (the deploy runs it on pushes)
 npm run shots        # retake the home page's screenshots (needs Chrome and `npm run dev` running)
 ```
 
@@ -84,7 +85,11 @@ status line sit along the bottom.
 | Launch climbs | every launch with a known pad and minute is drawn rising from its pad to orbit on an ESTIMATED path (pad, time and target orbit; no one publishes a rocket's live position), with T+, height, speed and stage, **Follow** and **Watch live**. In the launches list: **Preview / Watch / Replay the climb** (the clock moves to lift-off) |
 | New launches | objects launched in the last three days are brighter, mint, and named "New" (Layers → New launches) |
 | Rover paths | at Mars, the routes Curiosity and Perseverance have driven, from NASA's daily record; each rover stands at the end of its path (Layers → Rover paths) |
-| Eclipses and transits | the bell lists the next solar and lunar eclipses (an alert while one is happening), a planet crossing the Sun, and the shadows of Jupiter's moons on the planet (routine); choosing one moves the clock to its peak and goes to where the shadow falls. Worked out in the app (`space/skyEvents.ts`) and checked against NASA's eclipse tables |
+| Eclipses and transits | during a solar eclipse the Moon's shadow darkens the globe and the track of its centre is drawn; the bell lists the next solar and lunar eclipses (an alert while one is happening), a planet crossing the Sun, and the shadows of Jupiter's moons on the planet (routine); choosing one moves the clock to its peak and goes to where the shadow falls. Worked out in the app (`space/skyEvents.ts`) and checked against NASA's eclipse tables |
+| The Station over you | with your location shared, the bell gives the Space Station's next pass and raises an alert when it is about to rise high overhead |
+| Notifications | opt-in, from the bell: a browser notification when an alert starts (launch, eclipse, close asteroid, Station overhead), once each |
+| Solar-system speeds | away from the Earth the time bar adds a day, a week, a month and a year a second; back at the Earth it returns to 1000× |
+| Share links | `#launch=<id>&t=…` opens a launch climb at that moment, `#event=solar-2027-02-06` an eclipse at its peak, besides `#sat=`, `#pair=`, `#place=`, `#craft=` |
 | What's new | the home page and About list the latest additions, newest first |
 | Live and coming up | the bell in the top bar (on a phone, in the menu): spacecraft a Deep Space Network dish is talking to now, a launch in flight or about to lift off, an active meteor shower, then the next launches, asteroid and shower peak. A green dot and count while anything is live; each row goes to it |
 | Filters | while any filter hides part of the catalogue (a type chosen in the search, the type and orbit chips, the height range, the year slider), an amber banner at the top of the globe says how many are shown and why, and **Show all** clears every one of them |

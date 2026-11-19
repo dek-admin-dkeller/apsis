@@ -16,7 +16,7 @@
  *   - a transit of Mercury or Venus can only be at an inferior conjunction;
  *   - a Galilean moon (or its shadow) can only cross Jupiter when it passes the planet's
  *     centre line as seen from the Earth (or the Sun): those passings are bracketed with
- *     steps of 1/16 of the moon's orbit, and the limb crossings are then bisected.
+ *     steps of 1/8 of the moon's orbit, and the limb crossings are then bisected.
  * Results are kept per lunation, per conjunction and per four-day block, so a repeated call
  * costs a few map lookups.
  *
@@ -36,9 +36,9 @@
  *     Jupiter the event is worked out at Jupiter and then dated when its light reaches the
  *     Earth, which is how published tables give it (35–52 minutes later).
  *   - Jupiter is the IAU ellipsoid (71,492 × 66,854 km, its 1-bar level). A transit begins and
- *     ends when the CENTRE of the moon, or of its shadow, is on the limb as seen from the Earth
- *     (IMCCE's convention: "the satellite or its umbra is bisected"); a shadow on the part of
- *     the lit side turned away from the Earth does not count.
+ *     ends when the CENTRE of the moon, or of its shadow, is on the edge of the part of the disc
+ *     that is both lit and seen from the Earth (IMCCE's convention: "the satellite or its umbra
+ *     is bisected"). Away from opposition that edge is the terminator on one side.
  *   - Clock: everything here is Unix ms UTC, like the app; ephem.ts converts to uniform time
  *     itself (TT_MINUS_UTC_MS). The Earth's turn (for places) is UT1 ≈ UTC.
  *   - Where an eclipse is seen is said in coarse words: a path's names come from regionName()
@@ -566,20 +566,25 @@ function planetTransitAt(planet: 'mercury' | 'venus', k: number): SkyEvent | nul
   const [epoch, period] = INFERIOR[planet];
   const guess = epoch + k * period;
   // Find where the planet's longitude passes the Sun's on the near side: scan ±30 days
-  // (Mercury's eccentric orbit moves its conjunctions a week or more from the mean), then halve.
+  // (Mercury's eccentric orbit moves its conjunctions a week or more from the mean) with plain
+  // geometric positions, which are enough to find the day, then halve with the apparent ones.
+  const rough = (t: number) => {
+    const e = bodyPosition('earth', t);
+    const p = sub(bodyPosition(planet, t), e);
+    return { gap: wrap180(eclipticLon(p) + 180 - eclipticLon(e)), near: norm(p) < norm(e) };
+  };
   const gap = (t: number) => {
     const { p, s } = planetAndSun(planet, t);
     return wrap180(eclipticLon(p) - eclipticLon(s));
   };
   let conj: number | null = null;
-  const step = 2 * DAY_MS;
+  const step = 3 * DAY_MS;
+  let a = rough(guess - 30 * DAY_MS);
   for (let t = guess - 30 * DAY_MS; t < guess + 30 * DAY_MS && conj === null; t += step) {
-    const a = gap(t), b = gap(t + step);
+    const b = rough(t + step);
     // Near inferior conjunction the planet moves backwards against the Sun: + to −.
-    if (a > 0 && b <= 0 && a - b < 90) {
-      const near = planetAndSun(planet, t);
-      if (norm(near.p) < norm(near.s)) conj = bisect(t, t + step, (x) => gap(x) > 0, 20);
-    }
+    if (a.near && a.gap > 0 && b.gap <= 0 && a.gap - b.gap < 90) conj = bisect(t - DAY_MS, t + step + DAY_MS, (x) => gap(x) > 0, 20);
+    a = b;
   }
   let found: SkyEvent | null = null;
   if (conj !== null && norm(offsetFromSun(planet, conj)) < 0.6 * DEG) {
@@ -618,7 +623,8 @@ export function planetTransits(fromMs: number, toMs: number): SkyEvent[] {
   const out: SkyEvent[] = [];
   for (const planet of ['mercury', 'venus'] as const) {
     const [epoch, period] = INFERIOR[planet];
-    const first = Math.floor((fromMs - epoch) / period) - 1, last = Math.ceil((toMs - epoch) / period) + 1;
+    // A conjunction is within 30 days of its mean date and a transit lasts under a day.
+    const first = Math.ceil((fromMs - 31 * DAY_MS - epoch) / period), last = Math.floor((toMs + 31 * DAY_MS - epoch) / period);
     for (let k = first; k <= last; k++) {
       const e = planetTransitAt(planet, k);
       if (e && e.endMs >= fromMs && e.startMs <= toMs) out.push(e);
@@ -636,12 +642,12 @@ const GALILEAN: { id: BodyId; name: string }[] = [
 /**
  * What changes slowly round Jupiter, for an OBSERVER's moment t: the light time τ, Jupiter's
  * place from the Sun at t − τ, the Earth seen from Jupiter (Earth at t), Jupiter's pole and its
- * angle from the Sun in our sky. Worked out every six hours and interpolated in between: the
- * Earth's curving path makes that at most a few hundred km out at 600 million km, which moves a
+ * angle from the Sun in our sky. Worked out every twelve hours and interpolated in between:
+ * the Earth's curving path makes that at most 1,500 km out at 600 million km, which moves a
  * Galilean event by a fraction of a second, and it saves a full Moon series per evaluation.
  */
 interface Slow { tau: number; jupiter: Vec; toEarth: Vec; pole: Vec; elongation: number }
-const SLOW_STEP = 6 * HOUR_MS;
+const SLOW_STEP = 12 * HOUR_MS;
 const slowNodes = new Map<number, Slow>();
 
 function slowNode(k: number): Slow {
@@ -688,12 +694,16 @@ function onDisc(moon: BodyId, kind: JovianKind, t: number): boolean {
   const { r, d, slow } = jovian(moon, kind, t);
   const hit = lineEllipsoid(r, d, slow.pole, JUPITER_A, JUPITER_B);
   if (!hit || hit[0] <= 0) return false; // misses the planet, or the moon is behind it
-  if (kind === 'transit') return true;
-  // The shadow falls on the lit side; it counts only on the part of it turned towards the Earth.
+  // Either way it must be where the disc is both lit and turned towards the Earth. For a
+  // shadow (cast on the lit side) that rules out the strip of lit cloud we cannot see; for the
+  // moon itself, the strip of the near side the Sun does not reach: away from opposition the
+  // dark limb is up to 1,300 km wide, and a moon crossing it is not seen against the bright
+  // disc (IMCCE's times say the same: without this, ingress came a minute early after
+  // opposition and egress a minute late before it).
   const p = add(r, scale(d, hit[0]));
   const along = dot(p, slow.pole);
   const normal = add(scale(sub(p, scale(slow.pole, along)), 1 / (JUPITER_A * JUPITER_A)), scale(slow.pole, along / (JUPITER_B * JUPITER_B)));
-  return dot(normal, sub(slow.toEarth, p)) > 0;
+  return dot(normal, sub(slow.toEarth, p)) > 0 && dot(normal, add(slow.jupiter, p)) < 0;
 }
 
 /** Sideways offset of the moon from the line through Jupiter's centre (+ / − either side), and whether it is on the near side. */
@@ -713,7 +723,8 @@ function jupiterBlock(k: number): SkyEvent[] {
   const found: SkyEvent[] = [];
   for (const { id, name } of GALILEAN) {
     const period = BODIES[id].periodDays * DAY_MS;
-    const step = period / 16;
+    // Eight steps an orbit: a passing on the near side is always bracketed by two near points.
+    const step = period / 8;
     // The longest a centre can take to cross the disc's radius, with room to spare.
     const orbitKm = norm(bodyRelative(id, 'jupiter', from));
     const reach = (1.6 * JUPITER_A) / ((2 * Math.PI * orbitKm) / period);
@@ -723,14 +734,16 @@ function jupiterBlock(k: number): SkyEvent[] {
         const next = across(id, kind, t + step);
         if (prev.near && next.near && Math.sign(prev.x) !== Math.sign(next.x)) {
           const sign0 = Math.sign(prev.x);
-          const mid = bisect(t, t + step, (x) => Math.sign(across(id, kind, x).x) === sign0, 14);
+          // To within a minute or so: it only has to be inside the crossing.
+          const mid = bisect(t, t + step, (x) => Math.sign(across(id, kind, x).x) === sign0, 10);
           if (mid < to && onDisc(id, kind, mid)) {
             let back = reach;
             while (onDisc(id, kind, mid - back) && back < 4 * reach) back *= 1.5;
             let ahead = reach;
             while (onDisc(id, kind, mid + ahead) && ahead < 4 * reach) ahead *= 1.5;
-            const startMs = Math.round(bisect(mid - back, mid, (x) => onDisc(id, kind, x)));
-            const endMs = Math.round(bisect(mid, mid + ahead, (x) => onDisc(id, kind, x)));
+            // 13 halvings of the bracket: about a second for Io, three for Callisto.
+            const startMs = Math.round(bisect(mid - back, mid, (x) => onDisc(id, kind, x), 13));
+            const endMs = Math.round(bisect(mid, mid + ahead, (x) => onDisc(id, kind, x), 13));
             const peakMs = Math.round((startMs + endMs) / 2);
             const slow = slowAt(peakMs);
             const hidden = slow.elongation < 15 ? ' · Jupiter is too close to the Sun to see' : '';

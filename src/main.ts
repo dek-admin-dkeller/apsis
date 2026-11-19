@@ -64,6 +64,7 @@ import { HowTo } from './ui/howto.ts';
 import { alertDistance, clockStamp, duration, Inspector } from './ui/inspector.ts';
 import { LoadingScreen } from './ui/intro.ts';
 import { Landing, updateRows } from './ui/landing.ts';
+import { EclipseShadow } from './render/eclipseShadow.ts';
 import { WHATS_NEW } from './ui/featureList.ts';
 import type { App, FrameInfo, SearchProvider } from './ui/app.ts';
 import { freshLaunches, type FreshLaunch } from './data/fresh.ts';
@@ -74,7 +75,7 @@ import { DEFAULT_SITE, SettingsStore, type Settings } from './ui/settings.ts';
 import { ShareDialog, warmShare } from './ui/share.ts';
 import { Sheets } from './ui/sheet.ts';
 import { thumbnail } from './ui/thumb.ts';
-import { TimeControls, type SimClock } from './ui/timeControls.ts';
+import { speedText, TimeControls, type SimClock } from './ui/timeControls.ts';
 import { ObjectTabs } from './ui/objectTabs.ts';
 import { Tour } from './ui/tour.ts';
 import { Watchlist } from './ui/watchlist.ts';
@@ -208,6 +209,7 @@ const track = new GroundTrack(kit.eciGroup);
 const markers = new ConjunctionMarkers(kit, sim);
 const encViz = new EncounterViz(kit);
 const grid = new GridViz(kit, sim);
+const eclipseShadow = new EclipseShadow(globe, globe.earth); // the Moon's shadow on the day side during a solar eclipse
 const rig = new CameraRig(kit);
 // Everything beyond Earth orbit (the Moon, the planets, Webb, the Voyagers) is drawn by scenes
 // of its own (ui/places.ts). `places.elsewhere` says the visitor is in one of them;
@@ -648,7 +650,7 @@ function updateTimeChip(): void {
   if (!isPhone()) return;
   const offset = clock.time - Date.now();
   const text = clock.paused ? 'Paused'
-    : clock.speed !== 1 ? (Math.abs(clock.speed) < 1 ? 'Slow motion' : `${clock.speed < 0 ? '−' : ''}${fmtInt(Math.abs(clock.speed))}×`)
+    : clock.speed !== 1 ? (Math.abs(clock.speed) < 1 ? 'Slow motion' : `${clock.speed < 0 ? '−' : ''}${speedText(Math.abs(clock.speed)).replace(' a second', '/s')}`)
     : Math.abs(offset) >= 5000 ? `${offset > 0 ? '+' : '−'}${duration(offset)}`
     : '';
   if (text === timeChipText) return;
@@ -1371,6 +1373,11 @@ for (const button of document.querySelectorAll<HTMLElement>('[data-view]')) {
 
 // ---- share links: the address after # describes what is on screen ---------------------------
 
+// Features' parts of share links (App.addShareLink); a link they must restore that arrived
+// before they were installed waits in `pendingLink`.
+const shareLinks: import('./ui/app.ts').ShareLink[] = [];
+let pendingLink: URLSearchParams | null = null;
+
 function shareUrl(): string {
   const q = new URLSearchParams();
   const enc = encPanel.encounter;
@@ -1380,6 +1387,8 @@ function shareUrl(): string {
   } else if (enc) {
     q.set('pair', `${enc.a.noradId}-${enc.b.noradId}`);
     q.set('t', String(Math.round(enc.approach.tcaMs / 1000)));
+  } else if (shareLinks.some((link) => link.add(q))) {
+    // a feature's own link (a launch being watched, an eclipse): it set what it needs
   } else {
     if (selected) q.set('sat', String(selected.noradId));
     else q.set('cam', kit.camera.position.toArray().map((v) => v.toFixed(2)).join(','));
@@ -1388,7 +1397,12 @@ function shareUrl(): string {
   return `${location.origin}${location.pathname}#${q.toString()}`;
 }
 const shareDialog = new ShareDialog();
-$('share').addEventListener('click', () => shareDialog.open(shareUrl(), !!selected || encPanel.isOpen));
+/** Open the share window; "this view" is offered when there is something particular on screen. */
+function openShare(): void {
+  const url = shareUrl();
+  shareDialog.open(url, !!selected || encPanel.isOpen || /[#&](launch|event)=/.test(url));
+}
+$('share').addEventListener('click', openShare);
 
 /** Was the page opened from a share link? If so, restore what it describes. */
 function applyLink(): boolean {
@@ -1399,6 +1413,11 @@ function applyLink(): boolean {
     // A link to somewhere beyond Earth orbit: the Moon, a planet, a spacecraft out there.
     if (q.has('t') && Number.isFinite(t)) jumpTo(t * 1000);
     void places.applyLink(q);
+    return true;
+  }
+  if (q.has('launch') || q.has('event')) {
+    // A feature's link: whoever handles it (the features may still be on their way: then it waits).
+    if (!shareLinks.some((link) => link.apply(q))) pendingLink = q;
     return true;
   }
   const byId = (id: string | undefined) => catalog!.byNorad.get(Number(id));
@@ -1617,6 +1636,13 @@ function setAway(away: boolean): void {
     jumpTo(clock.time, true);
     viewKey = '';
     filters.nudge(); // back at the Earth with part of it hidden: say so before the empty globe alarms anyone
+    // The solar system's speeds (a day, a month, a year a second) mean nothing for satellites
+    // circling every 90 minutes: back at the Earth, time runs at the fastest of its own speeds.
+    if (Math.abs(clock.speed) > 1000) {
+      clock.speed = Math.sign(clock.speed) * 1000;
+      timeControls.sync();
+      toast('Time slowed to 1000× for the satellites', 3500);
+    }
   }
   openPanel(null);
   setResting(false);
@@ -2044,6 +2070,7 @@ function step(now: number): void {
   const date = new Date(clock.time);
   const cameraDistance = kit.camera.position.length();
   globe.update(date, realSeconds, cameraDistance);
+  eclipseShadow.update(clock.time, globe.sunDirection, sky.bodies[0].direction); // the Moon's shadow, near new Moon only
   sky.update(date, globe.sunDirection, realSeconds);
   overlay.update(globe.sunDirection, cameraDistance);
   refreshSelected();
@@ -2118,6 +2145,10 @@ const app: App = {
   },
 
   observer: () => observer,
+  hasOwnLocation: () => {
+    const site = store.settings;
+    return !(site.siteName === DEFAULT_SITE.name && site.siteLat === DEFAULT_SITE.latDeg && site.siteLon === DEFAULT_SITE.lonDeg);
+  },
   settings: () => store.settings,
   setSetting: (name, value) => store.set(name, value as string | number | boolean),
 
@@ -2131,6 +2162,10 @@ const app: App = {
   showFlyby: (name) => places.showFlyby(name),
   showDeepCraft: (code) => places.showByDsn(code),
   goWorld: (body) => places.goBody(body),
+  addShareLink: (link) => {
+    shareLinks.push(link);
+    if (pendingLink && link.apply(pendingLink)) pendingLink = null;
+  },
   goEarth: () => (places.elsewhere ? places.visit('earth') : Promise.resolve()),
   focusSearch: (text) => search.focus(text),
   flyToGround: (latDeg, lonDeg, altitudeKm = 2500) => {
@@ -2180,7 +2215,7 @@ const app: App = {
     else if (what === 'fullscreen') flip(!!document.fullscreenElement, toggleFullscreen);
     else if (what === 'howto') flip(howto.isOpen, () => (howto.isOpen ? howto.close() : howto.open()));
     else if (what === 'keys') flip(!keysOverlay.classList.contains('is-hidden'), () => setKeys(keysOverlay.classList.contains('is-hidden')));
-    else if (what === 'share') shareDialog.open(shareUrl(), !!selected || encPanel.isOpen);
+    else if (what === 'share') openShare();
   },
   openSection: (name) => {
     if (isPhone() && name === 'tonight') {

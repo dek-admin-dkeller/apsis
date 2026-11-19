@@ -69,7 +69,7 @@ export const FEATURES: FeatureGroup[] = [
     summary: 'Pick anything and stay with it: where it is, what it is, and what it can see.',
     items: [
       { name: 'Inspector', text: 'Live height, speed and position, the path over the ground, the shape of the orbit, its record (owner, launch date, size) and a link to its Wikipedia article.' },
-      { name: '3D models and photos', text: 'Seventy-two kinds of spacecraft and rockets modelled in 3D, from a CubeSat and the Starlink V2 Mini to the Webb telescope, Starship and the Tesla Roadster, beside a real photo where one exists.', fresh: true },
+      { name: '3D models and photos', text: 'Seventy-eight kinds of spacecraft and rockets modelled in 3D, from a CubeSat and the Starlink V2 Mini to the Webb telescope, Starship and the Tesla Roadster, beside a real photo where one exists.', fresh: true },
       { name: 'Ride along', text: 'Sit on a satellite and look out from it.' },
       { name: 'Passes over you', text: 'When it will next cross your sky, and the path it will take across it.' },
       { name: 'Watchlist and contact timeline', text: 'Star the objects you care about and see when ground stations can reach each of them.' },
@@ -106,6 +106,7 @@ export const FEATURES: FeatureGroup[] = [
       { name: 'Landing sites', text: 'Where the Apollo crews, the Vikings and the other historic landers came down, each with its date and whether the Sun is up there now.', fresh: true },
       { name: 'A full card for every craft', text: 'A photo, what it is for, its orbit, how far its signal has to travel, and switches for its orbit, its path over the ground and the ground that can see it.', fresh: true },
       { name: 'Close approaches at every world', text: 'The same screening as round the Earth, on the craft at Mars or the Moon: who is nearest whom now, the closest passes of the coming day, and the grid that finds them.', fresh: true },
+      { name: 'Time for the solar system', text: 'Away from the Earth, run time at a day, a week, a month or a year a second and watch the planets go round.', fresh: true },
       { name: 'Views of every world', text: 'The whole of it, low over the day side, the night side, or far enough back to take in its moons.', fresh: true },
       { name: 'Your choice of what is drawn', text: 'Planet orbits, spacecraft orbits, names, moons, spacecraft, landing sites and constellation names can each be switched off, on the solar system as at any world.', fresh: true },
     ],
@@ -121,14 +122,16 @@ export const FEATURES: FeatureGroup[] = [
       { name: 'Share', text: 'A link or QR code that reopens exactly what you are looking at.' },
       { name: 'Visible tonight', text: 'The bright passes you could see with your own eyes in the next 24 hours from where you are, and where to look. On a phone it opens inside the sky view.', fresh: true },
       { name: 'Upcoming launches', text: 'What is due to launch next, with a countdown and the pads marked on the globe.', fresh: true },
-      { name: 'Watch a launch climb', text: 'A rocket rising from its pad to orbit on the globe, live as it launches: an estimated path from the pad, the time and the target orbit, with its height, speed and stages, and a link to the webcast. Preview any upcoming launch, or replay a recent one.', fresh: true },
+      { name: 'Watch a launch climb', text: 'A rocket rising from its pad to orbit on the globe, live as it launches: an estimated path from the pad, the time and the target orbit, with its height, speed and stages, the booster flying back to land, and a link to the webcast. Preview any upcoming launch, replay a recent one, share the moment, and see the real objects once tracking has caught up.', fresh: true },
       { name: 'New launches', text: 'What went up in the last three days stands out: brighter dots and a “New” name, until the novelty wears off.', fresh: true },
       { name: 'Orbit changes', text: 'Which satellites have raised or lowered their orbits since the data was last refreshed, and what is new or gone.', fresh: true },
       { name: 'Space weather and re-entries', text: 'How active the Sun is today, and roughly how long the lowest objects have left.', fresh: true },
       { name: 'Spacecraft catalogue', text: 'Every 3D model on one page. Pick one to turn it round, read what it is, and go and find one in orbit.', fresh: true },
       { name: 'Asteroid fly-bys', text: 'The rocks passing the Earth in the coming weeks: when, how far away in kilometres and Moon-distances, how big and how fast. Choose one to move the clock to its closest approach.', fresh: true },
       { name: 'Fireballs', text: 'The brightest meteors recorded lately, with the energy of each, marked on the globe where they exploded.', fresh: true },
-      { name: 'Eclipses and transits', text: 'The next solar and lunar eclipses and the shadows of Jupiter’s moons crossing its face, worked out in the app and listed in the bell. Choose one to move the clock to it and see the shadow where it falls.', fresh: true },
+      { name: 'Eclipses and transits', text: 'The next solar and lunar eclipses and the shadows of Jupiter’s moons crossing its face, worked out in the app and listed in the bell. During a solar eclipse the Moon’s shadow darkens the Earth and the track of its centre is drawn on the ground. Choose one to go to it.', fresh: true },
+      { name: 'The Station over you', text: 'With your location shared, the bell says when the Space Station is about to pass overhead and whether it will be bright to the eye.', fresh: true },
+      { name: 'Notifications', text: 'Turn them on in the bell and the browser tells you when something unusual starts: a launch, an eclipse, a close asteroid, the Station overhead. Never for routine things.', fresh: true },
       { name: 'Meteor showers', text: 'Which annual showers are active now and which come next, with the hour of each peak worked out for this year.', fresh: true },
       { name: 'Deep Space Network', text: 'Which of NASA’s giant dishes is talking to which spacecraft this minute, how far away it is and how long the signal takes.', fresh: true },
     ],
@@ -151,6 +154,22 @@ export interface Update {
 }
 
 export const WHATS_NEW: Update[] = [
+  {
+    date: '2026-11-19',
+    title: 'Eclipses you can see, the Station over you, faster time out there',
+    items: [
+      'The Moon’s shadow falls on the Earth during a solar eclipse, with the track of its centre drawn across the ground. Choose an eclipse in the bell to go to it.',
+      'The bell tells you when the Space Station is about to pass over you, and can send a browser notification for alerts if you turn that on.',
+      'Away from the Earth, time can run at a day, a week, a month or a year a second, so the planets visibly go round.',
+      'Launch climbs show the booster flying back down to its droneship or landing zone, and, once tracking catches up, the real objects and how close the estimate was.',
+      'Share a launch climb or an eclipse: the link opens it at that moment.',
+      'Planets far more precise (VSOP87): eclipse and transit times now within a minute of NASA’s.',
+      'A rebuilt Tesla Roadster with Starman at the wheel, and new models for Qianfan, Guowang, Planet Doves, ICEYE, Globalstar and Capella: 78 kinds in all. Scroll through every one on the home page.',
+      'Rover paths are easier to find: drawn from farther out, and switched from the rover’s own card.',
+      'Saturn opens from the side the Sun lights its rings (since 2025 that is the southern side), and a seam in the rings’ shadow is gone.',
+      'The bell is more honest about asteroids: only a really close one is an alert, and it lists the next one you can actually follow.',
+    ],
+  },
   {
     date: '2026-11-19',
     title: 'Launches you can watch, rovers that move, eclipses ahead',

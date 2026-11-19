@@ -35,6 +35,12 @@ export const KIND_FACT: Record<ModelKind, string> = {
   phasedarray: 'One flat antenna the size of a squash court, strong enough for an ordinary phone on the ground to hear.',
   starlinkv2: 'The second Starlink design, launched from 2023: more than twice as heavy as the first, with two long solar wings and about four times the capacity.',
   kuiper: 'Amazon’s broadband satellites, launched from 2025 to build a constellation of more than three thousand.',
+  qianfan: 'Shanghai’s Qianfan (“Thousand Sails”) broadband constellation, planned at more than ten thousand satellites; little has been published about them, so this shape is an informed guess.',
+  guowang: 'China’s national broadband constellation, planned at about thirteen thousand satellites; the only published picture shows a tapering body with two wings, so the rest of this shape is a guess.',
+  globalstar: 'A satellite-phone network: each satellite simply relays a call between a phone and the nearest ground station, so the switching stays on the ground.',
+  iceye: 'A radar satellite the size of a suitcase, with an antenna 3.2 m long: Finland’s ICEYE flies the largest fleet of them, imaging through cloud and at night.',
+  capella: 'A small radar satellite whose antenna is an umbrella of gold mesh 3.5 m across, unfurled in orbit.',
+  dove: 'Planet’s shoebox-sized imaging satellites: a fleet of them photographs the whole land surface of the Earth every day.',
   iridium: 'The second Iridium fleet, launched on Falcon 9s in 2017–2019: 66 working satellites linked to each other by radio, so a satellite phone works anywhere on Earth.',
   o3b: 'Broadband from 8,000 km up, a quarter of the way to geostationary height: close enough for a short delay, high enough for a small ring of satellites over the equator to cover the tropics.',
   galileo: 'Europe’s navigation satellites, each carrying hydrogen-maser clocks that lose less than a second in three million years.',
@@ -85,7 +91,7 @@ export const KIND_FACT: Record<ModelKind, string> = {
 
 /** The catalogue's rows: [heading, the kinds under it, in order]. */
 const GROUPS: [string, ModelKind[]][] = [
-  ['Earth orbit', ['starlink', 'starlinkv2', 'oneweb', 'kuiper', 'comsat', 'iridium', 'o3b', 'phasedarray', 'geocomsat', 'relay', 'gnss', 'galileo', 'glonass', 'weather', 'goes', 'spinner', 'observer', 'radarsat', 'smallsat', 'cubesat', 'lasersphere', 'rocketbody', 'debris']],
+  ['Earth orbit', ['starlink', 'starlinkv2', 'oneweb', 'kuiper', 'qianfan', 'guowang', 'comsat', 'iridium', 'globalstar', 'o3b', 'phasedarray', 'geocomsat', 'relay', 'gnss', 'galileo', 'glonass', 'weather', 'goes', 'spinner', 'observer', 'dove', 'radarsat', 'iceye', 'capella', 'smallsat', 'cubesat', 'lasersphere', 'rocketbody', 'debris']],
   ['Crews and cargo', ['iss', 'tiangong', 'station', 'dragon', 'starliner', 'orion', 'soyuz', 'shenzhou', 'cygnus', 'capsule', 'dreamchaser']],
   ['Rockets', ['falcon9', 'falconheavy', 'starship', 'electron', 'atlasv', 'vulcan', 'newglenn', 'ariane6', 'soyuzrocket', 'longmarch', 'launcher']],
   ['Telescopes', ['telescope', 'webb', 'euclid', 'tess', 'chandra', 'xmm']],

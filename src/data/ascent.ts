@@ -45,6 +45,11 @@ export interface Ascent {
   stages: AscentStage[];
   /** How the inclination was chosen, in words (shown in the card: it is a guess). */
   basis: string;
+  /**
+   * The first stage's way down, for rockets whose boosters land (Falcon, New Glenn): a droneship
+   * downrange (usual) or back to land near the pad (when the service says "RTLS").
+   */
+  booster: { landS: number; landAngle: number; where: string; estimated: boolean } | null;
   /** Pad in the inertial frame at lift-off (unit vector) and the direction of flight there. */
   u: [number, number, number];
   d: [number, number, number];
@@ -168,7 +173,20 @@ export function planAscent(launch: Launch): Ascent | null {
 
   const burnS = BURN.find(([pattern]) => pattern.test(`${launch.family} ${launch.rocket}`))?.[1] ?? 560;
   const f = (x: number) => Math.round(burnS * x);
+  // A booster that lands: on a droneship about 600 km downrange some six minutes after
+  // separating (a Falcon 9's usual), or back near the pad when the service says so.
+  const lands = /falcon|new glenn/i.test(`${launch.family} ${launch.rocket}`) && !/expendable/i.test(launch.rocket);
+  const rtls = launch.landing?.type === 'RTLS';
+  const booster = lands && launch.landing?.type !== 'NONE'
+    ? {
+      landS: f(0.29) + (rtls ? 420 : 360),
+      landAngle: (rtls ? 9 : 600) / R_KM,
+      where: launch.landing?.place || (rtls ? 'a landing zone near the pad' : 'a droneship about 600 km downrange'),
+      estimated: !launch.landing,
+    }
+    : null;
   return {
+    booster,
     launch, liftoffMs: launch.netMs, burnS, insertionKm: insertionKm(orbit), inclinationDeg: incl,
     azimuthDeg: ((az * 180) / Math.PI + 360) % 360, stagingS: f(0.29), basis, u, d,
     stages: [
@@ -177,7 +195,8 @@ export function planAscent(launch: Launch): Ascent | null {
       { t: f(0.29), label: 'First stage done, stages separate' },
       { t: f(0.37), label: 'Fairing off: the payload is in vacuum' },
       { t: burnS, label: 'Engine off: in orbit' },
-    ],
+      ...(booster ? [{ t: booster.landS, label: rtls ? 'Booster lands back at the coast' : 'Booster lands on the droneship' }] : []),
+    ].sort((p, q) => p.t - q.t),
   };
 }
 
@@ -220,4 +239,38 @@ export function ascentState(a: Ascent, tMs: number): AscentState {
 export function ascentSpanS(a: Ascent): number {
   const rIns = R_KM + a.insertionKm;
   return a.burnS + 2 * 2 * Math.PI * Math.sqrt((rIns * rIns * rIns) / MU);
+}
+
+/**
+ * Where the first stage is, after separating, on its way down (null before separation, after
+ * landing, or for a rocket whose booster does not land). It coasts up to about 125 km and comes
+ * down at its landing place: a smooth arc between the two, in the same frozen inertial frame.
+ */
+export function boosterState(a: Ascent, tMs: number): { pos: [number, number, number]; altKm: number; landed: boolean } | null {
+  const b = a.booster;
+  if (!b) return null;
+  const t = (tMs - a.liftoffMs) / 1000;
+  if (t < a.stagingS) return null;
+  const start = ascentState(a, a.liftoffMs + a.stagingS * 1000);
+  const from = start.pos.map((v) => v / Math.hypot(...start.pos)) as [number, number, number];
+  // Where it comes down (a unit vector, inertial): a droneship downrange along the flight path;
+  // or the pad itself, which the Earth's turn has carried east by the time the booster is back.
+  let to: [number, number, number];
+  if (b.landAngle * R_KM < 50) {
+    const w = EARTH_TURN * b.landS, cw = Math.cos(w), sw = Math.sin(w);
+    to = [a.u[0] * cw - a.u[1] * sw, a.u[0] * sw + a.u[1] * cw, a.u[2]];
+  } else {
+    const c = Math.cos(b.landAngle), sn = Math.sin(b.landAngle);
+    to = [0, 1, 2].map((k) => a.u[k] * c + a.d[k] * sn) as [number, number, number];
+  }
+  const s = Math.min(1, (t - a.stagingS) / (b.landS - a.stagingS));
+  const ease = s * s * (3 - 2 * s);
+  // Along the great circle between the two (slerp), coasting up to ~125 km and down to the landing.
+  const omega = Math.acos(Math.max(-1, Math.min(1, from[0] * to[0] + from[1] * to[1] + from[2] * to[2])));
+  const k0 = omega < 1e-9 ? 1 - ease : Math.sin((1 - ease) * omega) / Math.sin(omega);
+  const k1 = omega < 1e-9 ? ease : Math.sin(ease * omega) / Math.sin(omega);
+  const alt = start.altKm * (1 - s) + 4 * 90 * s * (1 - s);
+  const r = R_KM + alt;
+  const pos = [0, 1, 2].map((k) => r * (from[k] * k0 + to[k] * k1)) as [number, number, number];
+  return { pos, altKm: alt, landed: s >= 1 };
 }

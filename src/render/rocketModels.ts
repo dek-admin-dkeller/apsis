@@ -163,8 +163,8 @@ function makeRocketMaterials(m: Materials) {
     steel: std({ map: steelSkin(), metalness: 0.78, roughness: 0.44, envMapIntensity: 1.25 }),
     tiles: std({ map: tileSkin(), metalness: 0.1, roughness: 0.8, envMapIntensity: 0.5 }),
     carbon: std({ map: weaveSkin(), metalness: 0.35, roughness: 0.5, envMapIntensity: 0.9 }),
-    copper: std({ map: paintedSkin('#b97a52', '#7d4f33'), metalness: 0.2, roughness: 0.62, envMapIntensity: 0.7 }), // Atlas V's booster
-    orange: std({ map: foamSkin('#c26a30'), metalness: 0, roughness: 0.85, envMapIntensity: 0.35 }), // Vulcan's foam
+    copper: std({ map: paintedSkin('#b97a52', '#7d4f33'), metalness: 0.2, roughness: 0.62, envMapIntensity: 0.7 }), // Atlas V's booster: bare aluminium anodised and Tiodized, which darkens to copper (it has no foam)
+    orange: std({ map: foamSkin('#c26a30'), metalness: 0, roughness: 0.85, envMapIntensity: 0.35 }), // Vulcan's booster: spray-on foam, orange like Delta IV's
     greyGreen: std({ map: paintedSkin('#a5ad9f', '#737b6f'), metalness: 0.05, roughness: 0.72, envMapIntensity: 0.5 }), // Soyuz
   };
 }

@@ -124,10 +124,15 @@
         <!-- Drawn by src/ui/landing.ts from the tracker's own 3D models once it has loaded. -->
         <section class="ld-section" id="ld-craft">
           <div class="ld-head">
-            <h2>Seventy-two kinds of spacecraft</h2>
+            <h2><span id="ld-kind-count">78</span> kinds of spacecraft</h2>
             <p class="ld-intro">From a CubeSat to the Webb telescope, the Mars rovers, Starship and the Tesla Roadster, every object is drawn as a model like these. They are built in code from reference photos, so nothing has to be downloaded to show them.</p>
           </div>
-          <div class="ld-plate" id="ld-plate"></div>
+          <!-- Every model, in one row that scrolls sideways (src/ui/landing.ts); the arrows move it a pageful. -->
+          <div class="ld-plate-wrap">
+            <button class="ld-plate-arrow" id="ld-plate-back" aria-label="Earlier models" disabled>‹</button>
+            <div class="ld-plate" id="ld-plate"></div>
+            <button class="ld-plate-arrow is-on" id="ld-plate-on" aria-label="More models">›</button>
+          </div>
           <!-- Presses #gallery-open, the catalogue of every model; hidden while that button is not on the page. -->
           <button class="ld-text-button" id="landing-models" hidden>See all models</button>
         </section>
@@ -430,6 +435,7 @@
           <label class="act" title="Its path over the ground"><input type="checkbox" data-setting="groundTrack" /><span>Track</span></label>
           <label class="act" title="The ground it can be seen from"><input type="checkbox" data-setting="footprint" /><span>Footprint</span></label>
           <label class="act" title="The spacecraft itself, in 3D"><input type="checkbox" data-setting="model" /><span>3D model</span></label>
+          <label class="act act-ground" title="Where it has driven, drawn on the ground (NASA/JPL)"><input type="checkbox" data-setting="roverPaths" /><span>Path driven</span></label>
         </div>
         <div class="tabs" id="pc-tabs" role="tablist"></div>
         <div class="insp-body" id="pc-body"></div>
@@ -1055,6 +1061,11 @@
               <button data-speed="10" title="10 seconds every second">10×</button>
               <button data-speed="100" title="About 1.7 minutes every second">100×</button>
               <button data-speed="1000" title="About 17 minutes every second">1000×</button>
+              <!-- Away from the Earth only (space.css): fast enough to see the planets go round. -->
+              <button data-speed="86400" class="away-only" title="A day every second">1 d/s</button>
+              <button data-speed="604800" class="away-only" title="A week every second">1 wk/s</button>
+              <button data-speed="2629800" class="away-only" title="A month every second">1 mo/s</button>
+              <button data-speed="31557600" class="away-only" title="A year every second">1 yr/s</button>
             </div>
             <button id="now" class="tb now" title="Back to the real current time (N)">Now</button>
           </div>

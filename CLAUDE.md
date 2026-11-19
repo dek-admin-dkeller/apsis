@@ -35,6 +35,7 @@ npm run bench        # brute force vs hash, look-ahead completeness; exits 1 on 
 npm run fetch-data   # textures + CelesTrak elements + SATCAT facts into public/ (2 h / one-day guards)
 npm run fetch-radio  # SatNOGS radio records into public/data/radio.json (5.5 h guard; also run by CI)
 npm run fetch-deep   # JPL Horizons + CNEOS into public/data/deep.json and scripts/fixtures/deep-reference.json (5.5 h guard; also run by CI)
+npm run smoke        # the built site in headless Chrome must start and open its main places (the deploy runs it on pushes)
 npm run shots        # retake the home page's product pictures (needs Chrome and the dev server running)
 npm run build-borders  # regenerate public/data/borders.bin from the world-atlas package
 npm run check        # the feature checks (orbit changes, visible passes, report, decay, search, groups, and the
@@ -153,7 +154,7 @@ src/render/                 space/spaceView + space/bodyMesh (the scenes away fr
                             scene (renderer, bloom, quality presets, the dissolve between scenes), globe (Earth shader), tiles (close-up ground:
                             NASA GIBS map tiles streamed in below ~6,000 km), geoOverlay (borders, grid, terminator), sky (Milky Way, stars, constellations, planets, Sun, Moon), aurora, satellites
                             (the point cloud, colour modes, highlighting, picking), satModels + modelParts + observatoryModels +
-                            deepModels + planetaryModels + constellationModels + vehicleModels + rocketModels (72 procedural models: see "3D models"; satModels also holds the
+                            deepModels + planetaryModels + constellationModels + vehicleModels + rocketModels (78 procedural models: see "3D models"; satModels also holds the
                             previews, thumbnails), prewarm (models built in idle slices from the home page), cameraRig (fly-to, object focus, Earth drift), firstPerson (ride-along,
                             sky view, phone motion), orbitLine, groundTrack, encounterViz (close-approach drawing),
                             conjunctionMarkers, gridViz, constellation (orbits + coverage map), siteMarker, padMarkers
@@ -509,8 +510,11 @@ craftPosition(craft, t) → km about craft.centre      bodyPosition / bodyRelati
   and `air` only where there is a real answer. GM of a giant planet is the planet alone
   (used for things orbiting close to it). `visitable` is true exactly when `imagery.ts` has
   a map (the check enforces it): 31 bodies; fourteen small moons are plain coloured balls.
-- `ephem.ts`: planets from JPL's "approximate positions" table (1800–2050); the Earth is
-  that table's Earth–Moon barycentre minus the Moon's share; the Moon is a 70-term series
+- `ephem.ts`: planets from VSOP87 (Bretagnon & Francou; the series truncated in the generated
+  `planetSeries.ts`, regenerated with `node scripts/make-deep-fixture.mjs --planets`) for
+  1900–2100 — within 0.6″ of Horizons for Mercury to Saturn, ~2″ for Uranus and Neptune —
+  and JPL's "approximate positions" table (1800–2050) outside that and always for Pluto
+  (`planetByTable` keeps the old method for comparison); the Earth is VSOP's own; the Moon is a 70-term series
   (Meeus ch. 47) precessed to J2000. Rotation is the IAU model per body (`ROTATION`, with the
   periodic terms in `NOD`), every constant checked against Horizons; the Earth uses GMST
   carried back through precession; nine moons with no model (Hyperion tumbles; Janus and
@@ -663,6 +667,46 @@ it is used. So:
   designator, dated by the SATCAT facts; newer than the facts = new). `cloud.setFresh` makes
   them larger and mint without dimming anything; `labels.setFresh` names each launch's lead
   object "New ·". Layers switch `newLaunches`; the bell lists them as ongoing.
+
+## Second polish pass (Nov 2026): what was added and the rules it brought
+
+- **Rover paths are findable**: visible from ~2.6 Mars radii (not 0.6), always for the rover
+  being looked at, and switchable on the rover's own card (`#pc-acts.is-ground`: "Path driven",
+  the same `roverPaths` setting as Layers).
+- **Time on the solar system**: away from the Earth the time bar adds a day, a week, a month and
+  a year a second (`.away-only` speed buttons; `speedText()`); back at the Earth anything faster
+  than 1000× is brought down to it (`setAway`), with a toast. A long jump renews only the
+  space views' PATHS (`SpaceView.refreshLines`), never a full rebuild (that reloaded every map).
+- **The Moon's shadow on the Earth** (`render/eclipseShadow.ts`, `ECLIPSE_GLSL` in `globe.ts`,
+  shared word for word by `tiles.ts`): per pixel, the share of the Sun's disc the Moon covers,
+  squared for the screen; the precise Moon and Sun from `space/ephem.ts`, precessed to date
+  (the sky's own Moon is 0.3° out); only near new Moon. During a central eclipse the track of
+  the shadow's centre is drawn on the globe. Ground tiles must get the same uniforms or they
+  hide the shadow (they did).
+- **The bell** also has: the Space Station over the visitor (`findPasses`, only with their own
+  location: `app.hasOwnLocation()`; an alert when it rises within 10 min and climbs ≥ 20°),
+  opt-in browser notifications for alerts only (`apsis.bell.notify`, sent once per row `id`,
+  remembered two days in `apsis.bell.sent`), eclipses a year ahead (worked out in an idle
+  moment: ~35 ms the first time), and asteroids judged honestly: an alert only within two
+  Moon-distances, "coming up" names the next one WITH a path, and one without says so.
+  Choosing a solar eclipse flies there two frames after the clock jump (or the globe's turn is
+  stale and the camera lands 26° off).
+- **Launch climbs** also have: the booster's way down (`boosterState`: a droneship ~600 km
+  downrange, or back to the turning pad when Launch Library says RTLS; `Launch.landing` is read
+  when the service's detailed answer has it), "Now tracked: N objects at i° (the estimate flew
+  at …)" once the launch's objects are in the catalogue, and share links.
+- **Share links from features**: `app.addShareLink({ add, apply })`; `#launch=<id>&t=…` (a climb
+  being followed) and `#event=<sky event id>` (an eclipse or transit at its peak). A link that
+  arrives before the features are installed waits (`pendingLink`).
+- **The home page's plate is a sideways row of EVERY model** (favourites first, then
+  `kindGroups()`), pictures drawn only as they come into view and the page is still; the
+  heading's count is the real number (`#ld-kind-count`).
+- **Deploys re-apply the craft facts** (`fetch-deep.mjs --facts`) to the kept deep.json — see
+  "Deploying" — after the Roadster stayed a "probe" on the live site.
+- **Models**: 78 kinds; the latest are qianfan, guowang, dove (Planet), iceye, globalstar,
+  capella, and a rebuilt `roadster` (lofted body at true proportions, Starman at the wheel).
+- **CI**: actions at checkout@v7, setup-node@v7, configure-pages@v6, upload-pages-artifact@v5
+  (it leaves out dotfiles: the site has none), deploy-pages@v5; the smoke test on pushes.
 
 ## Small rules added in the polish pass (Nov 2026)
 
@@ -901,7 +945,7 @@ addresses, never a third party) whether a file has been published again, and tak
 
 ## 3D models (`render/satModels.ts` and the files beside it)
 
-- 72 kinds (`ModelKind` in `data/describe.ts`), each a builder, built once, merged by
+- 78 kinds (`ModelKind` in `data/describe.ts`), each a builder, built once, merged by
   material, normalised and cloned by `buildModel(kind)`. The files:
   - `modelParts.ts`: the kit, and nothing about any one spacecraft. `makeMaterials()` (painted
     canvas textures, normal maps computed from painted height fields, a small painted
@@ -1015,8 +1059,10 @@ addresses, never a third party) whether a file has been published again, and tak
 
 ## Verifying a change
 
-1. `npm run build` (zero TypeScript errors), `npm run check`, and, if hashing/look-ahead
-   changed, `npm run bench`.
+1. `npm run build` (zero TypeScript errors), `npm run check`, `npm run smoke` (the built site
+   in headless Chrome; the deploy runs it on every push and publishes nothing if it fails;
+   `SMOKE_SOFTWARE=1` draws without the GPU as CI does), and, if hashing/look-ahead changed,
+   `npm run bench`.
 2. Run the dev server and exercise the feature. Check the browser console is clean. A
    background/hidden tab throttles `requestAnimationFrame` to ~2 fps, which makes camera
    flights look stuck — that is the browser, not a bug.
@@ -1058,7 +1104,10 @@ the pace for CelesTrak past one download per 2 hours, and do not run the fetch s
 `--force` in CI. A push build downloads nothing from outside:
 `scripts/carry-over.mjs` reads the data files back from the published site and keeps each one
 that parses, has the same top-level fields as the repository's copy and is newer, so a push
-never puts the site back on older data or drops the orbit-change list. Runs queue rather
+never puts the site back on older data or drops the orbit-change list. Because the kept
+`deep.json` carries the craft facts of whatever commit wrote it, every run then re-applies
+this commit's `deep-craft.mjs` with `fetch-deep.mjs --facts` (offline): a changed fact (a craft's
+model) reaches the site on the next deploy, not the next JPL download. Runs queue rather
 than cancel each other (`cancel-in-progress: false`): the first scheduled refresh was once
 cancelled by a push that arrived seconds later, and the data stayed two days old. The job has a
 45-minute limit so a hung run cannot hold the queue. `vite.config.ts` uses `base: './'`,
@@ -1066,8 +1115,13 @@ so the site works from any sub-path.
 
 ## Ideas not built yet
 
+Saved for later at the owner's request (Nov 2026): **offline use and installing as an app**
+through a service worker (the manifest exists; a worker would cache the shell and the data
+files and serve them when offline), and **a calendar export (.ics)** of upcoming launches and
+eclipses from the bell.
+
 Beyond Earth orbit: a camera lock switch on a craft's card (today closing the card lets go
-of it), the paths of rovers across the ground, eclipses and transits called out as they happen.
+of it).
 
 Multiplayer games on a separate `/play` page (needs a small real-time service such as
 Firebase or Supabase; Pages cannot provide one),

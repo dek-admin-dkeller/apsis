@@ -322,7 +322,15 @@ body.home-open :is(#hud, #tooltip, #reticle, #range-tag) { opacity: 0 !important
 .ld-text-button:hover { color: var(--ld-ink); }
 
 /* ---- the plate of spacecraft: laid out like a page from a field guide ---- */
-.ld-plate { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: clamp(18px, 2.6vw, 34px) clamp(12px, 2vw, 26px); margin-top: clamp(26px, 5vh, 52px); min-height: 150px; }
+.ld-plate-wrap { position: relative; margin-top: clamp(26px, 5vh, 52px); }
+/* One row of every model, scrolled sideways; a fixed height, so the page never changes length. */
+.ld-plate { display: flex; gap: clamp(12px, 2vw, 26px); overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: thin; padding-bottom: 10px; }
+.ld-plate figure { flex: 0 0 clamp(120px, 14vw, 180px); scroll-snap-align: start; }
+.ld-plate-arrow { position: absolute; top: 34%; z-index: 1; width: 36px; height: 36px; border: 1px solid var(--ld-line); border-radius: 50%; background: rgba(6, 9, 16, 0.85); color: var(--ld-ink); font: 22px/1 var(--font-ui); cursor: pointer; transition: opacity 160ms ease; }
+.ld-plate-arrow:disabled { opacity: 0; pointer-events: none; }
+#ld-plate-back { left: -14px; }
+#ld-plate-on { right: -14px; }
+@media (hover: none) { .ld-plate-arrow { display: none; } } /* a finger swipes the row */
 #landing-models { margin-top: clamp(20px, 3vh, 30px); }
 #landing-models[hidden] { display: none; }
 .ld-plate figure { margin: 0; }
@@ -376,7 +384,7 @@ body.home-open :is(#hud, #tooltip, #reticle, #range-tag) { opacity: 0 !important
   .ld-screen img { border-radius: 8px; }
   .ld-screen.is-phone { grid-template-columns: 1fr; justify-items: center; }
   .ld-row { grid-template-columns: 1fr; }
-  .ld-plate { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ld-plate figure { flex-basis: 30vw; }
 }
 @media (max-width: 600px) {
   .ld-nav { display: none; }

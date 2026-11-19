@@ -116,17 +116,20 @@ const BODY_FRAGMENT = /* glsl */ `
       if (i >= uOccCount) break;
       sun = min(sun, lightPast(uOcc[i]));
     }
-    if (uRing.z > 0.0 && ndl > 0.0) {
+    if (uRing.z > 0.0) {
       // Where does the line to the Sun cross the ring plane, and how dense are the rings there?
+      // The ring picture is read for EVERY pixel and the result masked afterwards: read inside
+      // per-pixel conditions (lit side, the right side of the plane, within the rings), the GPU
+      // cannot tell which mip level to use at their edges and drew a dashed seam along the
+      // shadow's outer edge (the owner saw it on Saturn).
       float tilt = dot(uSunDir, uPole);
-      if (abs(tilt) > 1.0e-4) {
-        vec3 rel = vPosW - uCentre;
-        float t = -dot(rel, uPole) / tilt;
-        if (t > 0.0) {
-          float u = (length(rel + uSunDir * t) - uRing.x) / max(uRing.y - uRing.x, 1.0e-6);
-          if (u > 0.0 && u < 1.0) sun *= 1.0 - texture2D(uRingMap, vec2(u, 0.5)).a * uRing.z;
-        }
-      }
+      float safeTilt = abs(tilt) > 1.0e-4 ? tilt : 1.0e-4;
+      vec3 rel = vPosW - uCentre;
+      float t = -dot(rel, uPole) / safeTilt;
+      float u = (length(rel + uSunDir * t) - uRing.x) / max(uRing.y - uRing.x, 1.0e-6);
+      float density = texture2D(uRingMap, vec2(clamp(u, 0.0, 1.0), 0.5)).a;
+      float inside = step(0.0, u) * step(u, 1.0) * step(0.0, t) * step(1.0e-4, abs(tilt)) * step(0.0, ndl);
+      sun *= 1.0 - density * inside * uRing.z;
     }
 
     vec3 col = albedo * (lit * limb * sun * uGain + uNight);

@@ -8,7 +8,7 @@
 //   - a launch without a pad position or a time to the minute is not drawn.
 // Exits 1 on any failure.
 
-import { ascentSpanS, ascentState, planAscent } from '../src/data/ascent.ts';
+import { ascentSpanS, ascentState, boosterState, planAscent } from '../src/data/ascent.ts';
 
 let failed = 0;
 const ok = (pass, what, detail = '') => {
@@ -65,6 +65,29 @@ for (let t = -5; t < ascentSpanS(a); t += 1) {
   worst = Math.max(worst, step);
 }
 ok(worst < 7.8, 'moves smoothly (no one-second step faster than the orbit itself)', `${worst.toFixed(2)} km`);
+
+// The booster's way down: a droneship ~600 km downrange by default; back to the pad (which the
+// Earth's turn has carried east) when the service says RTLS; none for a rocket that does not land.
+{
+  const f9 = planAscent(launch({ orbit: 'LEO', mission: 'Starlink Group 10-5' }));
+  const end = boosterState(f9, f9.liftoffMs + f9.booster.landS * 1000);
+  const along = Math.acos(Math.min(1, (end.pos[0] * f9.u[0] + end.pos[1] * f9.u[1] + end.pos[2] * f9.u[2]) / Math.hypot(...end.pos))) * 6371;
+  ok(end.landed && Math.abs(end.altKm) < 1e-6 && Math.abs(along - 600) < 1, 'Falcon 9 booster comes down on the droneship ~600 km downrange', `${along.toFixed(0)} km at T+${f9.booster.landS} s`);
+  const back = planAscent(launch({ orbit: 'LEO', landing: { type: 'RTLS', place: 'Landing Zone 1' } }));
+  const home = boosterState(back, back.liftoffMs + back.booster.landS * 1000);
+  const pad = ascentState(back, back.liftoffMs).pos; // the pad at lift-off; turned on by the Earth since
+  const w = 7.2921159e-5 * back.booster.landS;
+  const padNow = [pad[0] * Math.cos(w) - pad[1] * Math.sin(w), pad[0] * Math.sin(w) + pad[1] * Math.cos(w), pad[2]];
+  const miss = Math.hypot(home.pos[0] - padNow[0], home.pos[1] - padNow[1], home.pos[2] - padNow[2]);
+  ok(miss < 1, 'a return-to-launch-site booster lands back at the (turning) pad', `${miss.toFixed(3)} km off`);
+  ok(planAscent(launch({ rocket: 'Electron', family: 'Electron' })).booster === null, 'a rocket whose booster does not land has none');
+  let worst = 0;
+  for (let t = f9.stagingS; t < f9.booster.landS; t += 1) {
+    const p = boosterState(f9, f9.liftoffMs + t * 1000).pos, q = boosterState(f9, f9.liftoffMs + (t + 1) * 1000).pos;
+    worst = Math.max(worst, Math.hypot(q[0] - p[0], q[1] - p[1], q[2] - p[2]));
+  }
+  ok(worst < 4, 'the booster moves smoothly', `largest one-second step ${worst.toFixed(2)} km`);
+}
 
 ok(planAscent(launch({ latDeg: null, lonDeg: null })) === null, 'no pad position: not drawn');
 ok(planAscent(launch({ precision: 'hour' })) === null, 'time only to the hour: not drawn');

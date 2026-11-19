@@ -59,6 +59,12 @@ export interface Launch {
   family: string;
   /** A webcast address, if the service lists one. */
   webcast: string | null;
+  /**
+   * Where the first stage is to land, when the service says (its detailed answer: the stage's
+   * `landing.type.abbrev` — "ASDS" a droneship, "RTLS" back to land — and the place's name).
+   * Absent in the ordinary answer; the climb then assumes what is usual for the rocket.
+   */
+  landing?: { type: string; place: string };
 }
 
 export interface LaunchList {
@@ -97,6 +103,17 @@ const field = (object: unknown, key: string): unknown =>
 /** A coordinate, which the service sends as a string ("34.632"); NaN for anything missing or empty. */
 const degrees = (value: unknown): number =>
   typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN;
+
+/** The first stage's landing, from a detailed answer (`rocket.launcher_stage[0].landing`); undefined otherwise. */
+function landingOf(rocket: unknown): { type: string; place: string } | undefined {
+  const stages = field(rocket, 'launcher_stage');
+  if (!Array.isArray(stages) || stages.length === 0) return undefined;
+  const landing = field(stages[0], 'landing');
+  const type = text(field(field(landing, 'type'), 'abbrev')).toUpperCase();
+  if (!type || field(landing, 'attempt') === false) return undefined;
+  const place = field(landing, 'location') ?? field(landing, 'landing_location');
+  return { type, place: text(field(place, 'name')) || text(field(place, 'abbrev')) };
+}
 
 /** The first http(s) address in a list of {url} objects, or null. */
 function firstUrl(list: unknown): string | null {
@@ -149,6 +166,7 @@ export function parseLaunches(file: unknown): Launch[] {
       orbit: text(field(field(field(entry, 'mission'), 'orbit'), 'abbrev')),
       family: text(field(field(field(entry, 'rocket'), 'configuration'), 'family')),
       webcast: firstUrl(field(field(entry, 'mission'), 'vid_urls')) ?? firstUrl(field(entry, 'vidURLs')),
+      landing: landingOf(field(entry, 'rocket')),
     });
   }
   return launches.sort((a, b) => a.netMs - b.netMs);
