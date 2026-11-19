@@ -225,6 +225,7 @@ export class SpaceView {
   private track: THREE.Line | null = null; // the selected craft's path over the ground (a child of the body, so it turns with it)
   private trackKey = '';
   private trackAt = 0;
+  private casters: Item[] = []; // the bodies of a place that can cast a shadow, biggest first
   private readonly footprint: THREE.LineLoop; // the edge of the ground that can see the selected craft
 
   constructor(kit: SceneKit, backdrop: THREE.Group, host: SpaceHost) {
@@ -397,6 +398,7 @@ export class SpaceView {
   /** Put everything away (the view is then not drawn or updated). */
   clear(): void {
     this.dropTrack();
+    this.casters = [];
     this.footprint.visible = false;
     this.ground?.dispose(); // its patches are children of the body's mesh, which goes next
     this.ground = null;
@@ -591,6 +593,7 @@ export class SpaceView {
         this.craftLine(item, tMs, (v) => this.toWorld(v, this.unitsPerKm, this.scratch));
       }
     }
+    this.casters = this.items.filter((item) => item.mesh && item.target.kind === 'body' && item.target.body.id !== 'sun').sort((a, b) => b.radius - a.radius);
     this.place(tMs);
     for (const item of this.items) reach = Math.max(reach, item.pos.length() * 1.5);
     this.extent = Math.min(reach, 60000);
@@ -816,7 +819,7 @@ export class SpaceView {
         const moon = item.target.body;
         const planet = this.items.find((other) => other.key === `body:${moon.parent}`);
         if (!planet) continue;
-        this.toWorld(bodyRelative(moon.id, moon.parent!, tMs, this.vec), 1, item.pos).normalize().multiplyScalar(planet.radius * (1.45 + 0.62 * item.beside)).add(planet.pos);
+        this.toWorld(bodyRelative(moon.id, moon.parent!, tMs, this.vec), 1, item.pos).normalize().multiplyScalar(planet.radius * (1.4 + 0.36 * item.beside)).add(planet.pos);
       }
       const focusKey = this.focus ? targetKey(this.focus) : '';
       const ease = dt < 0 ? 0 : this.snap ? 1 : 1 - Math.exp(-dt * 5);
@@ -862,9 +865,10 @@ export class SpaceView {
     const occluders = u.uOcc.value as THREE.Vector4[];
     let count = 0;
     if (this.where?.kind === 'place') {
-      for (const other of this.items) {
-        if (other === item || !other.mesh || count >= MAX_OCCLUDERS) continue;
-        if ((other.target as { body: Body }).body.id === 'sun') continue;
+      // The biggest first: a planet with a dozen moons has room for six shadows, and Titan's
+      // crossing Saturn matters more than a 90-kilometre rock's.
+      for (const other of this.casters) {
+        if (other === item || count >= MAX_OCCLUDERS) continue;
         occluders[count++].set(other.pos.x, other.pos.y, other.pos.z, other.radius);
       }
     }
