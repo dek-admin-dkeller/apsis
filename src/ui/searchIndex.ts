@@ -63,6 +63,10 @@ const KIND_TOPIC: Partial<Record<ModelKind, string>> = {
   iss: 'International Space Station', tiangong: 'Tiangong space station', station: 'Space station modules',
   dragon: 'Dragon capsules', soyuz: 'Soyuz-type spacecraft', cygnus: 'Cygnus cargo spacecraft', capsule: 'Cargo spacecraft',
   rocketbody: 'Rocket upper stages', debris: 'Debris fragments',
+  // Telescopes that have a 3D model of their own are still telescopes.
+  chandra: 'Space telescopes', xmm: 'Space telescopes', webb: 'Space telescopes', euclid: 'Space telescopes', tess: 'Space telescopes',
+  lasersphere: 'Laser-ranging spheres', relay: 'Data-relay satellites', phasedarray: 'Direct-to-phone satellites',
+  soho: 'Solar observatories', l1monitor: 'Space-weather and magnetosphere probes',
 };
 
 const CATEGORY_TOPIC: Partial<Record<Category, string>> = {

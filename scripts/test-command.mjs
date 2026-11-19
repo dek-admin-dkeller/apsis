@@ -270,7 +270,8 @@ topic('hubble', 'nothing'); // a name, not a type
 const telescopes = findTopics(index, 'telescope', 1)[0].topic;
 const names = new Set(telescopes.members.map((i) => catalog.sats[i].name));
 check('type', 'the telescopes include Hubble, Chandra, Fermi', String(['HST', 'CXO', 'FGRST (GLAST)'].every((name) => names.has(name))), 'true');
-check('type', 'every one of them is drawn as a telescope', String(telescopes.members.every((i) => describe(catalog.sats[i]).kind === 'telescope')), 'true');
+// (Chandra and XMM-Newton have 3D models of their own; they are telescopes all the same.)
+check('type', 'every one of them is drawn as a telescope', String(telescopes.members.every((i) => ['telescope', 'chandra', 'xmm'].includes(describe(catalog.sats[i]).kind))), 'true');
 check('type', 'at least ten telescopes', String(telescopes.members.length >= 10), 'true');
 check('type', 'keyword lists are sorted, without repeats', String([...index.byWord.values()].every((list) => list.every((v, k) => k === 0 || v > list[k - 1]))), 'true');
 check('type', 'byWord("telescope") is those objects', String(index.byWord.get('telescope')?.length === telescopes.members.length), 'true');
