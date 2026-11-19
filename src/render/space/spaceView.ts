@@ -71,6 +71,8 @@ export interface SpaceOptions {
   names: boolean;
   /** Spacecraft at all. */
   craft: boolean;
+  /** Moons (other than the one being visited or looked at). */
+  moons: boolean;
   /** On the solar system: name every craft and draw every path, not only the well-known ones. */
   allCraft: boolean;
   /** Historic landing sites. */
@@ -143,6 +145,13 @@ const HEADLINE = new Set(['voyager-1', 'voyager-2', 'new-horizons', 'pioneer-10'
 const MAPS = new Map<string, THREE.Texture>();
 const WAITING = new Map<string, ((texture: THREE.Texture | null) => void)[]>();
 const VIEWS: SpaceView[] = [];
+let WARM: THREE.WebGLRenderTarget | null = null; // the tiny buffer views are drawn into ahead of time (see prewarm)
+/** Run something when the browser next has a moment (or soon, where it cannot say). */
+const idle = (run: () => void): void => {
+  const ask = (window as unknown as { requestIdleCallback?: (run: () => void, options?: { timeout: number }) => number }).requestIdleCallback;
+  if (ask) ask(run, { timeout: 600 });
+  else setTimeout(run, 60);
+};
 
 interface Item {
   target: Target;
@@ -219,12 +228,13 @@ export class SpaceView {
   private ground: GroundTiles | null = null; // close-up ground of the place's body, where its map is served in tiles
   private sharpGround = true; // the Layers switch (Settings.sharpGround)
   private lastT = 0; // the clock at the previous frame, to tell how fast time is running
-  private options: SpaceOptions = { orbits: true, names: true, craft: true, allCraft: false, sites: true, skyNames: true, selOrbit: true, selTrack: false, selFootprint: false, selModel: true };
+  private options: SpaceOptions = { orbits: true, names: true, craft: true, moons: true, allCraft: false, sites: true, skyNames: true, selOrbit: true, selTrack: false, selFootprint: false, selModel: true };
   private skyRoot: HTMLElement | null = null; // constellation names, made on first use
   private readonly skyTags: { tag: HTMLElement; direction: THREE.Vector3 }[] = [];
   private track: THREE.Line | null = null; // the selected craft's path over the ground (a child of the body, so it turns with it)
   private trackKey = '';
   private trackAt = 0;
+  private cells: THREE.LineSegments | null = null; // occupied cells of the screening grid (see setCells)
   private casters: Item[] = []; // the bodies of a place that can cast a shadow, biggest first
   private readonly footprint: THREE.LineLoop; // the edge of the ground that can see the selected craft
 
@@ -398,6 +408,7 @@ export class SpaceView {
   /** Put everything away (the view is then not drawn or updated). */
   clear(): void {
     this.dropTrack();
+    this.cells = null; // (a child of `content`, which is emptied below; its buffers are small)
     this.casters = [];
     this.footprint.visible = false;
     this.ground?.dispose(); // its patches are children of the body's mesh, which goes next
@@ -754,20 +765,57 @@ export class SpaceView {
       WAITING.delete(address);
       for (const callback of callbacks) callback(texture);
     };
-    new THREE.TextureLoader().load(address, (texture) => {
+    const keep = (texture: THREE.Texture) => {
       texture.colorSpace = THREE.SRGBColorSpace;
       texture.anisotropy = this.kit.quality === 'fast' ? 1 : Math.min(8, this.kit.renderer.capabilities.getMaxAnisotropy());
       texture.wrapS = THREE.RepeatWrapping; // the map joins up across longitude 180°
+      texture.flipY = false; // see the vertex shader in bodyMesh.ts
+      texture.needsUpdate = true;
       MAPS.set(address, texture);
-      const limit = this.host.isPhone() ? 12 : 28;
+      const limit = this.host.isPhone() ? 16 : 40;
       for (const [old, stale] of MAPS) {
         if (MAPS.size <= limit) break;
         if (VIEWS.some((view) => view.using(stale))) continue;
         stale.dispose();
         MAPS.delete(old);
       }
-      done(texture);
-    }, undefined, () => done(null));
+      // Hand it to the graphics card in an idle moment, BEFORE anything draws with it: left to
+      // the first frame that uses it, a 4096-pixel map costs that frame tens of milliseconds,
+      // and that frame is usually in the middle of a camera move.
+      idle(() => {
+        this.kit.renderer.initTexture(texture);
+        done(texture);
+      });
+    };
+    // Decoded off the main thread where the browser can (as render/tiles.ts does); otherwise the ordinary way.
+    if (typeof createImageBitmap === 'function') {
+      fetch(address)
+        .then((response) => (response.ok ? response.blob() : Promise.reject(new Error(String(response.status)))))
+        .then((blob) => createImageBitmap(blob))
+        .then((bitmap) => keep(new THREE.Texture(bitmap as unknown as HTMLImageElement)))
+        .catch(() => done(null));
+    } else {
+      new THREE.TextureLoader().load(address, keep, undefined, () => done(null));
+    }
+  }
+
+  /**
+   * Do the first-time work of drawing this view now, out of sight: compile its shaders and send
+   * its shapes to the graphics card by drawing it once into a tiny buffer. Called in an idle
+   * moment after a view is built, so the frame in which it first appears (always in the middle
+   * of a change of scene) has nothing left to set up.
+   */
+  prewarm(): void {
+    if (!this.where) return;
+    const renderer = this.kit.renderer;
+    this.camera.updateMatrixWorld();
+    this.backdrop.position.copy(this.camera.position);
+    renderer.compile(this.scene, this.camera);
+    const tiny = (WARM ??= new THREE.WebGLRenderTarget(32, 32, { type: THREE.HalfFloatType }));
+    const before = renderer.getRenderTarget();
+    renderer.setRenderTarget(tiny);
+    renderer.render(this.scene, this.camera);
+    renderer.setRenderTarget(before);
   }
 
   // ---- every frame ---------------------------------------------------------------------------
@@ -795,10 +843,15 @@ export class SpaceView {
         if (item.target.kind === 'body') {
           if (item.centre) item.pos.set(0, 0, 0);
           else this.toWorld(bodyRelative(item.target.body.id, centre, tMs, this.vec), this.unitsPerKm, item.pos);
+          item.shown = this.wanted(item);
+          if (item.mesh) item.mesh.mesh.visible = item.shown;
         } else {
           const craft = item.target.craft;
           const state = craftPosition(craft, tMs, this.vec);
           this.toWorld(state.pos, this.unitsPerKm, item.pos);
+          // Something on the ground stands a hair above it: the close-up ground (render/tiles.ts)
+          // is drawn as patches lifted up to 0.11 % of the radius, and would bury it otherwise.
+          if (craft.motion.type === 'surface') item.pos.multiplyScalar(1.0014);
           // From the Sun, only what the true-scale view reaches: the far probes belong on the map.
           // A passing asteroid is here only for the few days its path is known for.
           item.shown = (centre !== 'sun' || item.pos.length() < 60000) && !(craft.passing && state.held) && this.wanted(item);
@@ -819,7 +872,9 @@ export class SpaceView {
         const moon = item.target.body;
         const planet = this.items.find((other) => other.key === `body:${moon.parent}`);
         if (!planet) continue;
-        this.toWorld(bodyRelative(moon.id, moon.parent!, tMs, this.vec), 1, item.pos).normalize().multiplyScalar(planet.radius * (1.4 + 0.36 * item.beside)).add(planet.pos);
+        // (Measured from the planet's full size, whatever size it is drawn at just now: a moon
+        // must not slide about as its planet's dot shrinks or grows.)
+        this.toWorld(bodyRelative(moon.id, moon.parent!, tMs, this.vec), 1, item.pos).normalize().multiplyScalar(planet.base * (1.4 + 0.36 * item.beside)).add(planet.pos);
       }
       const focusKey = this.focus ? targetKey(this.focus) : '';
       const ease = dt < 0 ? 0 : this.snap ? 1 : 1 - Math.exp(-dt * 5);
@@ -827,7 +882,13 @@ export class SpaceView {
       for (const item of this.items) {
         if (!item.mesh || item.target.kind !== 'body') continue;
         const own = item.key === focusKey || (item.beside > 0 && `body:${item.target.body.parent}` === focusKey);
-        const want = own ? 1 : THREE.MathUtils.clamp(this.camera.position.distanceTo(item.pos) / 110, 0.2, 1);
+        // The planet of the moon being looked at stays at least half size: it is that moon's
+        // world, and shrunk to a speck beside it the pair would look the wrong way round.
+        const parentOfFocus = this.focus?.kind === 'body' && this.focus.body.parent === item.target.body.id && item.target.body.kind !== 'star';
+        const near = THREE.MathUtils.clamp(this.camera.position.distanceTo(item.pos) / 110, 0.2, 1);
+        const want = own ? 1 : parentOfFocus ? Math.max(near, 0.5) : near;
+        item.shown = this.wanted(item);
+        item.mesh.mesh.visible = item.shown;
         item.scale += (want - item.scale) * ease;
         item.radius = item.base * item.scale;
         item.mesh.mesh.scale.setScalar(item.scale);
@@ -841,8 +902,8 @@ export class SpaceView {
 
   /** Is a craft (or landing site) switched on in Layers? What is being looked at always is. */
   private wanted(item: Item): boolean {
-    if (item.target.kind !== 'craft') return true;
-    if (this.focus && targetKey(this.focus) === item.key) return true;
+    if (item.centre || (this.focus && targetKey(this.focus) === item.key)) return true;
+    if (item.target.kind === 'body') return item.target.body.kind !== 'moon' || this.options.moons;
     return item.target.craft.site ? this.options.sites : this.options.craft;
   }
 
@@ -868,7 +929,7 @@ export class SpaceView {
       // The biggest first: a planet with a dozen moons has room for six shadows, and Titan's
       // crossing Saturn matters more than a 90-kilometre rock's.
       for (const other of this.casters) {
-        if (other === item || count >= MAX_OCCLUDERS) continue;
+        if (other === item || !other.shown || count >= MAX_OCCLUDERS) continue;
         occluders[count++].set(other.pos.x, other.pos.y, other.pos.z, other.radius);
       }
     }
@@ -1026,6 +1087,52 @@ export class SpaceView {
     this.trackAt = tMs;
   }
 
+  // ---- screening cells --------------------------------------------------------------------------
+
+  /**
+   * Draw the cells of the spatial hash that hold something (ui/placeWatch.ts screens the craft
+   * of a place with the same grid the tracker uses): `cells` is x, y, z of each cell's centre
+   * in ICRF km about the place's body, then 1 if a pair inside the alert distance touches it;
+   * `sizeKm` is the cell edge. Null takes the drawing away.
+   */
+  setCells(cells: Float64Array | null, sizeKm = 0): void {
+    if (this.cells) {
+      this.cells.removeFromParent();
+      this.cells.geometry.dispose();
+      (this.cells.material as THREE.Material).dispose();
+      this.cells = null;
+    }
+    if (!cells || cells.length === 0 || this.where?.kind !== 'place') return;
+    const count = cells.length / 4;
+    const half = (sizeKm * this.unitsPerKm) / 2;
+    const position = new Float32Array(count * 24 * 3), color = new Float32Array(count * 24 * 3);
+    // The twelve edges of a cube, as pairs of corners (each corner a sign for x, y, z).
+    const corners = [[-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1], [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]];
+    const edges = [0, 1, 1, 2, 2, 3, 3, 0, 4, 5, 5, 6, 6, 7, 7, 4, 0, 4, 1, 5, 2, 6, 3, 7];
+    for (let c = 0; c < count; c++) {
+      // ICRF (x, y, z) → star axes (x, z, −y); the group below turns star axes into this view's.
+      const cx = cells[c * 4] * this.unitsPerKm, cy = cells[c * 4 + 2] * this.unitsPerKm, cz = -cells[c * 4 + 1] * this.unitsPerKm;
+      const hot = cells[c * 4 + 3] > 0;
+      edges.forEach((corner, k) => {
+        const at = (c * 24 + k) * 3;
+        // In star axes a cube stays a cube with its y and z edges swapped, so the same signs serve.
+        position[at] = cx + corners[corner][0] * half;
+        position[at + 1] = cy + corners[corner][1] * half;
+        position[at + 2] = cz + corners[corner][2] * half;
+        color[at] = hot ? 1 : 0.5;
+        color[at + 1] = hot ? 0.3 : 0.89;
+        color[at + 2] = hot ? 0.37 : 1;
+      });
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(color, 3));
+    this.cells = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55, depthWrite: false }));
+    this.cells.quaternion.copy(this.frame);
+    this.cells.frustumCulled = false;
+    this.content.add(this.cells);
+  }
+
   // ---- constellation names ---------------------------------------------------------------------
 
   /** The names of the constellation figures, as in the tracker: the same sky, so the same names. */
@@ -1144,6 +1251,54 @@ export class SpaceView {
     this.camera.up.copy(UP);
     this.flight = null;
     this.idle = 0;
+  }
+
+  /** When this view was built, on the app's clock (its orbit lines are drawn from that moment). */
+  get builtTime(): number {
+    return this.builtAt;
+  }
+
+  /** Does the place have moons (or, for a moon, a planet and sister moons) to pull back and look at? */
+  get hasCompany(): boolean {
+    return this.items.some((item) => item.mesh !== null && !item.centre);
+  }
+
+  /** Give one body its full map now, ahead of the camera going up to it (see sharpen). */
+  warmBody(body: BodyId): void {
+    const item = this.item(`body:${body}`);
+    if (item) this.sharpen(item);
+  }
+
+  /**
+   * One of the standing views, like the tracker's "Whole Earth" and "Low orbit": of a place,
+   * the whole of it from the sunlit side, low over the day side, the night side, or far enough
+   * back to take in its moons; of the solar system, all of it, the inner planets, or straight
+   * down on the planets' plane. Whatever was being followed is let go.
+   */
+  goView(name: 'whole' | 'close' | 'night' | 'moons' | 'inner' | 'above', tMs: number): void {
+    if (!this.where) return;
+    this.focus = null;
+    this.place(tMs);
+    this.limits();
+    const phone = this.host.isPhone();
+    let offset = this.homeOffset();
+    if (this.where.kind === 'system') {
+      if (name === 'inner') offset.multiplyScalar(0.36);
+      else if (name === 'above') offset = new THREE.Vector3(0, phone ? 460 : 330, 0.5);
+    } else {
+      const side = new THREE.Vector3().crossVectors(UP, this.sunDir);
+      if (side.lengthSq() < 1e-6) side.set(1, 0, 0);
+      side.normalize();
+      const rest = R / (phone ? PLACE_REST_PHONE : PLACE_REST);
+      if (name === 'close') offset = this.sunDir.clone().multiplyScalar(0.88).addScaledVector(side, 0.32).addScaledVector(UP, 0.34).normalize().multiplyScalar(R * 1.3);
+      else if (name === 'night') offset = this.sunDir.clone().multiplyScalar(-0.86).addScaledVector(side, 0.42).addScaledVector(UP, 0.28).normalize().multiplyScalar(rest);
+      else if (name === 'moons') {
+        let far = 0;
+        for (const item of this.items) if (item.mesh && !item.centre && item.shown) far = Math.max(far, item.pos.length());
+        offset.normalize().multiplyScalar(THREE.MathUtils.clamp(far * 1.9, R * 8, this.extent * 0.98));
+      }
+    }
+    this.fly(offset, 1.8, easeInOut, ORIGIN.clone());
   }
 
   /** How close and how far the camera may go, for what is being looked at. */
@@ -1295,6 +1450,19 @@ export class SpaceView {
     if (this.flight) controls.minDistance = 0;
     controls.update();
     controls.minDistance = near;
+    // Never inside a world. Turning the view round something that stands ON the ground (a rover,
+    // a landing site) would otherwise swing the camera down through the surface and show the
+    // inside of the sphere; here it slides along just above the ground instead.
+    if (this.where?.kind === 'place' && !this.flight) {
+      const floor = R * 1.004;
+      for (const item of this.items) {
+        if (!item.mesh || !item.shown) continue;
+        const reach = item.centre ? floor : item.radius * 1.004;
+        const offset = this.scratch.copy(camera.position).sub(item.pos);
+        if (offset.lengthSq() < reach * reach) camera.position.copy(item.pos).add(offset.lengthSq() > 1e-12 ? offset.setLength(reach) : offset.set(0, reach, 0));
+      }
+      camera.lookAt(controls.target);
+    }
   }
 
   // ---- the selected craft's model ------------------------------------------------------------
@@ -1316,11 +1484,13 @@ export class SpaceView {
     const position = focusItem.pos;
     const distance = this.camera.position.distanceTo(position);
     // Far too small to see at true size, so it is drawn much larger than life, as in the tracker.
-    const size = map ? THREE.MathUtils.clamp(distance * 0.07, 0.25, 2.5) : THREE.MathUtils.clamp(distance * 0.058, 0.024, 0.2);
+    // (Smaller for something standing on the ground: next to real hills a lander kilometres tall looks absurd.)
+    const grounded = craft.motion.type === 'surface';
+    const size = map ? THREE.MathUtils.clamp(distance * 0.07, 0.25, 2.5) : THREE.MathUtils.clamp(distance * 0.058, grounded ? 0.006 : 0.024, 0.2);
     this.modelHolder.visible = true;
     this.modelHolder.scale.setScalar(size);
 
-    const surface = craft.motion.type === 'surface';
+    const surface = grounded;
     const up = position.lengthSq() > 1e-9 && !map ? position.clone().normalize() : UP.clone();
     this.modelHolder.position.copy(position);
     if (surface) this.modelHolder.position.addScaledVector(up, -modelBase(this.modelKind) * size); // standing on the ground, not half sunk in it
@@ -1394,6 +1564,7 @@ export class SpaceView {
       // A landing site is a dot on the ground from afar; its name appears as the camera comes down to it.
       if (visible && item.target.kind === 'craft' && item.target.craft.site && item !== focusItem && distance > R * 2.4) visible = false;
       if (item === focusItem && this.modelHolder.visible) visible = false; // its model is on screen and its card names it
+      if (item === focusItem && item.mesh && this.where?.kind === 'system') visible = false; // the caption under it names it
       const drop = disc + 12;
       const width = tag.textContent!.length * 6.5 + 16;
       if (visible && item !== focusItem && taken.some((box) => Math.abs(box.x - x) < (box.w + width) / 2 && Math.abs(box.y - (y + drop)) < 18)) visible = false;
@@ -1423,7 +1594,7 @@ export class SpaceView {
     ray.setFromCamera(new THREE.Vector2((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1), this.camera);
     let nearest = Infinity;
     for (const item of this.items) {
-      if (!item.mesh) continue;
+      if (!item.mesh || !item.shown) continue;
       // A small body is hard to hit: give it a few pixels of grace.
       const grace = this.camera.position.distanceTo(item.pos) * (this.host.isPhone() ? 0.03 : 0.014);
       const hit = ray.ray.intersectSphere(new THREE.Sphere(item.pos, item.radius + grace), screen);

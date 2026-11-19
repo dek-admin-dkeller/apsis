@@ -96,7 +96,9 @@ export const FEATURES: FeatureGroup[] = [
       { name: 'Asteroids passing', text: 'Follow a near-Earth asteroid along its real path as it goes past.', fresh: true },
       { name: 'Landing sites', text: 'Where the Apollo crews, the Vikings and the other historic landers came down, each with its date and whether the Sun is up there now.', fresh: true },
       { name: 'A full card for every craft', text: 'A photo, what it is for, its orbit, how far its signal has to travel, and switches for its orbit, its path over the ground and the ground that can see it.', fresh: true },
-      { name: 'Your choice of what is drawn', text: 'Orbits, names, spacecraft, landing sites and constellation names can each be switched off, on the solar system as at any world.', fresh: true },
+      { name: 'Close approaches at every world', text: 'The same screening as round the Earth, on the craft at Mars or the Moon: who is nearest whom now, the closest passes of the coming day, and the grid that finds them.', fresh: true },
+      { name: 'Views of every world', text: 'The whole of it, low over the day side, the night side, or far enough back to take in its moons.', fresh: true },
+      { name: 'Your choice of what is drawn', text: 'Orbits, names, moons, spacecraft, landing sites and constellation names can each be switched off, on the solar system as at any world.', fresh: true },
     ],
   },
   {

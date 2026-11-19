@@ -25,6 +25,7 @@ export interface Settings {
   spaceOrbits: boolean; // the paths of planets, moons and spacecraft
   spaceNames: boolean; // names over the picture
   spaceCraft: boolean; // spacecraft at all
+  spaceMoons: boolean; // moons, beside their planets and round the world being visited
   spaceAllCraft: boolean; // on the solar system: name every craft, not only the well-known ones
   landingSites: boolean; // historic landing sites on the ground
   autoOrbit: boolean;
@@ -75,6 +76,7 @@ const DEFAULTS: Settings = {
   spaceOrbits: true,
   spaceNames: true,
   spaceCraft: true,
+  spaceMoons: true,
   spaceAllCraft: false,
   landingSites: true,
   autoOrbit: true,

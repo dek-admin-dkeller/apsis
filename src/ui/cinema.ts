@@ -25,6 +25,7 @@ export interface CinemaActions {
   openClosestCrossing(): boolean; // opens the close-approach view on a crossing pair; false if none is listed yet
   closeApproach(): void;
   setSpeed(multiplier: number): void; // time rate: 1, 10, 100 or 1000
+  backToNow(): void; // the clock back to the present (the fast scenes leave it hours ahead)
   hideInterface(on: boolean): void; // hides all panels and bars (same as the H key)
   toast(text: string): void;
 }
@@ -123,6 +124,10 @@ export class Cinema {
     window.removeEventListener('wheel', this.onUserInput, true);
     window.removeEventListener('keydown', this.onUserInput, true);
     this.undoScene();
+    // Several scenes run time at 100× or 1000×. Left there, the clock in the corner read hours
+    // ahead of the visitor's watch after a tour, with nothing to say why (the owner: "the time
+    // is still off"). The tour was a look around, not a trip in time: back to the present.
+    this.actions.backToNow();
     this.actions.hideInterface(false);
     this.root?.classList.remove('is-playing');
     this.captionEl?.classList.remove('is-on');

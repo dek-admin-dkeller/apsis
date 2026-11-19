@@ -72,10 +72,13 @@ class Dissolve extends Pass {
   render(renderer: THREE.WebGLRenderer, writeBuffer: THREE.WebGLRenderTarget, readBuffer: THREE.WebGLRenderTarget): void {
     const other = this.other;
     if (!other) return;
-    // The second picture is made exactly like the first: same size, same anti-aliasing.
-    if (!this.buffer || this.buffer.width !== readBuffer.width || this.buffer.height !== readBuffer.height || this.buffer.samples !== readBuffer.samples) {
+    // The second picture is the same size but is drawn without anti-aliasing: for the half
+    // second it is on screen it is half-transparent and moving, where the difference cannot be
+    // seen, and resolving a second multisampled buffer is what made weaker graphics chips drop
+    // frames exactly during the change of scene.
+    if (!this.buffer || this.buffer.width !== readBuffer.width || this.buffer.height !== readBuffer.height) {
       this.buffer?.dispose();
-      this.buffer = new THREE.WebGLRenderTarget(readBuffer.width, readBuffer.height, { type: THREE.HalfFloatType, samples: readBuffer.samples });
+      this.buffer = new THREE.WebGLRenderTarget(readBuffer.width, readBuffer.height, { type: THREE.HalfFloatType, samples: 0 });
     }
     renderer.setRenderTarget(this.buffer);
     renderer.render(other.scene, other.camera);

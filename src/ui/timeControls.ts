@@ -189,6 +189,8 @@ export class TimeControls {
     const offset = this.clock.time - Date.now();
     const live = Math.abs(offset) < 5000 && !this.clock.paused && this.clock.speed === 1;
     $('clock-offset').textContent = Math.abs(offset) < 5000 ? '' : `${offset > 0 ? '+' : '−'}${duration(offset)}`;
+    // Not the present: the clock itself says so (amber), wherever on the bar the eye lands.
+    this.play.closest<HTMLElement>('.timebar')!.classList.toggle('is-shifted', Math.abs(offset) >= 5000);
     const now = $('now');
     now.textContent = live ? 'Live' : 'Now';
     now.classList.toggle('is-live', live);

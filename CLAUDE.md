@@ -97,7 +97,10 @@ worker/lookahead.worker.ts: started on demand for the "Coming hours" scan (hashi
   (what is drawn). Exact single-object maths (selected object, close-approach view, passes)
   uses SGP4 directly on the main thread via `src/data/ephemeris.ts`.
 - `clock` in `main.ts` is `{ time (Unix ms), speed, paused }`; any jump in time must go
-  through `jumpTo()` (it calls `sim.reset()`). At normal speed `advanceClock()` follows the
+  through `jumpTo()` (it calls `sim.reset()`). The autopilot runs scenes at 100× and 1000× and
+  now puts the clock back to the present when it stops (it used to leave it hours ahead, and
+  the owner read that as "the time is still off"); whenever the clock is not the present its
+  figures are amber (`.timebar.is-shifted`). At normal speed `advanceClock()` follows the
   COMPUTER'S clock rather than summing frame times: a background tab or a locked phone draws
   no frames, and the sum used to come back minutes behind the present (the owner saw the clock
   "off"). Times are shown in the browser's local time unless Settings says UTC (the default
@@ -161,6 +164,7 @@ src/features/               optional modules installed through the App interface
                             weather, launches, tonight (+ tonightWords), report (+ reportPage), growth, commands (+ commandParse),
                             flybys, fireballs, showers, dsn (the four share beyond.css)
 src/ui/                     places (+ space.css: the moves between the tracker, another world and the solar system; see "Places"),
+                            placeWatch (the close-approach monitor of another world),
                             app (the App interface), featureList (every feature, drawn on the home page), objectTabs (the
                             Objects panel's three tabs), inspector (+ charts), monitor (live pairs), ahead (prediction), encounterPanel, howto
                             (walkthrough), hashTrace, benchmarkModal, filters, search (+ searchMatch, searchIndex,
@@ -406,23 +410,61 @@ How the pieces fit:
   of the five leaving for good (`LEAVING`): with every dead probe named and ringed, the inner
   planets were buried.
 - Share links: `#place=mars`, `#place=system&at=jupiter`, `#craft=webb`.
-- **The way out is a button in the top bar** (`#system-btn`, amber; `#m-system` on a phone):
-  "Solar system" from the tracker or a place, "Back to Earth" on the solar system. The owner
-  asked for it to be prominent; it used to be only the last item of the rail's View group.
-- **A craft's card is as full as a satellite's inspector** (the owner: "it doesn't give me a
-  lot of information like Earth … I can't turn the orbit or footprint on or off"): the
-  article's photo and opening lines (`wikiSummary`, fetched when the card opens), the orbit
-  worked out from the real path (period, lowest and highest, tilt to the body's equator),
-  dates and mass where the data has them, "Sun there now" for anything on the ground, and
-  the SAME Orbit / Track / Footprint / 3D model switches (`#pc-acts`, static markup, the
-  tracker's own settings `orbitPath`, `groundTrack`, `footprint`, `model`). `SpaceView`
-  draws the ground track in the body's turning frame (a child of its mesh) and the footprint
-  as the circle acos(R / r) from the point under the craft.
+- **The solar system is the tool; the Earth is the place in it with the most going on.** The
+  owner's words, and the test for every piece of interface here: nothing may read as a
+  separate "mode" or make the Earth the "main" view ("Back to Earth" was removed for that
+  reason). Every world has the same top bar, the same rail (with what applies there), the
+  same kind of card as a satellite's inspector, the same Layers, Settings, views and monitor.
+  When data for another world gets richer, it is added INTO these same parts.
+- **Where you are is a path in the top bar** (`#path`, drawn by `Places.drawPath`): "Solar
+  system / Earth", "Solar system / Jupiter / Europa". The last name is where the visitor is
+  (a click puts the usual view back); each name before it is one step out; on the solar
+  system a world the camera has gone up to is added in amber as the way in. It replaced an
+  amber "Solar system" button, a "System" entry in the rail's View group and a round button
+  on phones, each of which the owner found too small, too hidden or too much like a feature.
+- **The logo resets the view of the world you are AT** (`goHome` → `places.resetView()`):
+  usual view, nothing selected, no panel, clock back to now. It does not go to the Earth.
+- **On the solar system a world is captioned in the picture** (`#place-hud`): its name, one
+  line of where it is, "Enter <name>" (also the Enter key, a second click, or zooming in),
+  and its moons as plain links. This replaced a side card with a "Go to the Moon" button,
+  which the owner called "super AI and elementary". Keep it words in the picture: no box.
+- **Everything else gets the card, built from the inspector's own parts** (`#place-card`
+  uses `.insp-head`, `.insp-hero`, `.acts`, `.tabs`, `.telemetry`, `.kv`): a craft has Live /
+  Orbit / Record, a world Now / Facts / About, a landing site Site / About. The switches
+  (`#pc-acts`) are the tracker's own settings (`orbitPath`, `groundTrack`, `footprint`,
+  `model`); `SpaceView` draws the ground track in the body's turning frame (a child of its
+  mesh) and the footprint as the circle acos(R / r) from the point under the craft.
+- **Views at every world** (`data-place-view` / `data-map-view` buttons in the rail's View
+  group, keys 1–4, `SpaceView.goView`): whole, close, night, moons; on the solar system
+  whole, inner, above.
+- **A close-approach monitor at every world** (`ui/placeWatch.ts`, `#panel-watch`, the rail's
+  Monitor button): the craft in flight there go through the SAME `hashedPairs`, once a second,
+  with a cell as wide as the alert distance; a 24-hour look-ahead hashes every 30 s with
+  cells widened by what two craft can close in one step and narrows each candidate by thirds;
+  "Screening cells" (the tracker's own switch, `G`) draws the occupied cells
+  (`SpaceView.setCells`). It finds something only now and then: that is the true state of
+  things out there, and the panel says so.
+- **Nothing is set up during a change of scene** (the owner noticed frame drops): the solar
+  system is built and drawn once out of sight ~10 s after start-up (`SpaceView.prewarm`: a
+  render into a 32-pixel buffer compiles shaders and uploads shapes); a world's place is
+  built while the camera goes up to its dot (`Places.prepare`), not when the visitor goes
+  in; maps are decoded off the main thread (`createImageBitmap`) and uploaded in an idle
+  moment (`renderer.initTexture`) before anything draws with them; the second picture of a
+  dissolve is not multisampled; the page's classes (rail, path) change when a move STARTS
+  (`Places.chrome`), because restyling the page costs a frame; a view that has been left is
+  kept, not torn down. Do not move any of this work back into the move.
+- **The camera can never be inside a world** (`moveCamera` pushes it out to just above the
+  ground of any body it enters): turning the view round something that stands on the ground
+  used to swing it down through the surface. Things on the ground are placed 0.14 % above
+  the radius, because the close-up ground is drawn as patches lifted up to 0.11 %.
+- **On the solar system, a moon is placed from its planet's FULL size** and a planet whose
+  moon is being looked at stays at least half size (`place()`): placed from the size the
+  planet was currently drawn at, a chosen moon slid into its shrinking planet and ballooned.
 - **Layers away from the tracker** (`SpaceOptions`, set from `applySettings`): the sky tiles
   and the selected craft's switches (`data-everywhere`), the ground (`data-place`: not on the
   solar system), and a group that exists only out here (`data-away`): Orbits, Names,
   Spacecraft, Landing sites, Every craft on the solar system (`spaceOrbits`, `spaceNames`,
-  `spaceCraft`, `landingSites`, `spaceAllCraft`). The solar system has no menu of planets, but
+  `spaceCraft`, `spaceMoons`, `landingSites`, `spaceAllCraft`). The solar system has no menu of planets, but
   it does keep the rail's Layers and Settings: the owner asked to be able to turn the orbits
   off there.
 - **Landing sites** (`space/sites.ts`, `Site`) are given to the views as craft that stand on

@@ -233,6 +233,9 @@ const places = new Places({
   figures: () => sky.constellations,
   match: matchScore,
   jumpTo: (timeMs) => jumpTo(timeMs),
+  jumpToNow: () => jumpToNow(),
+  home: () => goHome(),
+  setGrid: (on) => setGrid(on),
   toast: (text) => toast(text),
   trackerView: () => ({ scene: kit.scene, camera: kit.camera, target: kit.controls.target }),
   trackerPose: () => ({ rel: kit.camera.position.clone().divideScalar(EARTH_RADIUS), quat: kit.camera.quaternion.clone() }),
@@ -384,7 +387,7 @@ function applySettings(s: Settings, changed: keyof Settings | null): void {
   setClockZone(s.clockZone);
   places.setSky(s.stars, s.constellations);
   places.setOptions({
-    orbits: s.spaceOrbits, names: s.spaceNames, craft: s.spaceCraft, allCraft: s.spaceAllCraft, sites: s.landingSites,
+    orbits: s.spaceOrbits, names: s.spaceNames, craft: s.spaceCraft, moons: s.spaceMoons, allCraft: s.spaceAllCraft, sites: s.landingSites,
     skyNames: s.skyLabels, selOrbit: s.orbitPath, selTrack: s.groundTrack, selFootprint: s.footprint, selModel: s.model,
   });
   if (changed === null || changed === 'units') $('d-label').textContent = alertDistance(screeningDistance);
@@ -556,7 +559,9 @@ function openPanel(name: PanelName | null): void {
     const on = button.dataset.panel === name;
     button.classList.toggle('is-on', on);
     // At another world "Objects" is the list of what is there, not the Earth's catalogue.
+    // At another world "Objects" is the list of what is there, and "Monitor" screens the craft there.
     if (button.dataset.panel === 'objects' && places.atPlace) places.toggleHere(on);
+    else if (button.dataset.panel === 'conj' && places.atPlace) places.toggleWatch(on);
     else $(`panel-${button.dataset.panel}`).classList.toggle('is-hidden', !on);
   }
 }
@@ -943,6 +948,7 @@ function setGrid(on: boolean): void {
   $<HTMLInputElement>('layer-grid').checked = on;
   $<HTMLInputElement>('grid-toggle').checked = on;
   grid.setVisible(on);
+  places.setGrid(on); // the same switch draws the grid of whatever world the visitor is at
   if (!on) $('grid-note').textContent = '';
   // A close approach is open: step back (or in again) so the two objects' cells fit the view.
   if (encPanel.isOpen) {
@@ -1520,6 +1526,7 @@ const cinema = new Cinema({
   },
   openClosestCrossing,
   closeApproach: () => closeEncounter(),
+  backToNow: () => jumpToNow(),
   setSpeed: (multiplier) => {
     replay = null;
     clock.speed = multiplier;
@@ -1583,7 +1590,16 @@ function holdCamera(pose: Pose): void {
 }
 
 function goHome(): void {
-  places.leaveNow();
+  if (places.elsewhere) {
+    // At another world, or on the solar system: the logo puts THAT view back the way it starts.
+    // It does not go to the Earth; no place is "home" more than another.
+    setKeys(false);
+    setAbout(false);
+    shareDialog.close();
+    openPanel(null);
+    places.resetView();
+    return;
+  }
   if (cinema.isPlaying) cinema.stop();
   if (fp.mode !== 'off') fp.exit();
   closeEncounter(true);
@@ -1616,6 +1632,13 @@ window.addEventListener('keydown', (event) => {
   if (el instanceof HTMLInputElement && el.type !== 'checkbox' && el.type !== 'range') return; // typing in a field
   if (event.metaKey || event.ctrlKey || event.altKey) return;
   // Away from the tracker, only the keys that mean something everywhere: time, picture, home, search.
+  if (places.elsewhere && ['1', '2', '3', '4', 'enter'].includes(event.key.toLowerCase())) {
+    // The same keys as the Earth's views, for the views of this place; Enter goes in to the world the camera is beside.
+    if (event.key === 'Enter') places.enter();
+    else places.goView(places.atPlace ? (['whole', 'close', 'night', 'moons'] as const)[Number(event.key) - 1] : (['whole', 'inner', 'above', 'whole'] as const)[Number(event.key) - 1]);
+    return;
+  }
+  if (places.atPlace && event.key.toLowerCase() === 'g') return setGrid(!gridOn);
   if (places.elsewhere && !['0', 'r', '[', ']', 'n', 'p', 'm', 'f', 'h', '/', ' ', 'escape', '?'].includes(event.key.toLowerCase())) return;
   switch (event.key.toLowerCase()) {
     case '0': goHome(); break;

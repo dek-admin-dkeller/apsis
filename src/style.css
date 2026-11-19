@@ -439,6 +439,8 @@ body.ui-rest .topbar, body.ui-rest .rail, body.ui-rest .statusbar { opacity: 0.6
 .clock-meta span { font-size: 10.5px; }
 .offset { font: 10.5px var(--font-mono); color: var(--amber); }
 .offset:empty { display: none; }
+/* The clock has been moved away from the present: its figures are amber, like the offset beside them. */
+.timebar.is-shifted #clock-time { color: var(--amber); }
 #clock-input {
   height: 32px;
   padding: 0 8px;
