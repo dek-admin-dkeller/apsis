@@ -227,6 +227,8 @@ body.ui-hidden #place-hud { display: none; }
   #place-card .insp-hero { height: 96px; }
   #place-hud { bottom: calc(var(--status, 84px) + 18px); }
   #ph-name { font-size: 28px; }
+  .ph-enter { padding: 0 20px; }
+  .ph-enter kbd { display: none; } /* no Enter key on a phone */
   .sp-tag { font-size: 11.5px; padding: 6px 9px; }
 }
 @media (max-width: 1180px) and (min-width: 761px) {

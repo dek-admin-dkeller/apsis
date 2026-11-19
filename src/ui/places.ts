@@ -1007,7 +1007,8 @@ export class Places {
     return [
       ['Now', (into) => {
         const distance = el('span'), light = el('span'), fromSun = el('span'), sunLight = el('span');
-        const parent = body.parent && body.parent !== 'sun' ? BODIES[body.parent] : null;
+        // (For our own Moon "from its planet" is "from Earth", which the first cell already says.)
+        const parent = body.parent && body.parent !== 'sun' && body.parent !== 'earth' ? BODIES[body.parent] : null;
         const rows: [string, HTMLElement | string][] = [];
         if (body.id !== 'earth') rows.push(['From Earth', distance], ['Light takes', light]);
         if (body.id !== 'sun') rows.push([parent ? `From ${parent.name}` : 'From the Sun', fromSun], ['Sunlight takes', sunLight]);
