@@ -320,5 +320,46 @@ check('the reference positions are from the same download as deep.json', referen
   check(`${balls.length} fireballs: places and energies sane, newest first`, balls.every((b, i) => Math.abs(b.latDeg) <= 90 && Math.abs(b.lonDeg) <= 180 && b.energyKt > 0 && (i === 0 || b.timeMs <= balls[i - 1].timeMs)));
 }
 
+// ── 4. The maps ─────────────────────────────────────────────────────────────────────────
+
+{
+  // Width and height straight from the file: a JPEG states them after its SOF marker
+  // (FF C0 … FF CF, except C4, C8 and CC), a PNG in its first chunk.
+  const sizeOf = (bytes) => {
+    if (bytes[0] === 0x89 && bytes[1] === 0x50) return [bytes.readUInt32BE(16), bytes.readUInt32BE(20)];
+    for (let i = 2; i + 9 < bytes.length;) {
+      if (bytes[i] !== 0xff) return null;
+      const marker = bytes[i + 1];
+      if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) return [bytes.readUInt16BE(i + 7), bytes.readUInt16BE(i + 5)];
+      i += 2 + bytes.readUInt16BE(i + 2);
+    }
+    return null;
+  };
+  const { IMAGERY, IMAGE_CREDITS } = await import('../src/space/imagery.ts');
+  const problems = [];
+  let files = 0, total = 0;
+  const look = (id, path, width) => {
+    let bytes;
+    try { bytes = readFileSync(join(HERE, '../public', path)); } catch { problems.push(`${id}: ${path} is missing`); return; }
+    files++;
+    if (path.startsWith('textures/space/')) total += bytes.length;
+    const size = sizeOf(bytes);
+    if (!size) problems.push(`${id}: ${path} is not a readable picture`);
+    else if (width !== null && (size[0] !== width || size[1] * 2 !== size[0])) problems.push(`${id}: ${path} is ${size[0]} × ${size[1]}, not ${width} × ${width / 2}`);
+  };
+  for (const body of BODY_LIST) {
+    const im = IMAGERY[body.id];
+    if (!im) { if (body.visitable) problems.push(`${body.id}: a place to visit with no map`); continue; }
+    look(body.id, im.base, im.base.startsWith('textures/space/') ? (body.id === 'enceladus' ? 1024 : 2048) : null);
+    if (im.baseHigh) look(body.id, im.baseHigh, 4096);
+    if (im.clouds) look(body.id, im.clouds, 2048);
+    if (im.ring) { look(body.id, im.ring.strip, null); if (!(im.ring.innerKm > body.radiusKm && im.ring.outerKm > im.ring.innerKm)) problems.push(`${body.id}: ring radii`); }
+    if (im.tiles && !(/^https:\/\/trek\.nasa\.gov\/tiles\/.+\{z\}\/\{y\}\/\{x\}\.(jpg|png)$/.test(im.tiles.url) && im.tiles.maxZoom >= 3)) problems.push(`${body.id}: tile address`);
+    if (!im.credit) problems.push(`${body.id}: no credit`);
+  }
+  if (IMAGE_CREDITS.some((c) => !c.body || !c.source || !c.licence || !/^https:\/\//.test(c.url))) problems.push('an incomplete credit line');
+  check(`maps: ${files} pictures present, each 2:1 at its stated width, every visitable body has one`, problems.length === 0 && total < 10 * 1048576, problems.join('; ') || `${(total / 1048576).toFixed(1)} MB in public/textures/space, ${IMAGE_CREDITS.length} credit lines`);
+}
+
 console.log(failed ? `\n${failed} failed` : '\nAll deep-space checks passed.');
 process.exit(failed ? 1 : 0);
