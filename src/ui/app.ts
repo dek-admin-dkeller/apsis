@@ -43,6 +43,25 @@ export type SectionName =
   | 'tonight' | 'launches' | 'changes' | 'newest' | 'trains' | 'lowest' // Activity
   | 'constellations' | 'growth' | 'designer'; // Tools
 
+/**
+ * One line the search field can offer. Anything may add its own (see App.addSearch): the
+ * catalogue, cities, actions, and the bodies and spacecraft beyond Earth orbit.
+ */
+export interface SearchHit {
+  /** The main text: 'James Webb Space Telescope'. */
+  title: string;
+  /** Quiet text beside it saying what kind of thing this is: 'Space telescope', 'Planet'. */
+  note?: string;
+  /** The heading it is listed under: 'Objects', 'Places', 'Beyond Earth orbit', 'Actions' … */
+  group: string;
+  /** How well it matches, 0…1 (1 = the name exactly); orders hits that come from different sources. */
+  score: number;
+  /** What choosing it does. */
+  run(): void;
+}
+/** Given what has been typed (trimmed, as typed), the hits a source has for it, best first. */
+export type SearchProvider = (query: string) => SearchHit[];
+
 export interface App {
   // ---- what is loaded, selected and open -------------------------------------------------
   /** The catalogue in use (null only for the first moments after start-up). */
@@ -77,6 +96,8 @@ export interface App {
   select(sat: Satellite | null): void;
   /** Objects whose name starts with or contains the query, or whose NORAD id matches. */
   search(query: string, limit?: number): Satellite[];
+  /** Offer more things in the search field (bodies, spacecraft beyond Earth orbit …). */
+  addSearch(provider: SearchProvider): void;
   /** Fly to look straight down at a place from `altitudeKm` up (default 2,500). */
   flyToGround(latDeg: number, lonDeg: number, altitudeKm?: number): void;
   view(which: ViewName): void;

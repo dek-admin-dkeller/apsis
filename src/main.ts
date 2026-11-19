@@ -57,7 +57,7 @@ import { HowTo } from './ui/howto.ts';
 import { alertDistance, clockStamp, duration, Inspector } from './ui/inspector.ts';
 import { LoadingScreen } from './ui/intro.ts';
 import { Landing } from './ui/landing.ts';
-import type { App, FrameInfo } from './ui/app.ts';
+import type { App, FrameInfo, SearchProvider } from './ui/app.ts';
 import { installChanges } from './features/changes.ts';
 import { installCommand } from './features/command.ts';
 import { installGrowth } from './features/growth.ts';
@@ -1807,6 +1807,9 @@ function step(now: number): void {
 // Everything in src/features/ plugs in here, through the App interface (src/ui/app.ts). This
 // object is the only thing those modules know about the rest of the program.
 
+/** Extra sources for the search field (App.addSearch); the search module asks each one as the visitor types. */
+const searchProviders: SearchProvider[] = [];
+
 const app: App = {
   catalog: () => catalog,
   facts: () => facts,
@@ -1832,6 +1835,7 @@ const app: App = {
 
   select: (sat) => select(sat),
   search: (query, limit) => (catalog ? searchCatalog(catalog, query, limit) : []),
+  addSearch: (provider) => void searchProviders.push(provider),
   flyToGround: (latDeg, lonDeg, altitudeKm = 2500) => {
     if (fp.mode !== 'off') fp.exit();
     closeEncounter(true);
