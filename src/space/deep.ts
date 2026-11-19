@@ -17,14 +17,35 @@
  *   surface   a point on the ground, turned with the body by bodyAxes().
  *
  * Positions are km in the ICRF frame RELATIVE TO `centre`; add bodyPosition(centre) for a
- * place in the solar system. Like ephem.ts this is pure arithmetic apart from loadDeep().
+ * place in the solar system. Like ephem.ts this is pure arithmetic apart from loadDeep() and
+ * refreshDeep(), which takes a newer copy of the file when the site has published one while
+ * the tab was open (data/freshness.ts decides when to ask).
  */
 
+import { fetchData } from '../data/freshness.ts';
 import { BODIES } from './bodies.ts';
 import { bodyAxes, elementsPosition, meanMotion, setMoonElements } from './ephem.ts';
 import type { BodyId, Craft, DeepData, Motion, Vec } from './types.ts';
 
 let loading: Promise<DeepData | null> | null = null;
+const refreshListeners: ((deep: DeepData) => void)[] = [];
+
+/** Read the file. Null if it is missing or unreadable. */
+async function read(fresh: boolean): Promise<DeepData | null> {
+  try {
+    const res = await fetchData('data/deep.json', fresh); // relative: the site may live under any sub-path
+    if (!res.ok) return null;
+    const data = (await res.json()) as DeepData;
+    if (!data || !Array.isArray(data.craft)) return null;
+    // Older or partial files must not break a caller that loops over these.
+    data.moons ??= {};
+    data.flybys ??= [];
+    data.fireballs ??= [];
+    return data;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * The deep-space data, fetched once (later calls share the same promise). Resolves null if the
@@ -32,23 +53,32 @@ let loading: Promise<DeepData | null> | null = null;
  * the moons' orbits in ephem.ts are refreshed from the file.
  */
 export function loadDeep(): Promise<DeepData | null> {
-  loading ??= (async () => {
-    try {
-      const res = await fetch('data/deep.json'); // relative: the site may live under any sub-path
-      if (!res.ok) return null;
-      const data = (await res.json()) as DeepData;
-      if (!data || !Array.isArray(data.craft)) return null;
-      // Older or partial files must not break a caller that loops over these.
-      data.moons ??= {};
-      data.flybys ??= [];
-      data.fireballs ??= [];
-      setMoonElements(data.moons);
-      return data;
-    } catch {
-      return null;
-    }
-  })();
+  loading ??= read(false).then((data) => {
+    if (data) setMoonElements(data.moons);
+    return data;
+  });
   return loading;
+}
+
+/** Be told when a NEWER copy of the file has replaced the one in use (not for the first load). */
+export function onDeepRefresh(run: (deep: DeepData) => void): void {
+  refreshListeners.push(run);
+}
+
+/**
+ * Fetch the file again, past the copy remembered above. If it is newer (by its own
+ * `fetchedAt`) it becomes the copy every later loadDeep() returns, the moons' orbits are
+ * brought up to date, and everyone who asked through onDeepRefresh is told. Resolves to that
+ * data, or null if the site's copy is not newer or could not be read.
+ */
+export async function refreshDeep(): Promise<DeepData | null> {
+  const current = await loadDeep();
+  const next = await read(true);
+  if (!next || (current && !(Date.parse(next.fetchedAt) > Date.parse(current.fetchedAt)))) return null;
+  loading = Promise.resolve(next);
+  setMoonElements(next.moons);
+  for (const run of refreshListeners) run(next);
+  return next;
 }
 
 /**

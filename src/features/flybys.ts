@@ -16,7 +16,7 @@
  */
 
 import './beyond.css';
-import { loadDeep } from '../space/deep.ts';
+import { loadDeep, onDeepRefresh } from '../space/deep.ts';
 import type { Flyby } from '../space/types.ts';
 import type { App } from '../ui/app.ts';
 import { $, fmt, fmtCompact, fmtInt, fmtKmS, fmtRange, lengthUnit, lengthValue, sectionNote } from '../ui/dom.ts';
@@ -105,11 +105,18 @@ export function installFlybys(app: App): void {
     link.href = 'https://cneos.jpl.nasa.gov/ca/';
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
-    credit.append('Close-approach data: ', link, `, read ${clockStamp(Date.parse(deep.fetchedAt))}.`);
+    const read = document.createTextNode(`, read ${clockStamp(Date.parse(deep.fetchedAt))}.`);
+    credit.append('Close-approach data: ', link, read);
     body.append(note, listBox, credit);
     render();
     // The list is about the real present: bring it up to date whenever the section is opened.
     body.closest('details')?.addEventListener('toggle', render);
+    // … and when the site has published a newer list while this tab was open.
+    onDeepRefresh((newer) => {
+      flybys = [...newer.flybys].sort((a, b) => a.timeMs - b.timeMs);
+      read.data = `, read ${clockStamp(Date.parse(newer.fetchedAt))}.`;
+      render();
+    });
   });
 
   // Distances, speeds and times are written in the chosen units and on the chosen clock.

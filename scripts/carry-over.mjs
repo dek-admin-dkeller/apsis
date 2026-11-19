@@ -1,11 +1,19 @@
-// Push builds: keep the data the site is already showing.
+// Every build: start from the data the site is already showing.
 //
 // The scheduled build downloads fresh elements, radio records, catalogue facts and deep-space
 // positions, and they live only in the published site (they are never committed back). A build started by a push
 // would otherwise publish the older snapshot stored in the repository and lose the orbit-change
-// comparison, until the next scheduled run up to 8 hours later.
+// comparison, until the next scheduled run.
 //
-// So before a push build this script reads the data files back from the published site — the
+// A scheduled build runs this first as well, for another reason: each download script
+// declines while ITS file is too young (CelesTrak 2 hours, SatNOGS and JPL about 6, the
+// catalogue facts a day). Measured against the weeks-old copies in the repository those
+// guards never held, and every run asked every source. Measured against what the site is
+// showing, a source is asked exactly as often as its script allows, however often the
+// workflow runs. And if a source cannot be reached, the site keeps the data it had instead of
+// falling back to the repository's old copy.
+//
+// So before a build this script reads the data files back from the published site — the
 // project's own pages; nothing is asked of CelesTrak, SatNOGS or JPL — and keeps each one that
 //   - parses as JSON,
 //   - has the same top-level fields as the copy in the repository (a push that changes a

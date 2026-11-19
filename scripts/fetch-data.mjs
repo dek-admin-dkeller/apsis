@@ -5,7 +5,9 @@
 //
 // Politeness: CelesTrak only refreshes its data every ~2 hours and asks clients not to
 // re-download more often than that. This script refuses to re-download a snapshot that
-// is younger than 2 hours (use --force to override) and the app itself never polls.
+// is younger than 2 hours (use --force to override) and the app itself never polls. The
+// site's scheduled build runs it every 3 hours: five requests, a second apart. The catalogue
+// facts (one large file that changes slowly) are fetched once a day.
 //
 // After a successful download it also compares the new elements with the ones it replaces
 // and writes public/data/changes.json (the "Orbit changes" list; see diff-elements.mjs).
@@ -152,7 +154,9 @@ async function fetchSatcat() {
   if (!(await exists(SNAPSHOT))) return console.log('  no orbital snapshot yet — skipped');
   if (!FORCE && (await exists(SATCAT))) {
     const ageHours = (Date.now() - Date.parse(JSON.parse(await readFile(SATCAT, 'utf8')).fetchedAt)) / 3.6e6;
-    if (ageHours < 24) return console.log(`  catalogue facts are ${ageHours.toFixed(1)} h old — not re-downloading (use --force)`);
+    // Once a day. (Half an hour under 24: the build that is due lands a few minutes short of a
+    // whole day after the last download, and would otherwise put it off by another three hours.)
+    if (ageHours < 23.5) return console.log(`  catalogue facts are ${ageHours.toFixed(1)} h old — not re-downloading (use --force)`);
   }
   const wanted = new Set(JSON.parse(await readFile(SNAPSHOT, 'utf8')).objects.map((o) => Number(o.NORAD_CAT_ID)));
   let text;

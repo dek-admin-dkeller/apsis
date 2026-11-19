@@ -55,6 +55,7 @@ export const FEATURES: FeatureGroup[] = [
       { name: 'Views and time', text: 'Whole Earth, low orbit, the geostationary ring, Earth with the Moon. Pause time, run it backwards, or up to a thousand times faster.' },
       { name: 'Growth by year', text: 'Drag a slider from 1957 to today and see what is still up there from each year.', fresh: true },
       { name: 'Data age', text: 'Colour every object by how recently its orbit was measured, so stale ones stand out.', fresh: true },
+      { name: 'Always current', text: 'The tracking data is refreshed every three hours, and a tab you leave open picks up the new data by itself.', fresh: true },
     ],
   },
   {

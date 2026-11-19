@@ -12,6 +12,7 @@
  */
 
 import { categorize, classifyOrbit, meanAltitudeKm } from './categorize.ts';
+import { fetchData } from './freshness.ts';
 import { CATEGORIES, ORBIT_CLASSES, type Category, type OmmRecord, type OrbitClass, type Satellite, type Snapshot } from './types.ts';
 
 export interface Catalog {
@@ -28,9 +29,13 @@ export interface Catalog {
 export const PREFIX_LEN = 4; // longest prefix stored in the autocomplete index
 const LIVE_GROUPS = ['active', 'cosmos-2251-debris', 'iridium-33-debris', 'fengyun-1c-debris', 'cosmos-1408-debris'];
 
-/** The bundled snapshot written by `npm run fetch-data`. Works offline. */
-export async function loadSnapshot(): Promise<Snapshot> {
-  const res = await fetch('./data/satellites.json');
+/**
+ * The bundled snapshot written by `npm run fetch-data`. Works offline. `fresh` is for a tab
+ * that has been open a while: ask the site before trusting the browser's cached copy
+ * (data/freshness.ts).
+ */
+export async function loadSnapshot(fresh = false): Promise<Snapshot> {
+  const res = await fetchData('./data/satellites.json', fresh);
   if (!res.ok) throw new Error(`snapshot missing (HTTP ${res.status}) — run "npm run fetch-data"`);
   return (await res.json()) as Snapshot;
 }

@@ -15,6 +15,8 @@
  * Stored in a Map keyed by NORAD id, so the lookup for the selected object is O(1).
  */
 
+import { fetchData } from './freshness.ts';
+
 export interface Transmitter {
   description: string;
   downlinkHz: number | null; // what the satellite sends, i.e. what a ground station tunes to
@@ -74,10 +76,13 @@ interface RadioFile {
   sats: SatRow[];
 }
 
-/** Read public/data/radio.json. Null when it is not bundled or cannot be read. */
-export async function loadRadio(): Promise<RadioData | null> {
+/**
+ * Read public/data/radio.json. Null when it is not bundled or cannot be read. `fresh` asks the
+ * site before trusting the browser's cached copy (data/freshness.ts).
+ */
+export async function loadRadio(fresh = false): Promise<RadioData | null> {
   try {
-    const res = await fetch('./data/radio.json');
+    const res = await fetchData('./data/radio.json', fresh);
     if (!res.ok) return null;
     const file = (await res.json()) as RadioFile;
     const madeMs = Date.parse(file.fetchedAt);

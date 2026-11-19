@@ -32,9 +32,9 @@ npm install
 npm run dev          # Vite dev server on http://localhost:5173
 npm run build        # tsc --noEmit && vite build → dist/   (must pass with zero TS errors)
 npm run bench        # brute force vs hash, look-ahead completeness; exits 1 on any mismatch
-npm run fetch-data   # textures + CelesTrak elements + SATCAT facts into public/ (2 h / 24 h guards)
-npm run fetch-radio  # SatNOGS radio records into public/data/radio.json (6 h guard; also run by CI)
-npm run fetch-deep   # JPL Horizons + CNEOS into public/data/deep.json and scripts/fixtures/deep-reference.json (12 h guard; also run by CI)
+npm run fetch-data   # textures + CelesTrak elements + SATCAT facts into public/ (2 h / one-day guards)
+npm run fetch-radio  # SatNOGS radio records into public/data/radio.json (5.5 h guard; also run by CI)
+npm run fetch-deep   # JPL Horizons + CNEOS into public/data/deep.json and scripts/fixtures/deep-reference.json (5.5 h guard; also run by CI)
 npm run shots        # retake the home page's product pictures (needs Chrome and the dev server running)
 npm run build-borders  # regenerate public/data/borders.bin from the world-atlas package
 npm run check        # the feature checks (orbit changes, visible passes, report, decay, search, groups, and the
@@ -136,7 +136,8 @@ worker/lookahead.worker.ts: started on demand for the "Coming hours" scan (hashi
 
 ```
 src/main.ts                 creates every module, per-frame loop, keyboard, share links, home/reset
-src/data/                   catalog, categorize, describe (operator/purpose/model kind from the name), ephemeris
+src/data/                   freshness (a tab left open takes the newer data files the site has published: see
+                            "A tab left open"), catalog, categorize, describe (operator/purpose/model kind from the name), ephemeris
                             (orbit series, look angles, passes, closest approach), satcat, wiki (name → article, link),
                             names (displayName: "Hubble Space Telescope (HST)"), spacecraft (a sentence about each model kind, for the catalogue),
                             regions ("over the South Pacific"), crew (people in space), types; and for the feature
@@ -176,7 +177,7 @@ scripts/                    fetch-data.mjs, fetch-radio.mjs, fetch-deep.mjs (+ d
 public/                     data/ (satellites.json, satcat.json, radio.json, deep.json, borders.bin; changes.json exists only
                             in the published site), shots/, textures/ (space/ = the maps of other bodies), icons/,
                             manifest.webmanifest
-.github/workflows/deploy.yml  build + deploy to Pages; every 8 h it refreshes CelesTrak, SatNOGS and JPL data first (not
+.github/workflows/deploy.yml  build + deploy to Pages; every 3 h it refreshes CelesTrak, SatNOGS and JPL data first (not
                             committed back); a push build keeps the data the site already shows (carry-over.mjs)
 ```
 
@@ -215,7 +216,16 @@ it (the owner found a text-only page bland):
   column: `.ld-top`, then `#landing-scroll` (`.ld-scroll`, `overscroll-behavior: none`). With
   the bar `position: sticky` inside the scroller, the elastic bounce past the top of the page
   pulled it away from the top edge. `landing.ts` passes a wheel turned over the bar on to the
-  scroller and sets `is-scrolled` (solid bar) once the page has moved.
+  scroller and sets `is-scrolled` once the page has moved.
+- **The bar has two states and one height** (`--ld-bar`, 60 px at every width). At the very
+  top of the page it is CLEAR over the live globe; what keeps it legible on a sunlit cloud is
+  a soft shade, darkest along the top edge and gone three bar-heights down (`.ld-top::before`),
+  with its words in full ink and a small text shadow. Once the page has moved it is SOLID with
+  a hairline. The change takes 180 ms. Do not bring back a tinted or frosted slab: the owner
+  disliked "its opacity" (it drew a hard line across the planet and washed the grey links out),
+  and the blur it leaned on never reached the built site (see "Performance notes": the build
+  drops unprefixed `backdrop-filter`). Until there is a globe, `.ld-top::after` stands in as
+  the same dark backdrop the opening screen has and fades with it.
 - **Showcase:** real screens in `public/shots/*.webp`, listed in `SHOTS` (`featureList.ts`).
   Retake them with `npm run shots` (`scripts/shots.mjs`: headless Chrome driven over the
   DevTools protocol against the running dev server) whenever the interface changes visibly.
@@ -597,6 +607,9 @@ graphics context).
 
 ## Outside services (all optional at run time; the app works offline without them)
 
+The page's own site first: a tab left open asks it, and only it, whether a data file has been
+published again (`src/data/freshness.ts`: four HEAD requests at most every 30 minutes, only
+while the tab is visible; see "A tab left open" below). Then, to others:
 CelesTrak (manual refresh; scheduled in CI), Wikipedia (REST summary for photos and descriptions,
 and the query API when an object's own name is tried as a title; cached per article), NOAA SWPC (aurora grid, Kp, solar flux), a public people-in-space list
 (`src/data/crew.ts`), NASA GIBS map tiles (`src/render/tiles.ts`, only while zoomed in and
@@ -608,12 +621,46 @@ hour), NASA's DSN Now feed (`src/space/dsn.ts`: one read shortly after start, th
 minute only while the Deep Space Network section is on screen), NASA Solar System Treks map
 tiles (the layers in `src/space/imagery.ts`, for whatever draws other bodies close up),
 nothing else from the browser. SatNOGS is read at BUILD time only
-(`scripts/fetch-radio.mjs`, 6 h guard, at most 22 requests; its API sends no CORS headers,
+(`scripts/fetch-radio.mjs`, 5.5 h guard, at most 22 requests; its API sends no CORS headers,
 and its data is CC BY-SA and credited in About). JPL Horizons and JPL CNEOS are also BUILD
-time only (`scripts/fetch-deep.mjs`, 12 h guard, about 130 requests one at a time; Horizons
-sends no CORS headers). The maps of other bodies are bundled; the Solar System Scope ones
+time only (`scripts/fetch-deep.mjs`, 5.5 h guard, about 130 requests one at a time; Horizons
+sends no CORS headers). How often the build asks each of them is in "Deploying". The maps of other bodies are bundled; the Solar System Scope ones
 are CC BY 4.0 and must be credited (`IMAGE_CREDITS`). No analytics, no accounts. Location is used only after
 an in-app yes plus the browser's own prompt, and stays in `localStorage`.
+
+## A tab left open (`src/data/freshness.ts`)
+
+A page reads the data files when it loads; the site publishes new ones every 3 hours. So that
+a tab opened yesterday does not show yesterday's orbits, the page asks its OWN site (relative
+addresses, never a third party) whether a file has been published again, and takes it.
+
+- **What it asks:** at most once every 30 minutes, only while the tab is visible, one HEAD per
+  watched file (`satellites.json`, `deep.json`, `radio.json`, `changes.json`): headers only.
+  The `ETag` / `Last-Modified` is compared with that of the copy in use, which `fetchData()`
+  remembered when the file was loaded (every loader of these files goes through `fetchData`).
+  Only a file whose validator differs is fetched, once.
+- **The caches.** Pages sends `Cache-Control: max-age=600`; a plain fetch would be answered by
+  the browser's cache for ten minutes. Both requests use `cache: 'no-cache'` ("ask the server
+  before using my copy"): unchanged is a 304, changed brings the new file. A validator only
+  says "published again" (every deployment changes it), so each owner also compares the
+  file's own `fetchedAt` before changing anything, and never goes backwards.
+- **Owners** register with `watchData(url, { reload, when? })`. `reload()` answers `'changed'`
+  (the visitor can see it: one toast, "Newer tracking data loaded"), `'same'`, or `'later'`.
+  - The catalogue (block at the end of `main.ts`, before "start"): `takeNewerSnapshot()` goes
+    through `rebuildCatalog()` like "Download current elements", but keeps the selected object
+    selected by NORAD id WITHOUT `select()` (which would fly the camera, reset the phone
+    sheet and buzz): `selected` is cleared for the rebuild and put back with the new object.
+    It waits (`quietForNewData()`) while the home page or loading screen is up, away from the
+    Earth (`places.elsewhere`), in a close approach or replay, a first-person view, the
+    autopilot, a recording, the tour, with a constellation on show, the monitor panel open or
+    an overlay open. The dots blink off for a moment while the worker computes the first
+    positions; that is the same as the manual refresh.
+  - Deep space: `refreshDeep()` (`space/deep.ts`) replaces the cached copy and tells
+    `onDeepRefresh` listeners: `places.refreshData`, the fly-by and fireball lists.
+  - Radio: `features/radio.ts` hands the new records to its cards.
+  - Orbit changes: after a catalogue swap the comparison is made in the browser (what this
+    tab had against what it has now); `changes.json` is only taken when nothing is showing.
+- The search field's type filter is kept by NORAD id, so it survives the swap.
 
 ## Robustness (added after a "black screen on a friend's laptop" report that could not be reproduced)
 
@@ -807,6 +854,13 @@ an in-app yes plus the browser's own prompt, and stays in `localStorage`.
 
 ## Performance notes
 
+- **The production build has no `backdrop-filter` in Chrome or Firefox.** The CSS minifier
+  keeps only `-webkit-backdrop-filter` where both are written (the built stylesheet has 25 of
+  those and not one unprefixed), so every "frosted" surface is frosted in Safari and in
+  `npm run dev`, and plain in the built site elsewhere. Nothing depends on the blur for
+  legibility any more (the home page's bar was the one place that did). If the frost is wanted
+  on the live site, fix it in the build (`css.lightningcss` targets / `build.cssTarget`), and
+  then look at every panel again, because none has been seen with it there.
 - 3D models are built once per kind and cloned (`buildModel` cache); `prewarmModels()` builds
   the common ones and compiles their shaders behind the loading screen so selecting an
   object or changing autopilot scene does not stutter.
@@ -832,14 +886,37 @@ search list above a real on-screen keyboard (it is sized from `visualViewport`).
 ## Deploying
 
 Push to `main` → the workflow builds and publishes `dist/` to GitHub Pages. The scheduled run
-(every 8 h) downloads fresh CelesTrak, SatNOGS and JPL (deep-space) data before building, compares the new
+(every 3 h, at 37 minutes past) downloads fresh CelesTrak, SatNOGS and JPL (deep-space) data before building, compares the new
 elements with the published ones (`changes.json`), and re-enables itself so GitHub does not
-pause the schedule after 60 days of inactivity. A push build downloads nothing from outside:
+pause the schedule after 60 days of inactivity.
+
+**How often each source is asked, and why that is polite.** The schedule only sets the pace.
+Every run first reads back the data the site is showing (`carry-over.mjs`, our own site), and
+each download script then declines if ITS file is too young, so no source is asked more often
+than its script allows however often the workflow runs (a run started by hand minutes after a
+scheduled one downloads nothing, and still deploys):
+
+| Source | Asked | Requests | Why that is within bounds |
+| --- | --- | --- | --- |
+| CelesTrak elements | every run, 3 h (guard 2 h) | 5, a second apart | CelesTrak refreshes about every 2 h and asks for no more than one download per update |
+| CelesTrak catalogue facts | once a day (guard 23.5 h) | 1 | changes slowly; one file |
+| SatNOGS | every second run, 6 h (guard 5.5 h) | at most 22, 1.5 s apart | 6 h is how far back one download's reports reach, so "last heard" has no gaps; more often would repeat the same pages |
+| JPL Horizons and CNEOS | every second run, 6 h (guard 5.5 h) | about 130, strictly one at a time, 1.1 s apart | JPL asks for no parallel requests; the craft follow paths predicted weeks ahead, so more often would gain nothing |
+
+The guards are half an hour short of their round figure on purpose: the run that is due
+starts a few minutes less than 6 h after the last download finished, and an exact 6 would
+turn it away. Before this, the guards were measured against the weeks-old copies in the
+repository and never held: every run asked everyone. Each download step has its own time
+limit and may fail (`continue-on-error`); a source that is down, or a guard that declines,
+costs that refresh and never the deployment, and the site keeps the data it had. Never raise
+the pace for CelesTrak past one download per 2 hours, and do not run the fetch scripts with
+`--force` in CI. A push build downloads nothing from outside:
 `scripts/carry-over.mjs` reads the data files back from the published site and keeps each one
 that parses, has the same top-level fields as the repository's copy and is newer, so a push
 never puts the site back on older data or drops the orbit-change list. Runs queue rather
 than cancel each other (`cancel-in-progress: false`): the first scheduled refresh was once
-cancelled by a push that arrived seconds later, and the data stayed two days old. `vite.config.ts` uses `base: './'`,
+cancelled by a push that arrived seconds later, and the data stayed two days old. The job has a
+45-minute limit so a hung run cannot hold the queue. `vite.config.ts` uses `base: './'`,
 so the site works from any sub-path.
 
 ## Ideas not built yet

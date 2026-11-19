@@ -2135,6 +2135,99 @@ for (const install of [installRadio, installChanges, installWeather, installLaun
   }
 }
 
+// ---------------------------------------------------------------- a tab left open: newer data from our own site
+//
+// The site publishes fresh data every few hours, but a page only reads it when it loads: a tab
+// opened yesterday showed yesterday's orbits. Now and then (data/freshness.ts: at most every
+// 30 minutes, only while the tab is visible, and only ever from this site's own address) the
+// page asks whether a data file has changed and takes the newer copy. The radio records and
+// the orbit-change list look after themselves in their own modules; the catalogue and the
+// deep-space data are handed over here.
+//
+// (Everything this needs is in this one block, its two imports included, so that it can be
+// read, moved or removed as a piece.)
+
+import { startFreshness, watchData } from './data/freshness.ts';
+import { onDeepRefresh, refreshDeep } from './space/deep.ts';
+
+/**
+ * Is this a moment when the whole catalogue can be replaced without the visitor losing what
+ * they are doing? Replacing it rebuilds every object, so anything that is a list of THIS
+ * catalogue's objects would be emptied under them. Until it is, the newer data simply waits.
+ */
+function quietForNewData(): boolean {
+  return app.ready() // not behind the home page or the loading screen
+    && !places.elsewhere // looking at the Earth, not at another world or the solar system
+    && !encPanel.isOpen && replay === null // no close approach on screen or being replayed
+    && fp.mode === 'off' && !cinema.isPlaying && !cinema.isRecording && !tour.isRunning
+    && constMembers.length === 0 // a constellation on show
+    && openPanelName !== 'conj' // the monitor's lists, or a "coming hours" scan being read
+    && !document.querySelector('.overlay:not(.is-hidden)'); // an open page (the contact timeline works from these objects)
+}
+
+/**
+ * Put a newer download of the catalogue to use: the same path as "Download current elements"
+ * (rebuildCatalog), but leaving the visitor where they are. The selected object stays
+ * selected, found again by its catalogue number: the inspector stays open on the tab it was
+ * on, and the camera never lets go, because what it follows is this object's computed
+ * position, which carries straight on from the new elements. (select() is not used for that:
+ * it would fly the camera in again, reset the sheet on a phone and buzz.)
+ */
+function takeNewerSnapshot(snapshot: Snapshot): void {
+  const keep = selected?.noradId ?? null;
+  const following = rig.follow;
+  selected = null; // so that applyCatalog does not deselect; put back below
+  baseSnapshot = snapshot;
+  baseLive = false;
+  rebuildCatalog();
+  const again = keep === null ? null : catalog?.byNorad.get(keep) ?? null;
+  if (again) {
+    selected = again;
+    selectedRec = makeSatrec(again);
+    orbit.setSatellite(again);
+    track.setSatellite(selectedRec, again.periodMin);
+    lastTraceAt = -Infinity;
+    refreshSelected();
+    inspector.show(again, facts.get(again.noradId), following);
+    inspector.setStarred(watch.has(again));
+    for (const run of selectHooks) run(again); // the feature modules hold the object too
+  } else if (keep !== null) {
+    select(null); // it is no longer in the data (it has come down): put the selection away properly
+  }
+}
+
+/** A newer download that arrived at a bad moment (see quietForNewData), kept for the next good one. */
+let heldSnapshot: Snapshot | null = null;
+
+watchData('./data/satellites.json', {
+  when: quietForNewData,
+  reload: async () => {
+    heldSnapshot ??= await loadSnapshot(true);
+    const snapshot = heldSnapshot;
+    // Newer than what is on screen? (Not if the visitor has downloaded current elements themselves since.)
+    if (!baseSnapshot || !(Date.parse(snapshot.fetchedAt) > Date.parse(baseSnapshot.fetchedAt))) {
+      heldSnapshot = null;
+      return 'same';
+    }
+    if (!quietForNewData()) return 'later'; // something was opened while it was downloading
+    heldSnapshot = null;
+    takeNewerSnapshot(snapshot); // updates the "Elements from" readout too (updateDataNote)
+    return 'changed';
+  },
+});
+
+// Spacecraft beyond Earth orbit, the fly-bys and the fireballs: no moment is a bad one, and
+// there is nothing to announce (positions move by a hair; the lists redraw themselves).
+onDeepRefresh((deep) => places.refreshData(deep));
+watchData('data/deep.json', {
+  reload: async () => {
+    await refreshDeep();
+    return 'same';
+  },
+});
+
+startFreshness(() => toast('Newer tracking data loaded'));
+
 // ---------------------------------------------------------------- start
 
 /** Let the page draw a frame before the next piece of work, so that loading never holds the picture for long. */

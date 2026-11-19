@@ -21,8 +21,10 @@
 //
 // Politeness: about 130 requests, strictly one at a time and at least 1.1 s apart (horizons.mjs
 // enforces it), a generic User-Agent, never repeated or polled. The script refuses to run again
-// while the file is younger than 12 hours (use --force). Two ways to change the file without
-// asking for everything again:
+// while the file is younger than about 6 hours (use --force): the site's build runs every 3
+// hours and this goes with every second one, four times a day. More often would gain nothing:
+// the craft move along paths predicted weeks ahead, and the fly-by and fireball lists change a
+// few times a day at most. Two ways to change the file without asking for everything again:
 //
 //   --only-new   ask Horizons only for the spacecraft and moons the file does not have yet
 //                (after adding a row to deep-craft.mjs or a moon to bodies.ts); everything
@@ -47,7 +49,8 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'public/data/deep.json');
 const REFERENCE = join(ROOT, 'scripts/fixtures/deep-reference.json');
 
-const MIN_AGE_HOURS = 12;
+// "Every second 3-hourly build" (half an hour under 6, for the minutes a build takes: see fetch-radio.mjs).
+const MIN_AGE_HOURS = 5.5;
 const DAY = 86400000;
 const AU_KM = 149597870.7;
 const CAD_URL = 'https://ssd-api.jpl.nasa.gov/cad.api';

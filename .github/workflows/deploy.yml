@@ -2,13 +2,25 @@
 #
 #   push to main      → build and deploy what is in the repository, with the data the site
 #                       is already showing (scripts/carry-over.mjs; no outside download)
-#   every 8 hours     → first download fresh orbital data from CelesTrak (and radio records from
-#                       SatNOGS, deep-space positions from JPL), then build and deploy
+#   every 3 hours     → refresh whatever is old enough to refresh, then build and deploy
 #   "Run workflow"    → same as the schedule (use it to refresh the data by hand)
 #
+# How often each source is really asked. Every run starts from the data the site is showing
+# now (carry-over.mjs), and each download script then looks at the age of ITS file and declines
+# if it is too young. So the schedule only sets the pace; the scripts set the limits, and a
+# run started by hand five minutes after a scheduled one downloads nothing at all:
+#
+#   CelesTrak elements    every run (3 h)        its own rule is "not more than once in 2 hours";
+#                                                 5 requests, a second apart
+#   CelesTrak catalogue   once a day              one file
+#   SatNOGS radio         every second run (6 h)  at most 22 requests, 1.5 s apart
+#   JPL Horizons + CNEOS  every second run (6 h)  about 130 requests, strictly one at a time
+#
+# A script that declines, or a source that cannot be reached, never stops the deployment: the
+# site is simply published again with the data it already had.
+#
 # The refreshed data is NOT committed back: it lives only in the published site, so the
-# repository does not grow by 7 MB three times a day. If CelesTrak cannot be reached, the
-# snapshot stored in the repository is published instead.
+# repository does not grow by 7 MB eight times a day.
 #
 # Each refresh is also compared with the one before it (the "Orbit changes" list in the app,
 # public/data/changes.json). The one before is taken from the site as it is published now.
@@ -18,7 +30,8 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: '23 */8 * * *'
+    # 37 minutes past, every third hour (UTC): off the hour, when GitHub's scheduler is least busy.
+    - cron: '37 */3 * * *'
   workflow_dispatch:
 
 permissions:
@@ -27,10 +40,10 @@ permissions:
   id-token: write
   actions: write # only for the keep-alive step below
 
-# One deployment at a time, and a run that has started is allowed to finish. With
-# cancel-in-progress a push that arrived while the 8-hourly refresh was running cancelled it,
-# and the site then kept its old data for another 8 hours. Now the push simply waits its turn
-# (and its build keeps the data the refresh has just published).
+# One deployment at a time, and a run that has started is allowed to finish: the workflow
+# cannot overlap itself. With cancel-in-progress a push that arrived while a scheduled refresh
+# was running cancelled it, and the site kept its old data until the next one. Now the push
+# simply waits its turn (and its build keeps the data the refresh has just published).
 concurrency:
   group: pages
   cancel-in-progress: false
@@ -38,6 +51,11 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # A normal run takes a few minutes, a full refresh about ten. A run that hangs must not hold
+    # the queue (and every later refresh) for the six hours GitHub allows by default. Each
+    # download below also has a limit of its own and is allowed to fail: a source having a slow
+    # day costs that one refresh, never the deployment.
+    timeout-minutes: 45
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -56,11 +74,12 @@ jobs:
           echo "url=${site%/}/" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ github.token }}
-      # A push must not put the site back on the older snapshot stored in the repository: the
-      # data files it is showing now are read back from the site itself and kept if they are
-      # newer. Nothing is downloaded from CelesTrak, SatNOGS or JPL here. Never fatal.
+      # Every run starts from the data the site is showing now, read back from the site itself
+      # (nothing is asked of CelesTrak, SatNOGS or JPL here). A push must not put the site back
+      # on the older snapshot stored in the repository; and on a scheduled run this is what
+      # lets each download script below judge the age of the data that is really published,
+      # so that a source is asked no more often than its script allows. Never fatal.
       - name: Keep the data the site is already showing
-        if: github.event_name == 'push'
         run: node scripts/carry-over.mjs "${{ steps.site.outputs.url }}" || echo "Could not read the published data - building with the stored snapshot"
       # The previous elements are not in the repository (see the top of this file), so they are
       # read back from the published site. Never fatal: on the first run, or if the site cannot
@@ -68,18 +87,24 @@ jobs:
       - name: Keep the elements published last time, to compare the new ones against
         if: github.event_name != 'push'
         run: curl -fsSL --retry 2 --max-time 120 -o "$RUNNER_TEMP/previous-elements.json" "${{ steps.site.outputs.url }}data/satellites.json" || echo "The published elements could not be read - no comparison this time"
-      - name: Refresh orbital data (CelesTrak asks for at most one download every 2 hours)
+      - name: Refresh orbital data (CelesTrak asks for at most one download every 2 hours; the script refuses sooner)
         if: github.event_name != 'push'
-        run: node scripts/fetch-data.mjs --previous="$RUNNER_TEMP/previous-elements.json" || echo "CelesTrak unreachable - publishing the stored snapshot"
-      - name: Refresh radio records (SatNOGS volunteer network; at most 22 requests, never fatal)
+        timeout-minutes: 6
+        continue-on-error: true
+        run: node scripts/fetch-data.mjs --previous="$RUNNER_TEMP/previous-elements.json" || echo "CelesTrak unreachable - publishing the elements the site already has"
+      - name: Refresh radio records (SatNOGS volunteer network; every second run, at most 22 requests, never fatal)
         if: github.event_name != 'push'
-        run: node scripts/fetch-radio.mjs || echo "SatNOGS unreachable - publishing the stored radio records"
+        timeout-minutes: 8
+        continue-on-error: true
+        run: node scripts/fetch-radio.mjs || echo "SatNOGS unreachable - publishing the radio records the site already has"
       # Spacecraft beyond Earth orbit, the moons' orbits, asteroid fly-bys and fireballs. About
-      # 90 requests to JPL, strictly one at a time; a craft that cannot be placed is skipped and
-      # an outage leaves the stored file in place.
-      - name: Refresh deep-space data (JPL Horizons and CNEOS; never fatal)
+      # 130 requests to JPL, strictly one at a time; a craft that cannot be placed is skipped and
+      # an outage leaves the file in place.
+      - name: Refresh deep-space data (JPL Horizons and CNEOS; every second run, never fatal)
         if: github.event_name != 'push'
-        run: node scripts/fetch-deep.mjs || echo "JPL unreachable - publishing the stored deep-space data"
+        timeout-minutes: 20
+        continue-on-error: true
+        run: node scripts/fetch-deep.mjs || echo "JPL unreachable - publishing the deep-space data the site already has"
       # GitHub switches off scheduled workflows in a repository that has had no activity for
       # 60 days (the site stays up; only this refresh would stop). Re-enabling the workflow
       # through the API on each scheduled run resets that timer.

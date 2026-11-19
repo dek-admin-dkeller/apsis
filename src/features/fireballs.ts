@@ -18,7 +18,7 @@
 import './beyond.css';
 import { regionName } from '../data/regions.ts';
 import { PadMarkers } from '../render/padMarkers.ts';
-import { loadDeep } from '../space/deep.ts';
+import { loadDeep, onDeepRefresh } from '../space/deep.ts';
 import type { Fireball } from '../space/types.ts';
 import type { App } from '../ui/app.ts';
 import { $, fmt, fmtKm, fmtKmS, sectionNote } from '../ui/dom.ts';
@@ -94,19 +94,32 @@ export function installFireballs(app: App): void {
       body.append(el('p', 'note', 'The fireball list did not come with this copy of the site.'));
       return;
     }
-    balls = deep.fireballs;
-    const recent = balls.filter((ball) => ball.timeMs > Date.now() - YEAR_MS).length;
-    const note = el('p', 'note', `${recent} recorded in the last twelve months; the energy is in kilotons of TNT. Click one to fly there.`);
+    const note = el('p', 'note');
     const listBox = el('ol', 'watch-list bx-list');
     const credit = el('p', 'note bx-credit');
     const link = el('a', '', 'NASA / JPL fireball data');
     link.href = 'https://cneos.jpl.nasa.gov/fireballs/';
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
-    credit.append('From US Government sensors: ', link, `, read ${clockStamp(Date.parse(deep.fetchedAt))}.`);
+    const read = document.createTextNode('');
+    credit.append('From US Government sensors: ', link, read);
     body.append(note, listBox, credit);
-    render(listBox);
-    sectionNote(body, recent > 0 ? String(recent) : '');
+    /** Draw the list for one copy of the data: the first, and any newer one the site publishes while this tab is open. */
+    const show = (data: { fireballs: typeof balls; fetchedAt: string }): void => {
+      balls = data.fireballs;
+      picked = -1;
+      const recent = balls.filter((ball) => ball.timeMs > Date.now() - YEAR_MS).length;
+      note.textContent = `${recent} recorded in the last twelve months; the energy is in kilotons of TNT. Click one to fly there.`;
+      read.data = `, read ${clockStamp(Date.parse(data.fetchedAt))}.`;
+      render(listBox);
+      markers?.set(balls);
+      markers?.emphasise(picked);
+      sectionNote(body, recent > 0 ? String(recent) : '');
+    };
+    show(deep);
+    onDeepRefresh((newer) => {
+      if (newer.fireballs.length > 0) show(newer);
+    });
   });
 
   app.onFrame((frame) => {

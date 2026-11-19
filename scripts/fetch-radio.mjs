@@ -11,9 +11,11 @@
 // without an Access-Control-Allow-Origin header, so a web page is not allowed to read them.
 //
 // Politeness: at most 22 requests in all, at least 1.5 s apart, never repeated or polled. The
-// script refuses to run again while the file is younger than 6 hours (use --force), every
+// script refuses to run again while the file is younger than about 6 hours (use --force), every
 // request has a timeout, and any failure leaves the existing file untouched and exits 0, so
-// a SatNOGS outage can never break a deploy.
+// a SatNOGS outage can never break a deploy. The site's build runs every 3 hours and this goes
+// with every second one: 6 hours is also about how far back one download's reports reach, so
+// "last heard" has no gaps.
 
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -30,7 +32,10 @@ const TRANSMITTERS_URL = 'https://db.satnogs.org/api/transmitters/?format=json';
 // 25 to a page (the page size is fixed), and the reply's Link header points at the next page.
 const OBSERVATIONS_URL = 'https://network.satnogs.org/api/observations/?status=good&format=json';
 
-const MIN_AGE_HOURS = 6;
+// "Every second 3-hourly build". Half an hour under 6: that build starts a few minutes short of
+// six hours after the last download finished, and a guard of exactly 6 would turn it away
+// and leave the records nine hours apart.
+const MIN_AGE_HOURS = 5.5;
 const MAX_PAGES = 20; // 500 observations: roughly the last 6 to 8 hours of the whole network
 const PAUSE_MS = 1500;
 const TIMEOUT_MS = 45000;

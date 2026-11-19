@@ -24,6 +24,7 @@ import './radio.css';
 import type { SatRec } from 'satellite.js';
 import { dopplerShiftHz, rangeRate, rateOverPass } from '../data/doppler.ts';
 import { findPasses, makeSatrec, type Observer, type Pass } from '../data/ephemeris.ts';
+import { watchData } from '../data/freshness.ts';
 import { loadRadio, megahertz, type RadioData, type RadioRecord, type Transmitter } from '../data/radio.ts';
 import { regionName } from '../data/regions.ts';
 import type { Satellite } from '../data/types.ts';
@@ -370,6 +371,20 @@ export function installRadio(app: App): void {
   app.onSettings((_settings, changed) => {
     if (changed === null || changed === 'units' || changed === 'clockZone' || changed.startsWith('site')) cards.redraw();
   });
-  void loadRadio().then((data) => cards.setData(data));
+  let made = 0; // when the records in use were put together
+  void loadRadio().then((data) => {
+    made = data?.madeMs ?? 0;
+    cards.setData(data);
+  });
   cards.select(app.selected());
+  // The site refreshes these records every few hours: a tab left open takes the newer ones.
+  watchData('./data/radio.json', {
+    reload: async () => {
+      const data = await loadRadio(true);
+      if (!data || !(data.madeMs > made)) return 'same';
+      made = data.madeMs;
+      cards.setData(data);
+      return 'same'; // nothing to announce: the card of the selected object simply says something newer
+    },
+  });
 }

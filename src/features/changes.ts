@@ -11,9 +11,10 @@
  *
  * Where a comparison comes from:
  *   - public/data/changes.json, written at build time when the site refreshes its data every
- *     8 hours (scripts/diff-elements.mjs). It does not exist locally or on a first deployment.
- *   - or it is made here, when the catalogue is replaced ("Download current elements"): the
- *     catalogue that was loaded is compared with the one that replaced it.
+ *     3 hours (scripts/diff-elements.mjs). It does not exist locally or on a first deployment.
+ *   - or it is made here, when the catalogue is replaced ("Download current elements", or a
+ *     tab left open taking the newer data the site has published since): the catalogue that
+ *     was loaded is compared with the one that replaced it.
  * Both use the same rules, src/data/changes.ts. This file is only wording and DOM, and it
  * never fetches anything except that one small file from its own site.
  */
@@ -21,6 +22,7 @@
 import './changes.css';
 import type { Catalog } from '../data/catalog.ts';
 import { CHANGE_KINDS, compareElements, epochMs, STALE_DAYS, type ChangeKind, type ChangeReport, type OrbitChange } from '../data/changes.ts';
+import { fetchData, watchData } from '../data/freshness.ts';
 import { statusLabel } from '../data/satcat.ts';
 import { CATEGORY_COLORS, type Satellite, type Snapshot } from '../data/types.ts';
 import type { App } from '../ui/app.ts';
@@ -135,20 +137,38 @@ export function installChanges(app: App): void {
     sectionNote($('changes-body'), next ? fmtInt(CHANGE_KINDS.reduce((sum, kind) => sum + next.counts[kind], 0)) : '');
   }
 
-  /** The comparison made when the site was built, if there is one and it belongs to this catalogue. */
-  async function loadPublished(catalog: Catalog): Promise<void> {
-    const mine = ++request;
-    let found: ChangeReport | null = null;
+  /** The site's own comparison, if there is one and it belongs to this catalogue. */
+  async function published(catalog: Catalog, fresh: boolean): Promise<ChangeReport | null> {
     try {
-      const res = await fetch('./data/changes.json');
+      const res = await fetchData('./data/changes.json', fresh);
       // A missing file can come back as the app's own HTML page; json() then throws, which is fine.
       const file = res.ok ? ((await res.json()) as ChangeReport) : null;
       // It must describe the download that is loaded: a file left from another one would name
       // changes that are not in this data.
-      if (file && Array.isArray(file.changes) && file.counts && file.to === catalog.fetchedAt) found = file;
+      if (file && Array.isArray(file.changes) && file.counts && file.to === catalog.fetchedAt) return file;
     } catch { /* no file (local copy, first deployment) or offline: there is simply no comparison yet */ }
+    return null;
+  }
+
+  /** The comparison made when the site was built, if there is one and it belongs to this catalogue. */
+  async function loadPublished(catalog: Catalog): Promise<void> {
+    const mine = ++request;
+    const found = await published(catalog, false);
     if (mine === request) setReport(found, false);
   }
+  // A tab left open: when the site publishes a newer changes.json it is taken only if it is
+  // about the catalogue on screen and nothing better is showing. (When the catalogue itself is
+  // replaced by a newer one, the comparison is made here, between what this tab had and what
+  // it has now: see onCatalog below. That one is kept.)
+  watchData('./data/changes.json', {
+    reload: async () => {
+      const catalog = app.catalog();
+      if (!catalog || madeHere || report) return 'same';
+      const found = await published(catalog, true);
+      if (found && app.catalog() === catalog && !report) setReport(found, false);
+      return 'same'; // a list in a panel: nothing to announce
+    },
+  });
 
   /** A catalogue as the comparison wants it: the plain records, without the visitor's own designed satellite. */
   const records = (catalog: Catalog): Snapshot => ({
@@ -185,7 +205,7 @@ export function installChanges(app: App): void {
       settings.addEventListener('click', () => app.openPanel('settings'));
       body.replaceChildren(
         el('p', 'note', 'No comparison yet. This list needs two downloads of the catalogue to set side by side. '
-          + 'It appears after the site’s next data refresh (every 8 hours), or straight away if you press “Download current elements” in Settings.'),
+          + 'It appears after the site’s next data refresh (every 3 hours), or straight away if you press “Download current elements” in Settings.'),
         settings,
       );
       return;

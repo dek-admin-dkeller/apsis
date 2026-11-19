@@ -33,8 +33,8 @@ npm run bench        # brute force vs spatial hash in Node — prints a table fo
 npm run build        # type-check + production build into dist/
 npm run check        # the feature checks: orbit changes, visible passes, the report, decay, the search,
                      # and the solar system against JPL Horizons (prints the worst errors)
-npm run fetch-radio  # refresh the SatNOGS radio records in public/data/radio.json (at most every 6 hours)
-npm run fetch-deep   # refresh public/data/deep.json: spacecraft beyond Earth orbit, fly-bys, fireballs (JPL; at most every 12 hours)
+npm run fetch-radio  # refresh the SatNOGS radio records in public/data/radio.json (at most about every 6 hours)
+npm run fetch-deep   # refresh public/data/deep.json: spacecraft beyond Earth orbit, fly-bys, fireballs (JPL; at most about every 6 hours)
 npm run shots        # retake the home page's screenshots (needs Chrome and `npm run dev` running)
 ```
 
@@ -96,6 +96,7 @@ status line sit along the bottom.
 | Time | the bar at the bottom: drag the timeline to move up to 12 hours either way, pause (`Space`), 1× – 1000×, run backwards (`R`), step 10 minutes (`[` `]`), **Now** (`N`), or click the clock to type a date |
 | Hover | pointing at an object shows a small card: picture, what it is, who runs it, height and speed |
 | Views | `1` `2` `3`, `5` (Earth with the Moon beyond it), or the buttons at the foot of the tool rail. Left alone, a whole-Earth view drifts slowly around the planet (Settings → Camera to switch off), and the bars around the picture dim a little until the pointer moves again |
+| Fresh data | the site refreshes its tracking data every 3 hours. A tab you leave open notices (it asks its own site, at most every 30 minutes and only while visible), loads the new data at a quiet moment and says so in one line; what you had selected stays selected, and **Elements from** in the top bar shows the new time |
 | Settings (`,`) | one line per setting, in five groups: **Units** (kilometres or miles; local time, which is what the clock shows unless changed, or UTC), **Display** (rendering quality, frosted panels, hover card, quiet time bar, home page on arrival), **Camera** (drift around the Earth, circle a selected object), **Ground station** (name, coordinates, use my location), **Data** (download current elements). Reset is at the foot |
 | Home page | the first thing a visitor sees, while the tracker loads behind it: the live globe as soon as its map has arrived (the objects, then the clouds and city lights, follow), real screens that change by themselves like a slideshow, how the search works, six of the 3D models, everything it can do, and **Open the tracker**. Going in before the tracker is ready shows the loading screen until it is. **About** in the tracker's top bar (the round **i** on a phone) brings it back. Skipped on arrival for share links and when switched off in Settings |
 | How it works | summarised on the home page, with a link to the full walkthrough: the screening algorithm with a live trace, live hash-table statistics, the look-ahead method and the benchmark. Also reachable from the monitor panel |
@@ -191,12 +192,27 @@ sampling every 0.2 s on a 4,000-object subset, the scan reported every crossing 
 ## Publishing
 
 The app is static files, so it runs on GitHub Pages. `.github/workflows/deploy.yml` builds
-and deploys on every push to `main`, and every 8 hours it first downloads fresh orbital data
-from CelesTrak (which asks for no more than one download every 2 hours), fresh radio
-records from SatNOGS and fresh deep-space positions from JPL, and compares the new elements
-with the ones published before (the "Orbit changes" list). The refreshed data is published but not committed, so the repository
-stays small; if CelesTrak cannot be reached, the snapshot in the repository is published
-instead. A build started by a push downloads nothing from outside: it reads the data files
+and deploys on every push to `main`, and every 3 hours it first refreshes the data and
+compares the new elements with the ones published before (the "Orbit changes" list). The
+refreshed data is published but not committed, so the repository stays small; if a source
+cannot be reached, the site keeps the data it already had.
+
+How often each source is asked. Every run starts from the data the site is showing, and each
+download script declines while its own file is too young, so the limits below hold however
+often the workflow runs (a run started by hand just after a scheduled one downloads nothing):
+
+| Source | Asked | Requests each time |
+| --- | --- | --- |
+| [CelesTrak](https://celestrak.org) orbital elements | every 3 hours (it updates about every 2 and asks for no more than one download per update) | 5, a second apart |
+| CelesTrak catalogue facts (owner, launch, size) | once a day | 1 |
+| [SatNOGS](https://satnogs.org) radio records | every 6 hours | at most 22, 1.5 s apart |
+| [JPL Horizons](https://ssd.jpl.nasa.gov/horizons/) and CNEOS (deep space, fly-bys, fireballs) | every 6 hours | about 130, strictly one at a time |
+
+A tab that stays open picks the new data up by itself: at most every 30 minutes, and only
+while it is visible, the page asks its own site (never anyone else) whether a data file has
+been published again, with a request that returns headers only, and loads a file only if it
+has. The catalogue is swapped at a quiet moment (not during a close-approach replay, not
+while you are at another world); what you had selected stays selected. A build started by a push downloads nothing from outside: it reads the data files
 back from the site as it is published and keeps them if they are newer than the repository's
 (`scripts/carry-over.mjs`), so a push never puts the site back on older data. In the
 repository settings, Pages must be set to deploy from **GitHub Actions**.
@@ -230,6 +246,7 @@ src/
     decay.ts             rough time left in orbit for the lowest objects        spaceWeather.ts   NOAA solar flux and Kp
     launches.ts          upcoming launches (Launch Library 2), cached           places.ts   cities the search can fly to
     names.ts             readable names for objects filed under a code: "Hubble Space Telescope (HST)"
+    freshness.ts         a tab left open asks its own site for newer data files (headers only, every 30 minutes)
     visibility.ts        which passes are bright enough to see, and when        approachData.ts   numbers for the report
     types.ts
   worker/
@@ -352,7 +369,7 @@ a `Map<catalogue name, full name>` for "Hubble Space Telescope (HST)".
   Weather Prediction Center and a public crew list); offline, those features stay empty.
 - **Nobody can "ping" a satellite.** "Last heard" and the transmitter lists come from
   [SatNOGS](https://satnogs.org), a volunteer ground-station network (Libre Space Foundation,
-  CC BY-SA). A copy of its records is saved when the site is built (every 8 hours), so the
+  CC BY-SA). A copy of its records is saved when the site is built (every 6 hours), so the
   page never calls SatNOGS itself. It covers only the newest few hours of reports, and
   stations listen only to what somebody scheduled: an object with no report was not picked
   up in that window, which is not the same as being silent. The Doppler figures are geometry.
@@ -420,7 +437,7 @@ a `Map<catalogue name, full name>` for "Hubble Space Telescope (HST)".
   drawn keeping one face to their planet. Outside 1800–2050 the planet table is not valid,
   and outside 1996–2056 the moons' orbits are extrapolated.
 - **Spacecraft beyond Earth orbit** (`public/data/deep.json`) are placed from
-  [JPL Horizons](https://ssd.jpl.nasa.gov/horizons/) when the site is built (every 8 hours):
+  [JPL Horizons](https://ssd.jpl.nasa.gov/horizons/) when the site is built (every 6 hours):
   an orbit about the body each one circles, a run of positions for the craft round the L1 and
   L2 points, or a landing site. At the moment of the download they are exact. Afterwards an
   orbit is carried forward by Kepler's equation: good for decades for the Voyagers, for

@@ -150,8 +150,8 @@ export class Search {
     window.visualViewport?.addEventListener('resize', () => this.fit());
 
     app.onCatalog((catalog) => {
-      // Object indices belong to one catalogue: a filter made of them cannot outlive it.
-      this.showEverything();
+      // (A type filter stays as it is: it is kept by catalogue number, so it carries over to
+      // a newer copy of the catalogue, such as the one a tab left open picks up by itself.)
       this.finder = new ObjectFinder(catalog);
       this.index = null;
     });
@@ -377,10 +377,11 @@ export class Search {
   private showOnly(label: string, members: number[]): void {
     const catalog = this.app.catalog();
     if (!catalog) return;
-    const keep = new Uint8Array(catalog.sats.length);
-    for (const index of members) keep[index] = 1;
+    // By catalogue number, in a Set, not by position in this catalogue: the filter then still
+    // means the same objects after the catalogue has been replaced by a newer download.
+    const keep = new Set(members.map((index) => catalog.sats[index].noradId));
     this.app.view('earth'); // deselects, and steps back to where the whole set can be seen
-    this.app.setFilter('search', (sat) => keep[sat.index] === 1);
+    this.app.setFilter('search', (sat) => keep.has(sat.noradId));
     this.filtered = true;
     this.chip.querySelector('span')!.textContent = label;
     this.chip.title = `Showing only ${label} (${fmtInt(members.length)} objects). Click to show everything again.`;
