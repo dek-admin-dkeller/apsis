@@ -13,7 +13,16 @@ export type ModelKind =
   | 'observer' | 'radarsat' | 'weather' | 'spinner' | 'telescope'
   | 'iss' | 'tiangong' | 'station'
   | 'dragon' | 'soyuz' | 'cygnus' | 'capsule'
-  | 'rocketbody' | 'debris';
+  | 'rocketbody' | 'debris'
+  | 'lasersphere' | 'relay' | 'phasedarray'
+  // Beyond Earth orbit (render/deepModels.ts). The deep-space data file names these as plain
+  // strings, so the spelling here is a contract: check with isModelKind before trusting one.
+  | 'webb' | 'euclid' | 'tess' | 'chandra' | 'xmm' | 'soho' | 'l1monitor' | 'stereo'
+  | 'parker' | 'solarorbiter' | 'bepi'
+  | 'voyager' | 'pioneer' | 'newhorizons' | 'probe'
+  | 'juno' | 'clipper' | 'lucy' | 'psyche' | 'samplereturn'
+  | 'lunarorbiter' | 'marsorbiter' | 'rover' | 'lander'
+  | 'asteroid';
 
 export interface Profile {
   kind: ModelKind;
@@ -95,7 +104,14 @@ const SHAPES: [RegExp, ModelKind][] = [
   [/^(SOYUZ|PROGRESS|SHENZHOU)/, 'soyuz'],
   [/^CYGNUS/, 'cygnus'],
   [/^(TIANZHOU|HTV|DREAM CHASER|STARLINER|CST-100)/, 'capsule'],
-  [/^(HST|CXO|XMM|SWIFT|FERMI|NUSTAR|IXPE|ASTROSAT|CHEOPS|TESS|XRISM|HXMT|INTEGRAL|NEOSSAT|EINSTEIN PROBE|SVOM|HINODE|IRIS)\b/, 'telescope'],
+  [/^CXO\b/, 'chandra'],
+  [/^XMM\b/, 'xmm'],
+  [/^SDO$/, 'soho'],
+  [/^(MMS \d|THEMIS|ARASE|TRACERS|POLAR$|IMAGE$)/, 'l1monitor'], // spinning drums with booms, like their cousins out in the solar wind
+  [/^(LAGEOS|LARES|STARLETTE|STELLA$|AJISAI|WESTPAC|LARETS)|ETALON/, 'lasersphere'], // (not the Calspheres: those are bare radar targets, with no prisms)
+  [/^(TDRS|LUCH|TIANLIAN)/, 'relay'],
+  [/^(SPACEMOBILE|BLUEWALKER|BLUEBIRD)/, 'phasedarray'], // (must come before the constellation line below, which used to claim them)
+  [/^(HST|SWIFT|FERMI|NUSTAR|IXPE|ASTROSAT|CHEOPS|TESS|XRISM|HXMT|INTEGRAL|NEOSSAT|EINSTEIN PROBE|SVOM|HINODE|IRIS)\b/, 'telescope'],
   [/^STARLINK/, 'starlink'],
   [/^ONEWEB/, 'oneweb'],
   [/^(ICEYE|CAPELLA|UMBRA|TERRASAR|TANDEM|RADARSAT|RCM-|COSMO-SKYMED|CSG-|SAOCOM|SENTINEL-1|ALOS|RISAT|NISAR|PAZ\b|KOMPSAT-[56]|SAR-LUPE|SARAH|STRIX|QPS-SAR|NOVASAR|IRIDE-MS|LUTAN|HISEA|CONDOR)/, 'radarsat'],
@@ -158,4 +174,41 @@ export const KIND_LABEL: Record<ModelKind, string> = {
   capsule: 'Cargo spacecraft',
   rocketbody: 'Rocket upper stage',
   debris: 'Debris fragment',
+  lasersphere: 'Laser-ranging sphere',
+  relay: 'Data-relay satellite',
+  phasedarray: 'Direct-to-phone satellite',
+  webb: 'James Webb Space Telescope',
+  euclid: 'Survey telescope',
+  tess: 'Planet-hunting telescope',
+  chandra: 'Chandra X-ray Observatory',
+  xmm: 'XMM-Newton X-ray telescope',
+  soho: 'Solar observatory',
+  l1monitor: 'Space-weather monitor',
+  stereo: 'STEREO solar observatory',
+  parker: 'Parker Solar Probe',
+  solarorbiter: 'Solar Orbiter',
+  bepi: 'BepiColombo',
+  voyager: 'Voyager',
+  pioneer: 'Pioneer 10 / 11',
+  newhorizons: 'New Horizons',
+  probe: 'Deep-space probe',
+  juno: 'Juno',
+  clipper: 'Jupiter-system orbiter',
+  lucy: 'Lucy',
+  psyche: 'Psyche',
+  samplereturn: 'Asteroid sample-return craft',
+  lunarorbiter: 'Lunar orbiter',
+  marsorbiter: 'Mars orbiter',
+  rover: 'Mars rover',
+  lander: 'Lander',
+  asteroid: 'Asteroid',
 };
+
+/**
+ * Is this string the name of a model? Data files name models as plain text (the deep-space
+ * list says 'webb', 'marsorbiter' …); a name this build does not know must fall back to
+ * 'probe' rather than reach buildModel().
+ */
+export function isModelKind(name: string): name is ModelKind {
+  return Object.hasOwn(KIND_LABEL, name);
+}

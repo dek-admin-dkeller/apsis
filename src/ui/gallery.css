@@ -1,0 +1,123 @@
+/*
+ * The spacecraft catalogue (ui/gallery.ts): a page of small pictures and, in its place, one
+ * model shown large. Built from the tracker's own tokens (style.css :root) and its overlay
+ * and panel classes; the only new shapes are the hairline grid of tiles and the stage.
+ */
+
+/* Opened from the home page too, which lies above every other layer (as #howto and #bench are). */
+#gallery { z-index: 210; }
+
+#gallery > .gal {
+  width: min(1040px, 100%);
+  height: min(86vh, 900px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ---- head: the title is the way back while one model is on show ---- */
+.gal .panel-head { padding-left: 16px; }
+.gal-title { margin: 0; font: inherit; }
+.gal-back {
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: 600 15px var(--font-display);
+  text-align: left;
+}
+.gal-back:disabled { cursor: default; }
+.gal-back.is-back::before { content: '‹'; display: inline-block; width: 14px; color: var(--muted); transition: color var(--fast), transform var(--fast); }
+.gal-back.is-back:hover::before { color: var(--cyan); transform: translateX(-2px); }
+.gal-count { flex: none; margin-right: 6px; font: 11px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--muted); }
+
+/* ---- the page of pictures ---- */
+.gal-grid { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 16px 20px; outline: none; }
+.gal-heading { margin: 16px 0 8px; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+/* One hairline between neighbours and round the outside, and nothing drawn for the empty places
+   at the end of a row: every tile has a full border and overlaps its neighbours by that one
+   pixel. (The line colour is --line laid over the panel, made opaque so that two borders lying
+   on top of each other are no brighter than one.) */
+.gal-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); padding: 0 1px 1px 0; }
+.gal-tile {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin: 0 -1px -1px 0;
+  padding: 0;
+  border: 1px solid #1a2333;
+  border-radius: 0;
+  background: var(--cell);
+  text-align: left;
+  transition: background var(--fast);
+}
+.gal-tile:hover { background: #0c1422; }
+.gal-tile:focus-visible { position: relative; z-index: 1; outline: 1px solid var(--cyan); outline-offset: -1px; }
+/* The square has its size before its picture arrives, so the page never moves under the pointer. */
+.gal-thumb { display: block; aspect-ratio: 1; padding: 9px 9px 0; }
+.gal-thumb img { display: block; width: 100%; height: 100%; object-fit: contain; opacity: 0; transition: opacity 240ms ease, transform var(--fast); }
+.gal-thumb img.is-in { opacity: 1; }
+.gal-tile:hover .gal-thumb img { transform: scale(1.04); }
+/* Two lines at most. The space round the name is margin, not padding: a clamped third line would show through padding. */
+.gal-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  height: calc(2 * 1.3em);
+  margin: 7px 10px 9px;
+  font-size: 11.5px;
+  line-height: 1.3;
+  color: var(--muted);
+  transition: color var(--fast);
+}
+.gal-tile:hover .gal-name, .gal-tile:focus-visible .gal-name { color: var(--text); }
+
+/* ---- one model, large ---- */
+.gal-detail { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.gal-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  display: block;
+  background: radial-gradient(ellipse 60% 55% at 50% 46%, rgba(127, 160, 210, 0.09), transparent 70%), var(--inset);
+  cursor: grab;
+  touch-action: none; /* a drag turns the model; it must not scroll the page as well */
+}
+.gal-stage:active { cursor: grabbing; }
+.gal-step {
+  position: absolute;
+  top: calc(50% - 60px);
+  width: 34px;
+  height: 34px;
+  border-color: var(--line);
+  background: var(--solid);
+  font-size: 20px;
+}
+.gal-prev { left: 12px; }
+.gal-next { right: 12px; }
+.gal-foot { flex: none; display: flex; align-items: flex-end; gap: 20px; padding: 14px 18px 16px; border-top: 1px solid var(--line); }
+.gal-words { flex: 1 1 auto; min-width: 0; }
+.gal-caption { margin: 0 0 4px; font: 600 20px/1.25 var(--font-display); }
+.gal-fact { max-width: 68ch; margin: 0; font-size: 13.5px; line-height: 1.5; color: #c3d2e4; }
+.gal-orbit { flex: none; }
+
+@media (max-width: 760px) {
+  /* The panel is the whole screen here (mobile.css); the picture grid scrolls inside it. */
+  #gallery > .gal { width: 100%; height: 100%; overflow: hidden; }
+  .gal .panel-head { padding-left: 16px; }
+  .gal-grid { padding: 0 12px calc(20px + env(safe-area-inset-bottom, 0px)); -webkit-overflow-scrolling: touch; }
+  .gal-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .gal-name { margin: 6px 8px 8px; font-size: 11px; }
+  .gal-step { top: calc(50% - 90px); }
+  .gal-prev { left: 8px; }
+  .gal-next { right: 8px; }
+  .gal-foot { flex-direction: column; align-items: stretch; gap: 12px; padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0px)); }
+  .gal-caption { font-size: 18px; }
+  .gal-orbit { height: 38px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gal-thumb img, .gal-back.is-back::before { transition: none; }
+  .gal-tile:hover .gal-thumb img { transform: none; }
+}

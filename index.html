@@ -1076,6 +1076,7 @@
         <header class="panel-head"><h2>About Apsis</h2><button class="icon-btn" id="about-close" aria-label="Close">×</button></header>
         <div class="about-body">
           <p>Apsis shows every tracked object in Earth orbit and screens them for close approaches in real time. It began as a university algorithms project about hashing; the <button class="link" id="about-how">How it works</button> page explains the method.</p>
+          <p>Every 3D model in one place, to turn and look at: the <button class="link" id="gallery-open">spacecraft catalogue</button>.</p>
           <p class="about-warn">For learning and curiosity only. Positions are predictions from public orbital data, good to roughly a kilometre. Do not use Apsis for operational decisions.</p>
           <h3>Data</h3>
           <dl class="kv plain-dd">
@@ -1101,6 +1102,9 @@
         </div>
       </div>
     </div>
+
+    <!-- ============ Spacecraft catalogue (filled by ui/gallery.ts when first opened) ============ -->
+    <div id="gallery" class="overlay is-hidden"></div>
 
     <!-- ============ Keyboard shortcuts ============ -->
     <div id="keys" class="overlay is-hidden">

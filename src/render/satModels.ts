@@ -9,867 +9,31 @@
  *
  * How a model is made:
  *   1. a builder in BUILDERS adds many small parts (bevelled buses, cylinders, dishes, wings)
- *      to a group
+ *      to a group, using the kit in modelParts.ts (materials, textures, part helpers)
  *   2. mergeByMaterial() welds all parts that share a material into one mesh, so even the
  *      ISS (several hundred parts) costs about a dozen draw calls
  *   3. buildModel() centres the result and scales its largest dimension to 1 unit
  *
- * Why the models do not look like grey boxes:
- *   - every material reflects a small painted "surroundings" picture (Sun, Earth-glow, soft
- *     lights), so foil, bare metal, glass and mirrors glint as the model turns
- *   - insulation foil, quilted blankets and hull plating get their wrinkles and seams from
- *     normal maps computed from painted height fields — detail that costs no triangles
- *   - bodies are bevelled or many-sided solids, never plain cubes: the bevels catch the light
+ * This file holds the builders for everything in Earth orbit; deepModels.ts holds the
+ * observatories, planetary craft and probes that fly beyond it.
  *
+ *   buildModel      a model of one kind (built once, then cloned); modelBase: its lowest point
+ *   modelThumbnail  a still picture of a kind, for lists
  *   SatelliteModel  the selected object's model, drawn at its position on the globe
- *   ModelPreview    the same model, slowly turning, inside the info card
+ *   ModelPreview    the same model, slowly turning, inside the info card (and the catalogue)
  */
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { ModelKind } from '../data/describe.ts';
 import type { SceneKit } from './scene.ts';
-
-type V3 = readonly [number, number, number];
-type Axis = 'x' | 'y' | 'z';
-type Painter = (ctx: CanvasRenderingContext2D, size: number) => void;
-const UP = new THREE.Vector3(0, 1, 0);
-const TAU = Math.PI * 2;
-
-/** Small repeatable random-number generator, so every model looks the same on every run. */
-function random(seed: number): () => number {
-  let a = seed;
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-// ---------------------------------------------------------------------------------------
-// Textures and materials (made once, shared by every model)
-// ---------------------------------------------------------------------------------------
-
-/** A colour texture painted on a square canvas. */
-function paint(size: number, draw: Painter): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = size;
-  draw(canvas.getContext('2d')!, size);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  texture.anisotropy = 8; // keeps the cell grid crisp when a panel is seen edge-on
-  return texture;
-}
-
-/**
- * A normal map made from a painted height field (white = raised, black = sunk). The slope
- * between neighbouring pixels becomes the direction the surface appears to face, so the
- * lighting shows wrinkles and seams that are not there in the geometry.
- */
-function relief(size: number, strength: number, draw: Painter): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
-  draw(ctx, size);
-  const image = ctx.getImageData(0, 0, size, size);
-  const height = new Float32Array(size * size);
-  for (let i = 0; i < height.length; i++) height[i] = image.data[i * 4] / 255;
-  const at = (x: number, y: number) => height[((y + size) % size) * size + ((x + size) % size)]; // wraps, so the map tiles
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-    // clamped so a hard edge in the painting cannot turn the surface completely side-on
-    const dx = THREE.MathUtils.clamp((at(x + 1, y) - at(x - 1, y)) * strength, -1.6, 1.6);
-    const dy = THREE.MathUtils.clamp((at(x, y + 1) - at(x, y - 1)) * strength, -1.6, 1.6);
-    const scale = 1 / Math.hypot(dx, dy, 1);
-    const o = (y * size + x) * 4;
-    image.data[o] = (-dx * scale * 0.5 + 0.5) * 255;
-    image.data[o + 1] = (dy * scale * 0.5 + 0.5) * 255; // canvas rows run downwards, texture v runs upwards
-    image.data[o + 2] = (scale * 0.5 + 0.5) * 255;
-    image.data[o + 3] = 255;
-  }
-  ctx.putImageData(image, 0, 0);
-  const texture = new THREE.CanvasTexture(canvas); // left in linear colour space: these are directions, not colours
-  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  texture.anisotropy = 4;
-  return texture;
-}
-
-/**
- * What the shiny materials reflect: black space above, the blue glow of Earth below, the Sun
- * and a few soft lights. It is only 256 × 128 pixels; three.js blurs it per roughness level.
- * Without it metal and foil have nothing to mirror and render as dull grey.
- */
-function surroundingsTexture(): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 128;
-  const ctx = canvas.getContext('2d')!;
-  const sky = ctx.createLinearGradient(0, 0, 0, 128);
-  sky.addColorStop(0, '#080b14');
-  sky.addColorStop(0.46, '#111829');
-  sky.addColorStop(0.54, '#2c3d58');
-  sky.addColorStop(1, '#5d7697');
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, 256, 128);
-  ctx.fillStyle = 'rgba(190,225,255,0.55)'; // the bright limb of the Earth
-  ctx.fillRect(0, 62, 256, 3);
-  const glow = (x: number, y: number, r: number, inner: string, outer: string) => {
-    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-    g.addColorStop(0, inner);
-    g.addColorStop(1, outer);
-    ctx.fillStyle = g;
-    ctx.fillRect(x - r, y - r, r * 2, r * 2);
-  };
-  glow(78, 34, 60, 'rgba(255,236,200,0.5)', 'rgba(255,236,200,0)'); // Sun halo
-  glow(78, 34, 20, 'rgba(255,252,240,1)', 'rgba(255,244,214,0)'); // Sun
-  glow(196, 40, 46, 'rgba(200,222,255,0.75)', 'rgba(200,222,255,0)'); // cool light on the far side
-  glow(140, 12, 30, 'rgba(255,255,255,0.4)', 'rgba(255,255,255,0)');
-  glow(20, 96, 40, 'rgba(235,245,255,0.5)', 'rgba(235,245,255,0)'); // cloud decks
-  glow(150, 104, 36, 'rgba(235,245,255,0.4)', 'rgba(235,245,255,0)');
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.mapping = THREE.EquirectangularReflectionMapping;
-  return texture;
-}
-
-/** A 4 × 4 block of solar cells: clipped corners, two bus bars each, metallic gaps between. */
-function cellTexture(cell: string, shade: string, gap: string, bar: string): THREE.CanvasTexture {
-  return paint(256, (ctx, size) => {
-    const rand = random(7);
-    ctx.fillStyle = gap;
-    ctx.fillRect(0, 0, size, size);
-    const step = size / 4, w = step - 3, c = 6;
-    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
-      const x = i * step + 1.5, y = j * step + 1.5;
-      ctx.fillStyle = rand() < 0.5 ? cell : shade;
-      ctx.beginPath();
-      ctx.moveTo(x + c, y); ctx.lineTo(x + w - c, y); ctx.lineTo(x + w, y + c); ctx.lineTo(x + w, y + w - c);
-      ctx.lineTo(x + w - c, y + w); ctx.lineTo(x + c, y + w); ctx.lineTo(x, y + w - c); ctx.lineTo(x, y + c);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = bar;
-      ctx.lineWidth = 1;
-      for (const f of [0.33, 0.67]) { ctx.beginPath(); ctx.moveTo(x, y + w * f); ctx.lineTo(x + w, y + w * f); ctx.stroke(); }
-    }
-  });
-}
-
-/**
- * Height field of crinkled insulation foil: overlapping triangular facets, each one a tilted
- * plane, so every facet catches the light from a slightly different direction.
- */
-function crinkleHeight(ctx: CanvasRenderingContext2D, size: number): void {
-  const rand = random(11);
-  ctx.fillStyle = '#808080';
-  ctx.fillRect(0, 0, size, size);
-  for (let i = 0; i < 520; i++) {
-    const x = rand() * size, y = rand() * size, r = 8 + rand() * 26, tilt = rand() * TAU;
-    const lo = Math.round(rand() * 255), hi = Math.round(rand() * 255);
-    const corners = [rand() * TAU, rand() * TAU, rand() * TAU];
-    // drawn again one tile to every side, so facets crossing the edge continue on the opposite edge
-    for (const ox of [-size, 0, size]) for (const oy of [-size, 0, size]) {
-      const cx = x + ox, cy = y + oy;
-      if (cx < -r || cx > size + r || cy < -r || cy > size + r) continue;
-      const slope = ctx.createLinearGradient(cx - Math.cos(tilt) * r, cy - Math.sin(tilt) * r, cx + Math.cos(tilt) * r, cy + Math.sin(tilt) * r);
-      slope.addColorStop(0, `rgb(${lo},${lo},${lo})`);
-      slope.addColorStop(1, `rgb(${hi},${hi},${hi})`);
-      ctx.fillStyle = slope;
-      ctx.beginPath();
-      for (const a of corners) ctx.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
-      ctx.closePath();
-      ctx.fill();
-    }
-  }
-}
-
-/** Faint light and dark patches, multiplied into a foil's colour so it is never perfectly even. */
-function mottleTexture(): THREE.CanvasTexture {
-  return paint(128, (ctx, size) => {
-    const rand = random(31);
-    ctx.fillStyle = '#ececec';
-    ctx.fillRect(0, 0, size, size);
-    for (let i = 0; i < 160; i++) {
-      const v = Math.round(190 + rand() * 65);
-      ctx.fillStyle = `rgba(${v},${v},${v},0.5)`;
-      ctx.beginPath();
-      const x = rand() * size, y = rand() * size, r = 5 + rand() * 16;
-      for (let k = 0; k < 3; k++) { const a = rand() * TAU; ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); }
-      ctx.closePath();
-      ctx.fill();
-    }
-  });
-}
-
-/**
- * Painted hull plating: seams every quarter tile, faint patches and access panels. Painted
- * twice with the same random numbers — once as colours, once as heights (seams sunk, access
- * panels slightly raised) — so the normal map lines up with the colour map.
- */
-function hullPainter(asHeight: boolean): Painter {
-  return (ctx, size) => {
-    const rand = random(23);
-    ctx.fillStyle = asHeight ? '#909090' : '#c9cdd3';
-    ctx.fillRect(0, 0, size, size);
-    for (let i = 0; i < 60; i++) {
-      const v = Math.round(178 + rand() * 40), x = rand() * size, y = rand() * size, w = 20 + rand() * 60, h = 10 + rand() * 40;
-      if (asHeight) continue;
-      ctx.fillStyle = `rgba(${v},${v},${v + 6},0.35)`;
-      ctx.fillRect(x, y, w, h);
-    }
-    ctx.strokeStyle = asHeight ? '#303030' : '#7f868f';
-    ctx.lineWidth = asHeight ? 3 : 1.5;
-    for (let p = 0; p <= size; p += size / 4) {
-      ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, size); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(size, p); ctx.stroke();
-    }
-    ctx.strokeStyle = asHeight ? '#585858' : '#959ba5';
-    ctx.fillStyle = '#a4a4a4';
-    ctx.lineWidth = asHeight ? 2 : 1;
-    for (let i = 0; i < 10; i++) {
-      const x = 8 + rand() * 200, y = 8 + rand() * 200, w = 12 + rand() * 30, h = 10 + rand() * 22;
-      if (asHeight) ctx.fillRect(x, y, w, h);
-      ctx.strokeRect(x, y, w, h);
-    }
-  };
-}
-
-/** Height field of a quilted thermal blanket: a grid of soft pillows with stitched seams between. */
-function quiltHeight(ctx: CanvasRenderingContext2D, size: number): void {
-  const step = size / 4;
-  ctx.fillStyle = '#404040';
-  ctx.fillRect(0, 0, size, size);
-  for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
-    const cx = (i + 0.5) * step, cy = (j + 0.5) * step;
-    const pillow = ctx.createRadialGradient(cx, cy, 0, cx, cy, step * 0.72);
-    pillow.addColorStop(0, '#f0f0f0');
-    pillow.addColorStop(1, '#404040');
-    ctx.fillStyle = pillow;
-    ctx.fillRect(i * step + 1, j * step + 1, step - 2, step - 2);
-  }
-}
-
-/** Radiator: white with fine parallel coolant-tube lines. */
-function radiatorTexture(): THREE.CanvasTexture {
-  return paint(64, (ctx, size) => {
-    ctx.fillStyle = '#c5c9cf';
-    ctx.fillRect(0, 0, size, size);
-    ctx.strokeStyle = '#989fa9';
-    ctx.lineWidth = 1;
-    for (let y = 4; y < size; y += 8) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(size, y); ctx.stroke(); }
-  });
-}
-
-/** Optical solar reflector: the mirror tiles that cover a big satellite's radiator walls. */
-function mirrorTexture(): THREE.CanvasTexture {
-  return paint(128, (ctx, size) => {
-    const rand = random(41);
-    ctx.fillStyle = '#58626e';
-    ctx.fillRect(0, 0, size, size);
-    for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) {
-      const v = Math.round(205 + rand() * 50);
-      ctx.fillStyle = `rgb(${v - 8},${v},${Math.min(255, v + 10)})`;
-      ctx.fillRect(i * 16 + 1, j * 16 + 1, 14.5, 14.5);
-    }
-  });
-}
-
-/** Phased-array antenna face: a grid of small gold patch elements on a dark board. */
-function arrayTexture(): THREE.CanvasTexture {
-  return paint(128, (ctx, size) => {
-    ctx.fillStyle = '#20252d';
-    ctx.fillRect(0, 0, size, size);
-    ctx.fillStyle = '#c49a45';
-    for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) ctx.fillRect(i * 16 + 3, j * 16 + 3, 10, 10);
-  });
-}
-
-/** Radar antenna face: pale radiating tiles, each with fine slot lines. */
-function radarTexture(): THREE.CanvasTexture {
-  return paint(128, (ctx, size) => {
-    ctx.fillStyle = '#7d8590';
-    ctx.fillRect(0, 0, size, size);
-    for (let i = 0; i < 2; i++) for (let j = 0; j < 4; j++) {
-      ctx.fillStyle = (i + j) % 2 ? '#c6cad0' : '#bbc0c7';
-      ctx.fillRect(i * 64 + 1.5, j * 32 + 1.5, 61, 29);
-      ctx.fillStyle = '#8f96a0';
-      for (let k = 0; k < 9; k++) ctx.fillRect(i * 64 + 6 + k * 6, j * 32 + 6, 2, 20);
-    }
-  });
-}
-
-/** Back of a rigid solar panel: dark carbon-fibre skin, stiffening ribs, a cable harness. */
-function panelBackTexture(): THREE.CanvasTexture {
-  return paint(128, (ctx, size) => {
-    ctx.fillStyle = '#343942';
-    ctx.fillRect(0, 0, size, size);
-    ctx.strokeStyle = '#69717d';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(3, 3, size - 6, size - 6);
-    ctx.lineWidth = 2;
-    for (const f of [1 / 3, 2 / 3]) {
-      ctx.beginPath(); ctx.moveTo(size * f, 3); ctx.lineTo(size * f, size - 3); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(3, size * f); ctx.lineTo(size - 3, size * f); ctx.stroke();
-    }
-    ctx.strokeStyle = '#b47f33';
-    ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(size / 2, 3); ctx.lineTo(size / 2, size - 3); ctx.stroke();
-  });
-}
-
-/** Back of a roll-out solar blanket: amber film with the fold lines it was packed along. */
-function blanketBackTexture(): THREE.CanvasTexture {
-  return paint(64, (ctx, size) => {
-    ctx.fillStyle = '#c98b35';
-    ctx.fillRect(0, 0, size, size);
-    ctx.fillStyle = '#a9742a';
-    for (let y = 0; y < size; y += 8) ctx.fillRect(0, y, size, 1.5);
-    ctx.fillStyle = '#d69a45';
-    for (let y = 3; y < size; y += 8) ctx.fillRect(0, y, size, 1);
-  });
-}
-
-/** Rocket-engine bell: sooty throat (bottom of the picture), heat-tinted bronze, steel-blue lip. */
-function nozzleTexture(): THREE.CanvasTexture {
-  return paint(64, (ctx, size) => {
-    const heat = ctx.createLinearGradient(0, size, 0, 0);
-    heat.addColorStop(0, '#2b2523');
-    heat.addColorStop(0.35, '#7a5238');
-    heat.addColorStop(0.7, '#6d6676');
-    heat.addColorStop(1, '#a9afb9');
-    ctx.fillStyle = heat;
-    ctx.fillRect(0, 0, size, size);
-    ctx.fillStyle = 'rgba(20,16,14,0.18)'; // stiffening hoops
-    for (let y = 6; y < size; y += 10) ctx.fillRect(0, y, size, 1.5);
-  });
-}
-
-/** Station truss: a painted girder face — longerons, cross-bracing and a few equipment panels. */
-function trussTexture(): THREE.CanvasTexture {
-  return paint(128, (ctx, size) => {
-    ctx.fillStyle = '#4a505a';
-    ctx.fillRect(0, 0, size, size);
-    ctx.fillStyle = '#c9ced6';
-    ctx.fillRect(8, 30, 50, 68);
-    ctx.fillStyle = '#b58a35';
-    ctx.fillRect(74, 44, 40, 40);
-    ctx.strokeStyle = '#aab1bb';
-    ctx.lineWidth = 5;
-    ctx.strokeRect(2, 12, size - 4, size - 24);
-    ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(2, 12); ctx.lineTo(size - 2, size - 12); ctx.moveTo(size - 2, 12); ctx.lineTo(2, size - 12); ctx.stroke();
-  });
-}
-
-/** Inside face of torn structure: bare metal with its greenish-gold protective coating, machined into a triangular stiffening grid. */
-function isogridTexture(): THREE.CanvasTexture {
-  return paint(128, (ctx, size) => {
-    ctx.fillStyle = '#b9b488';
-    ctx.fillRect(0, 0, size, size);
-    ctx.strokeStyle = '#646343';
-    ctx.lineWidth = 3;
-    const step = size / 4;
-    ctx.beginPath();
-    for (let k = -4; k <= 8; k++) {
-      ctx.moveTo(0, k * step); ctx.lineTo(size, k * step);
-      ctx.moveTo(k * step, 0); ctx.lineTo(k * step + size / 2, size);
-      ctx.moveTo(k * step, 0); ctx.lineTo(k * step - size / 2, size);
-    }
-    ctx.stroke();
-  });
-}
-
-/** Torn edge of a sandwich panel: the open cells of its honeycomb core. */
-function honeycombTexture(): THREE.CanvasTexture {
-  return paint(64, (ctx, size) => {
-    ctx.fillStyle = '#c9a856';
-    ctx.fillRect(0, 0, size, size);
-    ctx.fillStyle = '#2b251a';
-    for (let row = 0; row < 4; row++) for (let col = -1; col < 4; col++) {
-      const x = col * 16 + (row % 2) * 8 + 8, y = row * 16 + 8;
-      ctx.beginPath();
-      for (let k = 0; k < 6; k++) ctx.lineTo(x + 6.2 * Math.cos((k * Math.PI) / 3), y + 6.2 * Math.sin((k * Math.PI) / 3));
-      ctx.closePath();
-      ctx.fill();
-    }
-  });
-}
-
-/** Outside face of torn structure: white paint, panel seams, soot and scorch marks. */
-function scorchTexture(): THREE.CanvasTexture {
-  return paint(128, (ctx, size) => {
-    const rand = random(53);
-    ctx.fillStyle = '#c4c8ce';
-    ctx.fillRect(0, 0, size, size);
-    ctx.strokeStyle = '#7f868f';
-    ctx.lineWidth = 1.5;
-    for (let p = 0; p <= size; p += size / 2) { ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, size); ctx.moveTo(0, p); ctx.lineTo(size, p); ctx.stroke(); }
-    for (let i = 0; i < 26; i++) {
-      const x = rand() * size, y = rand() * size, r = 5 + rand() * 16;
-      const soot = ctx.createRadialGradient(x, y, 0, x, y, r);
-      soot.addColorStop(0, `rgba(38,30,24,${0.35 + rand() * 0.5})`);
-      soot.addColorStop(1, 'rgba(38,30,24,0)');
-      ctx.fillStyle = soot;
-      ctx.fillRect(x - r, y - r, r * 2, r * 2);
-    }
-    ctx.fillStyle = '#b3402d'; // what is left of a painted stripe
-    ctx.fillRect(0, 84, size, 7);
-  });
-}
-
-function makeMaterials() {
-  const surroundings = surroundingsTexture();
-  const std = (p: THREE.MeshStandardMaterialParameters) => new THREE.MeshStandardMaterial({ envMap: surroundings, ...p });
-  const crinkle = relief(256, 20, crinkleHeight), mottle = mottleTexture();
-  const wrinkles = (amount: number) => new THREE.Vector2(amount, amount);
-  // Brightness budget: the main view adds a bloom glow to anything brighter than 0.9, and has a
-  // headlight at the camera, so a smooth flat surface facing the viewer mirrors that light over
-  // its whole area and turns into a white blob. Hence: pale paint stays around 75 % grey with
-  // high roughness, and nothing large and flat is smoother than about 0.45.
-  //
-  // Metallised film: a soft mirror, broken up by the crinkles. The reflections are boosted
-  // because the painted surroundings are much dimmer than the real Sun.
-  const foil = (color: number, side: THREE.Side = THREE.FrontSide, roughness = 0.5) =>
-    std({ color, map: mottle, normalMap: crinkle, normalScale: wrinkles(0.7), metalness: 0.82, roughness, envMapIntensity: 1.7, side });
-  // Cell faces sit a hair above their backing panel; the offset stops the two from flickering.
-  // Cover glass gives the cells a soft sheen that moves across them as the model turns.
-  const cells = (map: THREE.Texture, emissive: number) =>
-    std({ map, metalness: 0.3, roughness: 0.46, envMapIntensity: 1.3, emissive, emissiveIntensity: 0.5, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
-  const light = (color: number) => std({ color, emissive: color, emissiveIntensity: 1.1, roughness: 0.6 });
-  const offset = { polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 };
-  return {
-    foilGold: foil(0xf2ae3d),
-    foilSilver: foil(0xbdc3cb, THREE.FrontSide, 0.56),
-    foilBlack: foil(0x2a2c33, THREE.FrontSide, 0.45),
-    foilTorn: foil(0xf2ae3d, THREE.DoubleSide),
-    blanket: std({ color: 0xaeb1ab, envMapIntensity: 0.5, normalMap: relief(128, 3.2, quiltHeight), normalScale: wrinkles(0.8), metalness: 0.05, roughness: 0.82 }),
-    hull: std({ map: paint(256, hullPainter(false)), normalMap: relief(256, 2.2, hullPainter(true)), metalness: 0.08, roughness: 0.72, envMapIntensity: 0.5 }),
-    white: std({ color: 0xc2c7ce, metalness: 0.05, roughness: 0.75, envMapIntensity: 0.5 }),
-    dish: std({ color: 0xc6cad0, metalness: 0.05, roughness: 0.7, envMapIntensity: 0.5, side: THREE.BackSide }), // the bowl: LatheGeometry faces away from its axis
-    dishBack: std({ color: 0x8a9099, metalness: 0.1, roughness: 0.7, envMapIntensity: 0.5 }),
-    dark: std({ color: 0x2c3139, metalness: 0.6, roughness: 0.42 }),
-    metal: std({ color: 0xa4abb5, metalness: 0.85, roughness: 0.52, envMapIntensity: 1.5 }),
-    nozzle: std({ map: nozzleTexture(), metalness: 0.85, roughness: 0.45, envMapIntensity: 1.6, side: THREE.DoubleSide }),
-    baffle: std({ color: 0x15171c, metalness: 0.2, roughness: 0.85, side: THREE.DoubleSide }),
-    lens: std({ color: 0x0b1626, metalness: 0.95, roughness: 0.25, envMapIntensity: 2.4 }),
-    yellow: std({ color: 0xd9a81e, metalness: 0.3, roughness: 0.55 }),
-    foam: std({ color: 0xbfb294, metalness: 0, roughness: 0.92, envMapIntensity: 0.4 }),
-    radiator: std({ map: radiatorTexture(), metalness: 0.05, roughness: 0.75, envMapIntensity: 0.5 }),
-    mirror: std({ map: mirrorTexture(), color: 0xc6cbd2, metalness: 0.6, roughness: 0.46, envMapIntensity: 1.6, ...offset }),
-    array: std({ map: arrayTexture(), metalness: 0.4, roughness: 0.5, ...offset }),
-    radar: std({ map: radarTexture(), metalness: 0.1, roughness: 0.65, envMapIntensity: 0.6, ...offset }),
-    truss: std({ map: trussTexture(), metalness: 0.5, roughness: 0.5 }),
-    cellsBlue: cells(cellTexture('#122c78', '#17388f', '#a4b0c8', '#6686d0'), 0x06122e),
-    cellsAmber: cells(cellTexture('#1a1826', '#241f2c', '#c79440', '#7a5a28'), 0x120c05),
-    panelBack: std({ map: panelBackTexture(), metalness: 0.3, roughness: 0.6 }),
-    panelBackGold: std({ map: blanketBackTexture(), metalness: 0.3, roughness: 0.6, envMapIntensity: 1.2 }),
-    // Debris only. Three of them multiply in a grey level stored per corner (charring), so every part given one must carry it.
-    scrapOuter: std({ map: scorchTexture(), metalness: 0.2, roughness: 0.6, vertexColors: true }),
-    scrapInner: std({ map: isogridTexture(), metalness: 0.7, roughness: 0.5, envMapIntensity: 1.4, vertexColors: true }),
-    scrapBare: std({ color: 0xa7adb6, metalness: 0.85, roughness: 0.5, envMapIntensity: 1.5, vertexColors: true, side: THREE.DoubleSide }),
-    scrapCore: std({ map: honeycombTexture(), metalness: 0.6, roughness: 0.5, side: THREE.DoubleSide }),
-    navRed: light(0xff3b30),
-    navGreen: light(0x35e07a),
-    navWhite: light(0xdfe8ff),
-  };
-}
-type Materials = ReturnType<typeof makeMaterials>;
-
-let sharedMaterials: Materials | null = null;
-function materials(): Materials {
-  return (sharedMaterials ??= makeMaterials());
-}
-
-// ---------------------------------------------------------------------------------------
-// Part helpers
-// ---------------------------------------------------------------------------------------
-
-// Docked visiting vehicles are drawn at a fraction of the station's size, so they are built
-// with fewer facets: round parts divide their segment counts by this while dock() is running.
-let coarse = 1;
-const facets = (n: number, min = 6) => Math.max(min, Math.round(n / coarse));
-
-function mesh(g: THREE.Group, geometry: THREE.BufferGeometry, material: THREE.Material, x = 0, y = 0, z = 0): THREE.Mesh {
-  const part = new THREE.Mesh(geometry, material);
-  part.position.set(x, y, z);
-  g.add(part);
-  return part;
-}
-
-/** Plain box — for small fittings. Spacecraft bodies use bus() or prism(), which have bevels. */
-function box(g: THREE.Group, material: THREE.Material, w: number, h: number, d: number, x = 0, y = 0, z = 0): THREE.Mesh {
-  return mesh(g, new THREE.BoxGeometry(w, h, d), material, x, y, z);
-}
-
-/**
- * A solid from flat convex faces. Each face gets its own normal (crisp edges that catch the
- * light) and texture coordinates laid flat on it at `tile` model units per repeat, so foil
- * crinkles are the same size on a big face and a small one.
- */
-function faceted(faces: THREE.Vector3[][], tile: number): THREE.BufferGeometry {
-  const position: number[] = [], normal: number[] = [], uv: number[] = [];
-  const ab = new THREE.Vector3(), ac = new THREE.Vector3(), n = new THREE.Vector3(), middle = new THREE.Vector3();
-  for (const face of faces) {
-    n.crossVectors(ab.subVectors(face[1], face[0]), ac.subVectors(face[2], face[0])).normalize();
-    middle.set(0, 0, 0);
-    for (const p of face) middle.add(p);
-    const inward = n.dot(middle) < 0; // the solid is built round the origin, so "outwards" is away from it
-    if (inward) n.negate();
-    const ax = Math.abs(n.x), ay = Math.abs(n.y), az = Math.abs(n.z);
-    for (let k = 1; k < face.length - 1; k++) {
-      for (const p of inward ? [face[0], face[k + 1], face[k]] : [face[0], face[k], face[k + 1]]) {
-        position.push(p.x, p.y, p.z);
-        normal.push(n.x, n.y, n.z);
-        if (ax >= ay && ax >= az) uv.push(p.z / tile, p.y / tile);
-        else if (ay >= az) uv.push(p.x / tile, p.z / tile);
-        else uv.push(p.x / tile, p.y / tile);
-      }
-    }
-  }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(position, 3));
-  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normal, 3));
-  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-  return geometry;
-}
-
-interface BusSpec {
-  x?: number;
-  y?: number;
-  z?: number;
-  bevel?: number; // width of the cut along every edge
-  top?: number; // 1 = straight sides; less makes the +Y end narrower (a tapered body)
-  tile?: number; // model units per texture repeat
-}
-
-/**
- * A spacecraft body: a box with every edge and corner cut off. The 12 bevels and 8 corner
- * facets face in between the main directions, so some of them always catch the light — that
- * is most of the difference between "a model" and "a grey cube".
- */
-function bus(g: THREE.Group, material: THREE.Material, w: number, h: number, d: number, s: BusSpec = {}): THREE.Mesh {
-  const a = w / 2, b = h / 2, c = d / 2, k = s.bevel ?? Math.min(w, h, d) * 0.08, top = s.top ?? 1;
-  const at = (x: number, y: number, z: number) => {
-    const f = 1 + ((top - 1) * (y + b)) / h;
-    return new THREE.Vector3(x * f, y, z * f);
-  };
-  const faces: THREE.Vector3[][] = [], signs = [-1, 1];
-  for (const p of signs) { // the six main faces
-    faces.push([at(p * a, -(b - k), -(c - k)), at(p * a, b - k, -(c - k)), at(p * a, b - k, c - k), at(p * a, -(b - k), c - k)]);
-    faces.push([at(-(a - k), p * b, -(c - k)), at(a - k, p * b, -(c - k)), at(a - k, p * b, c - k), at(-(a - k), p * b, c - k)]);
-    faces.push([at(-(a - k), -(b - k), p * c), at(a - k, -(b - k), p * c), at(a - k, b - k, p * c), at(-(a - k), b - k, p * c)]);
-  }
-  for (const p of signs) for (const q of signs) { // the twelve bevelled edges
-    faces.push([at(p * a, q * (b - k), -(c - k)), at(p * a, q * (b - k), c - k), at(p * (a - k), q * b, c - k), at(p * (a - k), q * b, -(c - k))]);
-    faces.push([at(p * a, -(b - k), q * (c - k)), at(p * a, b - k, q * (c - k)), at(p * (a - k), b - k, q * c), at(p * (a - k), -(b - k), q * c)]);
-    faces.push([at(-(a - k), p * b, q * (c - k)), at(a - k, p * b, q * (c - k)), at(a - k, p * (b - k), q * c), at(-(a - k), p * (b - k), q * c)]);
-    for (const r of signs) faces.push([at(p * a, q * (b - k), r * (c - k)), at(p * (a - k), q * b, r * (c - k)), at(p * (a - k), q * (b - k), r * c)]); // corners
-  }
-  return mesh(g, faceted(faces, s.tile ?? 0.7), material, s.x, s.y, s.z);
-}
-
-/** Flat-sided prism or frustum with `sides` faces, its length along Y (hexagonal buses, triangular bodies, girders). */
-function prism(g: THREE.Group, material: THREE.Material, sides: number, rTop: number, rBottom: number, h: number, x = 0, y = 0, z = 0, tile = 0.7, turn = 0): THREE.Mesh {
-  const loop = (r: number, yy: number) => Array.from({ length: sides }, (_, i) => new THREE.Vector3(r * Math.cos(turn + (i * TAU) / sides), yy, r * Math.sin(turn + (i * TAU) / sides)));
-  const upper = loop(rTop, h / 2), lower = loop(rBottom, -h / 2);
-  const faces = [upper, lower];
-  for (let i = 0; i < sides; i++) faces.push([lower[i], lower[(i + 1) % sides], upper[(i + 1) % sides], upper[i]]);
-  return mesh(g, faceted(faces, tile), material, x, y, z);
-}
-
-/** Turn an object whose length runs along +Y so that it runs along the given axis instead. */
-function orient<T extends THREE.Object3D>(object: T, axis: Axis): T {
-  if (axis === 'x') object.rotation.z = -Math.PI / 2;
-  if (axis === 'z') object.rotation.x = Math.PI / 2;
-  return object;
-}
-
-/** Cylinder or cone; `rTop` is the radius at the end that points along +axis. */
-function cyl(g: THREE.Group, material: THREE.Material, rTop: number, rBottom: number, h: number, x = 0, y = 0, z = 0, axis: Axis = 'y', open = false, segments = 24): THREE.Mesh {
-  return orient(mesh(g, new THREE.CylinderGeometry(rTop, rBottom, h, facets(segments), 1, open), material, x, y, z), axis);
-}
-
-function ball(g: THREE.Group, material: THREE.Material, r: number, x = 0, y = 0, z = 0, sx = 1, sy = 1, sz = 1): THREE.Mesh {
-  // small balls (lamps, joints, bottles) get fewer facets: nobody can count them at that size
-  const part = mesh(g, new THREE.SphereGeometry(r, facets(r < 0.08 ? 10 : 18, 8), facets(r < 0.08 ? 6 : 12, 5)), material, x, y, z);
-  part.scale.set(sx, sy, sz);
-  return part;
-}
-
-/** A hoop round the given axis: handrails, docking rings, stiffening frames. */
-function hoop(g: THREE.Group, material: THREE.Material, radius: number, tube: number, x = 0, y = 0, z = 0, axis: Axis = 'y', segments = 24): THREE.Mesh {
-  const part = mesh(g, new THREE.TorusGeometry(radius, tube, 4, facets(segments, 8)), material, x, y, z);
-  if (axis === 'y') part.rotation.x = Math.PI / 2;
-  if (axis === 'x') part.rotation.y = Math.PI / 2;
-  return part;
-}
-
-/** A surface of revolution about +Y from a list of [radius, height] points (capsules, domes, tanks). */
-function lathe(g: THREE.Group, material: THREE.Material, profile: (readonly [number, number])[], x = 0, y = 0, z = 0, axis: Axis = 'y', segments = 28): THREE.Mesh {
-  const points = profile.map(([r, h]) => new THREE.Vector2(r, h));
-  return orient(mesh(g, new THREE.LatheGeometry(points, facets(segments, 10)), material, x, y, z), axis);
-}
-
-/** A thin rod between two points. */
-function strut(g: THREE.Group, material: THREE.Material, a: V3, b: V3, radius = 0.012): THREE.Mesh {
-  const from = new THREE.Vector3(a[0], a[1], a[2]);
-  const along = new THREE.Vector3(b[0], b[1], b[2]).sub(from);
-  const length = along.length();
-  const part = mesh(g, new THREE.CylinderGeometry(radius, radius, length, facets(6, 4)), material);
-  part.position.copy(from).addScaledVector(along, 0.5);
-  part.quaternion.setFromUnitVectors(UP, along.normalize());
-  return part;
-}
-
-/** A sub-group at `at` whose own +Y axis points along `dir` — parts built inside it aim that way. */
-function aimed(g: THREE.Group, at: V3, dir: V3): THREE.Group {
-  const sub = new THREE.Group();
-  sub.position.set(at[0], at[1], at[2]);
-  sub.quaternion.setFromUnitVectors(UP, new THREE.Vector3(dir[0], dir[1], dir[2]).normalize());
-  g.add(sub);
-  return sub;
-}
-
-/** Repeat a texture across a part: multiply its texture coordinates. */
-function tileUV(geometry: THREE.BufferGeometry, su: number, sv: number): void {
-  const uv = geometry.attributes.uv;
-  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv);
-}
-
-/**
- * A rigid solar panel lying flat: `w` along X, `l` along Z, cells facing +Y, ribbed backing
- * facing −Y. `tile` is the size (model units) of one 4 × 4 block of cells.
- */
-function solarPanel(m: Materials, w: number, l: number, cells: THREE.Material = m.cellsBlue, back: THREE.Material = m.panelBack, tile = 0.35): THREE.Group {
-  const panel = new THREE.Group();
-  const thickness = Math.min(0.02, w * 0.03);
-  box(panel, back, w, thickness, l);
-  const face = new THREE.PlaneGeometry(w * 0.97, l * 0.985);
-  tileUV(face, w / tile, l / tile);
-  mesh(panel, face, cells, 0, thickness / 2 + 0.0008, 0).rotation.x = -Math.PI / 2;
-  return panel;
-}
-
-interface WingSpec {
-  width: number; // across the wing
-  length: number; // total length of the panels along the boom
-  panels?: number; // number of hinged panels
-  yoke?: number; // length of the boom between the body and the first panel
-  cells?: THREE.Material;
-  back?: THREE.Material;
-  tile?: number;
-}
-
-/** One fold-out solar wing in its own frame: root at the origin, running along +Z, cells facing +Y. */
-function buildWing(m: Materials, s: WingSpec): THREE.Group {
-  const wing = new THREE.Group();
-  const panels = s.panels ?? 3, yoke = s.yoke ?? s.width * 0.4, hinge = s.width * 0.03;
-  const each = (s.length - hinge * (panels - 1)) / panels;
-  const rod = Math.max(0.006, s.width * 0.018);
-  // Y-shaped yoke: one boom from the drive motor, forking to the first panel's edge
-  cyl(wing, m.metal, rod * 3, rod * 3, rod * 4, 0, 0, rod * 2, 'z', false, 10); // array drive motor
-  strut(wing, m.dark, [0, 0, 0], [0, 0, yoke * 0.45], rod * 1.6);
-  for (const side of [-1, 1]) strut(wing, m.dark, [0, 0, yoke * 0.45], [side * s.width * 0.32, 0, yoke], rod);
-  for (let i = 0; i < panels; i++) {
-    const z = yoke + i * (each + hinge) + each / 2;
-    const panel = solarPanel(m, s.width, each, s.cells, s.back, s.tile);
-    panel.position.z = z;
-    wing.add(panel);
-    if (i > 0) for (const side of [-1, 1]) cyl(wing, m.metal, rod, rod, s.width * 0.12, side * s.width * 0.3, 0, z - each / 2 - hinge / 2, 'x', false, 8);
-  }
-  return wing;
-}
-
-/** Two wings on opposite sides (±Z), both turned by `tilt` about their shared axis like a real array drive. */
-function wingPair(g: THREE.Group, m: Materials, s: WingSpec & { root: number; x?: number; y?: number; tilt?: number }): void {
-  for (const side of [-1, 1]) {
-    const wing = buildWing(m, s);
-    wing.position.set(s.x ?? 0, s.y ?? 0, side * s.root);
-    wing.rotation.set(0, side === 1 ? 0 : Math.PI, side * (s.tilt ?? 0));
-    g.add(wing);
-  }
-}
-
-/** A roll-out "blanket" wing as used on space stations: two cell blankets either side of a mast. Runs along +Z. */
-function blanketWing(m: Materials, length: number, width: number, tile: number): THREE.Group {
-  const wing = new THREE.Group();
-  const blanket = width * 0.44;
-  strut(wing, m.metal, [0, 0, 0], [0, 0, length], width * 0.022);
-  box(wing, m.dark, width, width * 0.05, width * 0.07, 0, 0, width * 0.06); // blanket box at the root
-  for (const side of [-1, 1]) {
-    const sheet = solarPanel(m, blanket, length * 0.92, m.cellsAmber, m.panelBackGold, tile);
-    // the fold lines of the backing repeat along the blanket rather than being stretched over it
-    tileUV((sheet.children[0] as THREE.Mesh).geometry, 1, length / width);
-    sheet.position.set((side * (width - blanket)) / 2, 0, length * 0.53);
-    wing.add(sheet);
-  }
-  box(wing, m.dark, width, width * 0.03, width * 0.03, 0, 0, length); // tip bar
-  return wing;
-}
-
-/**
- * A parabolic dish antenna at `at`, opening towards `dir`: white bowl, dark ribbed back, gimbal
- * hub. With `feed`, a horn on a tripod at the focus; big reflectors lit from a horn on the
- * spacecraft body pass false.
- */
-function dish(g: THREE.Group, m: Materials, radius: number, at: V3, dir: V3, feed = true): THREE.Group {
-  const d = aimed(g, at, dir);
-  const depth = radius * 0.3, focus = radius * 0.78, big = radius >= 0.25;
-  const profile: THREE.Vector2[] = [];
-  const steps = big ? 7 : 4;
-  for (let i = 0; i <= steps; i++) profile.push(new THREE.Vector2((radius * i) / steps, depth * (i / steps) ** 2));
-  const bowl = new THREE.LatheGeometry(profile, facets(big ? 32 : 16, 10));
-  mesh(d, bowl, m.dish);
-  mesh(d, bowl, m.dishBack); // the same surface seen from behind
-  hoop(d, m.dark, radius, radius * 0.025, 0, depth, 0, 'y', big ? 32 : 16);
-  if (big) {
-    // stiffening ribs on the back: straight lines touching the bowl at its rim stay behind it everywhere
-    for (let k = 0; k < 8; k++) {
-      const a = (k * TAU) / 8;
-      strut(d, m.dark, [radius * 0.1 * Math.cos(a), -depth * 0.95, radius * 0.1 * Math.sin(a)], [radius * 0.97 * Math.cos(a), depth * 0.9, radius * 0.97 * Math.sin(a)], radius * 0.016);
-    }
-    hoop(d, m.dark, radius * 0.55, radius * 0.014, 0, depth * 0.1 - radius * 0.02, 0, 'y', 20);
-  }
-  if (feed) {
-    for (let k = 0; k < 3; k++) {
-      const a = (k * TAU) / 3;
-      strut(d, m.dark, [radius * Math.cos(a), depth, radius * Math.sin(a)], [0, focus, 0], radius * 0.018);
-    }
-    cyl(d, m.metal, radius * 0.07, radius * 0.1, radius * 0.14, 0, focus, 0, 'y', false, 10); // feed horn
-  }
-  cyl(d, m.dark, radius * 0.14, radius * 0.2, depth * (big ? 1.1 : 0.5), 0, -depth * (big ? 0.55 : 0.25), 0, 'y', false, 12); // gimbal hub
-  return d;
-}
-
-/** A rocket-engine bell at `at`, exhaust pointing along `dir`. */
-function nozzle(g: THREE.Group, m: Materials, radius: number, length: number, at: V3, dir: V3): void {
-  const n = aimed(g, at, dir);
-  const small = radius < 0.05, steps = small ? 3 : 6; // thruster-sized bells are a few pixels across: keep them cheap
-  const profile: THREE.Vector2[] = [];
-  for (let i = 0; i <= steps; i++) profile.push(new THREE.Vector2(radius * (0.3 + 0.7 * Math.sqrt(i / steps)), (length * i) / steps));
-  mesh(n, new THREE.LatheGeometry(profile, small ? 8 : facets(radius > 0.2 ? 28 : 16, 8)), m.nozzle);
-  if (!small) cyl(n, m.dark, radius * 0.3, radius * 0.38, length * 0.25, 0, -length * 0.12, 0, 'y', false, 10); // combustion chamber
-  if (radius > 0.2) hoop(n, m.metal, radius * 1.01, radius * 0.03, 0, length, 0, 'y', 28); // stiffening ring at the lip
-}
-
-/** A cluster of small attitude thrusters on a block, firing roughly along `dir`. */
-function thrusters(g: THREE.Group, m: Materials, at: V3, dir: V3, size = 1): void {
-  const t = aimed(g, at, dir);
-  box(t, m.dark, 0.09 * size, 0.04 * size, 0.09 * size);
-  for (const [x, z] of [[-1, 0], [1, 0], [0, 1]]) nozzle(t, m, 0.022 * size, 0.04 * size, [x * 0.028 * size, 0.02 * size, z * 0.028 * size], [x * 0.5, 1, z * 0.5]);
-}
-
-/** Star tracker: a small baffled camera looking along `dir`. */
-function tracker(g: THREE.Group, m: Materials, at: V3, dir: V3, size = 1): void {
-  const t = aimed(g, at, dir);
-  cyl(t, m.baffle, 0.05 * size, 0.032 * size, 0.12 * size, 0, 0.06 * size, 0, 'y', true, 12);
-  cyl(t, m.lens, 0.03 * size, 0.03 * size, 0.01 * size, 0, 0.012 * size, 0, 'y', false, 12);
-  box(t, m.dark, 0.08 * size, 0.03 * size, 0.08 * size, 0, -0.01 * size, 0);
-}
-
-/** Whip / rod antenna from `at` along `dir`. */
-function whip(g: THREE.Group, m: Materials, at: V3, dir: V3, length: number, radius = 0.007): void {
-  const d = new THREE.Vector3(dir[0], dir[1], dir[2]).normalize().multiplyScalar(length);
-  strut(g, m.metal, at, [at[0] + d.x, at[1] + d.y, at[2] + d.z], radius);
-}
-
-/** Helix antenna under its white radome cone, pointing along `dir` from a round base plate. */
-function helix(g: THREE.Group, m: Materials, at: V3, dir: V3, length: number, radius = 0.05): void {
-  const h = aimed(g, at, dir);
-  cyl(h, m.metal, radius * 1.25, radius * 1.25, radius * 0.3, 0, radius * 0.15, 0, 'y', false, 8);
-  cyl(h, m.white, radius * 0.45, radius, length, 0, radius * 0.3 + length / 2, 0, 'y', false, 8);
-}
-
-/** Flat antenna board in the XY plane, its face (phased-array patches by default) towards +Z. */
-function arrayPanel(m: Materials, w: number, h: number, elementsPerUnit = 14, face: THREE.Material = m.array): THREE.Group {
-  const panel = new THREE.Group();
-  box(panel, m.dark, w, h, 0.03);
-  const front = new THREE.PlaneGeometry(w * 0.97, h * 0.97);
-  tileUV(front, (w * elementsPerUnit) / 8, (h * elementsPerUnit) / 8);
-  mesh(panel, front, face, 0, 0, 0.0158);
-  return panel;
-}
-
-/**
- * A flat panel of `face` material lying against a body: centre at `at`, looking along `dir`.
- * On a side wall `w` is the horizontal size and `h` the vertical one; on a deck (looking up or
- * down) `w` runs along X and `h` along Z. `repeat` = texture repeats per model unit.
- */
-function plate(g: THREE.Group, m: Materials, face: THREE.Material, w: number, h: number, at: V3, dir: V3, repeat = 4): void {
-  const normal = new THREE.Vector3(dir[0], dir[1], dir[2]).normalize();
-  const across = new THREE.Vector3().crossVectors(Math.abs(normal.y) > 0.9 ? new THREE.Vector3(0, 0, 1) : UP, normal).normalize();
-  const p = new THREE.Group();
-  p.position.set(at[0], at[1], at[2]);
-  p.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(across, normal, new THREE.Vector3().crossVectors(across, normal)));
-  g.add(p);
-  box(p, m.dark, w, 0.012, h);
-  const front = new THREE.PlaneGeometry(w * 0.95, h * 0.95);
-  tileUV(front, w * repeat, h * repeat);
-  mesh(p, front, face, 0, 0.0068, 0).rotation.x = -Math.PI / 2;
-}
-
-/**
- * A flat-shaded surface through a grid of points (rows of columns), for sheet metal that has
- * been bent and dented. `shade` holds a grey level per point that is multiplied into the
- * material's colour — used to blacken torn edges. `flip` turns the surface to face the other way.
- */
-function gridSurface(points: THREE.Vector3[][], shade: number[][], repeatU: number, repeatV: number, flip: boolean): THREE.BufferGeometry {
-  const rows = points.length - 1, cols = points[0].length - 1;
-  const position: number[] = [], uv: number[] = [], color: number[] = [];
-  for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
-    const corners = flip
-      ? [[i, j], [i + 1, j + 1], [i + 1, j], [i, j], [i, j + 1], [i + 1, j + 1]]
-      : [[i, j], [i + 1, j], [i + 1, j + 1], [i, j], [i + 1, j + 1], [i, j + 1]];
-    for (const [a, b] of corners) {
-      const p = points[b][a], s = shade[b][a];
-      position.push(p.x, p.y, p.z);
-      uv.push((a / cols) * repeatU, (b / rows) * repeatV);
-      color.push(s, s, s);
-    }
-  }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(position, 3));
-  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-  geometry.setAttribute('color', new THREE.Float32BufferAttribute(color, 3));
-  geometry.computeVertexNormals(); // no shared corners, so every triangle gets its own normal
-  return geometry;
-}
-
-/**
- * A pressurised module: barrel with tapered ends, a berthing ring at each end and a
- * trunnion ring round the middle. `axis` is the direction of its length.
- */
-function module(g: THREE.Group, m: Materials, r: number, len: number, x: number, y: number, z: number, axis: Axis, skin: THREE.Material = m.hull): THREE.Group {
-  const s = new THREE.Group();
-  const barrel = len * 0.8, cone = len * 0.1;
-  const body = cyl(s, skin, r, r, barrel, 0, 0, 0, 'y', true, 20);
-  tileUV(body.geometry, 4, Math.max(1, Math.round(barrel / ((Math.PI * r) / 2))));
-  cyl(s, skin, r * 0.6, r, cone, 0, barrel / 2 + cone / 2, 0, 'y', true, 20);
-  cyl(s, skin, r, r * 0.6, cone, 0, -barrel / 2 - cone / 2, 0, 'y', true, 20);
-  for (const end of [-1, 1]) cyl(s, m.dark, r * 0.62, r * 0.62, len * 0.02, 0, (end * len) / 2, 0, 'y', false, 12);
-  for (const end of [-1, 1]) cyl(s, m.metal, r * 1.03, r * 1.03, len * 0.025, 0, end * barrel * 0.28, 0, 'y', true, 20);
-  s.position.set(x, y, z);
-  g.add(orient(s, axis));
-  return s;
-}
-
-/** A length of station truss along Z: six-sided girder with painted bracing and a frame at each joint. */
-function girder(g: THREE.Group, m: Materials, length: number, r: number, x: number, y: number, z: number): void {
-  orient(prism(g, m.truss, 6, r, r, length, x, y, z, r * 1.7), 'z');
-  for (const end of [-1, 1]) orient(prism(g, m.metal, 6, r * 1.12, r * 1.12, r * 0.16, x, y, z + (end * length) / 2, 1), 'z');
-}
-
-/** Mount a ready-made part group in a parent: uniform scale, position, and facing (its +X turned to `facing`). */
-function dock(parent: THREE.Group, build: (g: THREE.Group, m: Materials) => void, m: Materials, scale: number, at: V3, facing: V3): void {
-  const sub = new THREE.Group();
-  coarse = 2.5;
-  build(sub, m);
-  coarse = 1;
-  sub.scale.setScalar(scale);
-  sub.position.set(at[0], at[1], at[2]);
-  sub.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), new THREE.Vector3(facing[0], facing[1], facing[2]).normalize());
-  parent.add(sub);
-}
+import {
+  TAU, random, materials, facets, mesh, box, faceted, bus, prism, orient, cyl, ball, hoop, lathe, strut, aimed, tileUV, solarPanel, buildWing, wingPair, blanketWing, dish, nozzle, thrusters, tracker, whip, helix, arrayPanel, plate, gridSurface, module, girder, dock,
+  type V3, type Materials, type Builder,
+} from './modelParts.ts';
+import { OBSERVATORY_BUILDERS } from './observatoryModels.ts';
+import { DEEP_BUILDERS } from './deepModels.ts';
+import { PLANETARY_BUILDERS } from './planetaryModels.ts';
 
 // ---------------------------------------------------------------------------------------
 // Crew and cargo vehicles (also reused, scaled down, as the craft docked to the stations).
@@ -996,7 +160,7 @@ function coreModuleParts(g: THREE.Group, m: Materials): void {
 // One builder per kind
 // ---------------------------------------------------------------------------------------
 
-const BUILDERS: Record<ModelKind, (g: THREE.Group, m: Materials) => void> = {
+const BUILDERS: Record<ModelKind, Builder> = {
   /** Starlink: flat "pizza box" bus, four phased arrays facing Earth, one tall solar array. */
   starlink(g, m) {
     bus(g, m.hull, 1.5, 0.1, 0.85, { bevel: 0.022, tile: 0.6 });
@@ -1695,6 +859,95 @@ const BUILDERS: Record<ModelKind, (g: THREE.Group, m: Materials) => void> = {
     wall.rotation.set(-0.35, 0.2, 0.25);
     g.add(wall);
   },
+
+  /**
+   * Laser-ranging sphere (LAGEOS, LARES, Starlette, Ajisai, Etalon): a dense metal ball
+   * studded with glass prisms, each of which sends a laser flash straight back to the station
+   * that fired it. Timing the echo gives the station's position to millimetres. No power, no
+   * radio, nothing to wear out: LAGEOS will stay up for millions of years.
+   */
+  lasersphere(g, m) {
+    mesh(g, new THREE.SphereGeometry(0.5, 40, 26), m.dullMetal); // dull on purpose: a polished ball this size mirrors the headlight as one white blob
+    const prismAt = (lat: number, lon: number) => {
+      const dir: V3 = [Math.cos(lat) * Math.cos(lon), Math.sin(lat), Math.cos(lat) * Math.sin(lon)];
+      const socket = aimed(g, [dir[0] * 0.492, dir[1] * 0.492, dir[2] * 0.492], dir);
+      cyl(socket, m.dark, 0.042, 0.042, 0.012, 0, 0, 0, 'y', false, 8);
+      cyl(socket, m.lens, 0.031, 0.031, 0.016, 0, 0.002, 0, 'y', false, 8);
+    };
+    for (let ring = -4; ring <= 4; ring++) { // drilled in rings of latitude, as the real ones are
+      const lat = ring * 0.31, count = Math.round(18 * Math.cos(lat));
+      for (let k = 0; k < count; k++) prismAt(lat, ((k + (ring & 1) * 0.5) * TAU) / count);
+    }
+    for (const pole of [-1, 1]) prismAt((pole * Math.PI) / 2, 0);
+  },
+
+  /**
+   * Data-relay satellite (TDRS, Luch, Tianlian): a switchboard in geostationary orbit. Two
+   * big steerable dishes on arms follow spacecraft in low orbit (the Space Station, Hubble)
+   * and a third passes what they say down to the ground.
+   */
+  relay(g, m) {
+    const R = 0.62, flat = R * Math.cos(Math.PI / 6);
+    prism(g, m.foilGold, 6, R, R, 0.9, 0, 0, 0, 0.5);
+    prism(g, m.foilBlack, 6, R * 1.03, R * 1.03, 0.12, 0, 0.42, 0);
+    prism(g, m.dark, 6, R * 1.08, R * 1.08, 0.05, 0, -0.47, 0); // Earth deck
+    wingPair(g, m, { width: 0.95, length: 2.1, panels: 2, root: flat, yoke: 0.55, tilt: 0.3 });
+    for (const s of [-1, 1]) {
+      // one tracking dish: an umbrella of mesh nearly five metres across, on a two-jointed arm
+      strut(g, m.dark, [s * 0.5, -0.3, 0], [s * 1.35, -0.62, 0.1], 0.03);
+      ball(g, m.metal, 0.06, s * 1.35, -0.62, 0.1);
+      dish(g, m, 0.95, [s * 1.42, -0.68, 0.1], [s * 0.75, -0.6, 0.25]);
+    }
+    dish(g, m, 0.36, [0, -0.52, 0.34], [0, -1, 0.2]); // the link to the ground station
+    plate(g, m, m.array, 0.7, 0.5, [0, -0.497, -0.18], [0, -1, 0], 10); // many-users antenna: thirty small helices in a patch
+    for (let k = 0; k < 6; k++) helix(g, m, [-0.28 + (k % 3) * 0.28, -0.5, -0.28 + Math.floor(k / 3) * 0.2], [0, -1, 0], 0.16, 0.035);
+    strut(g, m.metal, [0, 0.48, 0], [0, 1.05, 0], 0.014);
+    cyl(g, m.white, 0.02, 0.06, 0.1, 0, 1.08, 0, 'y', false, 10); // omni antenna, for when it has lost its bearings
+    nozzle(g, m, 0.14, 0.2, [0, 0.48, 0.25], [0, 1, 0.3]);
+    for (const deg of [30, 150, 210, 330]) {
+      const c = Math.cos((deg * Math.PI) / 180), s = Math.sin((deg * Math.PI) / 180);
+      thrusters(g, m, [R * c, 0.4, R * s], [c, 0.8, s]);
+    }
+    tracker(g, m, [0.3, 0.48, -0.3], [0.4, 1, -0.5]);
+  },
+
+  /**
+   * Direct-to-phone satellite (BlueWalker 3, BlueBird): one flat antenna the size of a squash
+   * court, made of hinged tiles that unfolded in orbit. The face towards Earth is thousands of
+   * small antenna elements, strong enough together for an ordinary phone to hear; the other
+   * face is solar cells. Tipped a little here so both can be seen.
+   */
+  phasedarray(g, m) {
+    const sail = new THREE.Group();
+    const size = 0.8, gap = 0.025;
+    for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) {
+      if (Math.abs(i) === 2 && Math.abs(j) === 2) continue; // the corners are left off
+      const x = i * (size + gap), z = j * (size + gap);
+      box(sail, m.dark, size, 0.03, size, x, 0, z);
+      const cells = new THREE.PlaneGeometry(size * 0.97, size * 0.97);
+      tileUV(cells, size / 0.27, size / 0.27);
+      mesh(sail, cells, m.cellsBlue, x, 0.016, z).rotation.x = -Math.PI / 2;
+      const elements = new THREE.PlaneGeometry(size * 0.97, size * 0.97);
+      tileUV(elements, 3, 3);
+      mesh(sail, elements, m.array, x, -0.016, z).rotation.x = Math.PI / 2;
+      if (i < 2 && !(Math.abs(i + 1) === 2 && Math.abs(j) === 2)) cyl(sail, m.metal, 0.012, 0.012, size * 0.5, x + (size + gap) / 2, 0, z, 'z', false, 6); // hinges
+    }
+    bus(sail, m.foilGold, 0.62, 0.26, 0.62, { y: 0.15, bevel: 0.03, tile: 0.4 }); // the control satellite in the middle
+    plate(sail, m, m.radiator, 0.4, 0.4, [0, 0.282, 0], [0, 1, 0], 4);
+    for (const s of [-1, 1]) {
+      dish(sail, m, 0.14, [s * 0.2, -0.06, 0.2], [s * 0.3, -1, 0.2]); // gateway links
+      tracker(sail, m, [s * 0.2, 0.28, -0.2], [s * 0.5, 1, -0.5]);
+      thrusters(sail, m, [s * 0.33, 0.15, 0.25], [s, 0.2, 0.3], 0.8);
+    }
+    whip(sail, m, [0.25, 0.28, 0.25], [0.2, 1, 0.2], 0.4);
+    sail.rotation.z = 0.3;
+    g.add(sail);
+  },
+
+  // Everything that flies beyond Earth orbit is built in its own files.
+  ...OBSERVATORY_BUILDERS,
+  ...DEEP_BUILDERS,
+  ...PLANETARY_BUILDERS,
 };
 
 /** Weld every part that shares a material into a single mesh (far fewer draw calls). */
@@ -1720,9 +973,10 @@ function mergeByMaterial(root: THREE.Group): THREE.Group {
   return merged;
 }
 
-/** Build a model, centred and scaled so its largest dimension is 1 unit. */
 const built = new Map<ModelKind, THREE.Group>(); // each kind is built once; every use is a cheap clone sharing its geometry
+const bases = new Map<ModelKind, number>(); // kind → height of its lowest point, in the units of the finished model
 
+/** Build a model, centred and scaled so its largest dimension is 1 unit. */
 export function buildModel(kind: ModelKind): THREE.Group {
   let model = built.get(kind);
   if (!model) {
@@ -1734,16 +988,34 @@ export function buildModel(kind: ModelKind): THREE.Group {
     inner.position.copy(bounds.getCenter(new THREE.Vector3())).multiplyScalar(-1);
     model = new THREE.Group();
     model.add(inner);
-    model.scale.setScalar(1 / Math.max(size.x, size.y, size.z));
+    const largest = Math.max(size.x, size.y, size.z);
+    model.scale.setScalar(1 / largest);
     built.set(kind, model);
+    bases.set(kind, -size.y / 2 / largest);
   }
   return model.clone(true);
+}
+
+/**
+ * How far below its centre a model's lowest point is (a negative number, for a model drawn
+ * one unit across). A rover or a lander has to stand ON the ground, not be centred in it:
+ * lift it by −modelBase(kind) × its drawn size.
+ */
+export function modelBase(kind: ModelKind): number {
+  if (!bases.has(kind)) buildModel(kind);
+  return bases.get(kind) ?? -0.5;
 }
 
 /** Remove a model from its holder. Geometry, materials and textures belong to the cache and stay. */
 function disposeModel(holder: THREE.Group): void {
   holder.clear();
 }
+
+// The kinds built behind the loading screen: the original set, which covers nearly the whole catalogue.
+const WARMED: ModelKind[] = [
+  'starlink', 'oneweb', 'comsat', 'geocomsat', 'gnss', 'smallsat', 'cubesat', 'observer', 'radarsat', 'weather', 'spinner',
+  'telescope', 'iss', 'tiangong', 'station', 'dragon', 'soyuz', 'cygnus', 'capsule', 'rocketbody', 'debris',
+];
 
 /**
  * Do the expensive first-time work up front: build the commonest models and compile the
@@ -1761,7 +1033,9 @@ export function prewarmModels(renderer: THREE.WebGLRenderer, scene: THREE.Scene,
   renderer.compile(scene, camera);
   scene.remove(holder);
 
-  const rest = (Object.keys(BUILDERS) as ModelKind[]).filter((kind) => !first.includes(kind));
+  // Not every kind: the craft beyond Earth orbit, and the few rare shapes added with them, are
+  // built when one is first shown (a few milliseconds each). Start-up does not pay for them.
+  const rest = WARMED.filter((kind) => !first.includes(kind));
   const idle = (work: () => void) => ('requestIdleCallback' in window ? window.requestIdleCallback(work, { timeout: 4000 }) : setTimeout(work, 300));
   const next = () => {
     const kind = rest.shift();
@@ -1772,8 +1046,8 @@ export function prewarmModels(renderer: THREE.WebGLRenderer, scene: THREE.Scene,
   idle(next);
 }
 
-// Dead objects are not attitude-controlled: they tumble. Value = tumble speed (1 = debris).
-const TUMBLE: Partial<Record<ModelKind, number>> = { debris: 1, rocketbody: 0.22 };
+// Dead objects are not attitude-controlled: they tumble, and so does a rock. Value = tumble speed (1 = debris).
+const TUMBLE: Partial<Record<ModelKind, number>> = { debris: 1, rocketbody: 0.22, asteroid: 0.12 };
 
 function addLights(scene: THREE.Scene): THREE.DirectionalLight {
   const sun = new THREE.DirectionalLight(0xfff4e0, 2.4);
@@ -1864,6 +1138,17 @@ export class SatelliteModel {
 const thumbnails = new Map<ModelKind, string>(); // kind → PNG data URL, rendered once each
 let thumbRenderer: THREE.WebGLRenderer | null = null;
 
+// The automatic choice of pose (below) keeps whichever side fills the frame best. For a craft
+// with one big flat face that is the face and nothing else: Euclid came out as a blue rectangle,
+// its telescope hidden behind its own sunshield. These kinds are posed by hand: [heading, lean].
+const EIGHTH = Math.PI / 4;
+const POSES: Partial<Record<ModelKind, readonly [number, number]>> = {
+  webb: [0.6 + 5 * EIGHTH, 0],
+  euclid: [0.6 + 3 * EIGHTH, 0],
+  solarorbiter: [0.6 + 5 * EIGHTH, 0],
+  rover: [0.6 + EIGHTH, 0],
+};
+
 /**
  * The rectangle a model covers as seen by `camera` (camera-space x/y), measured from its real
  * vertices so the thumbnail can be cropped right up to it.
@@ -1951,14 +1236,18 @@ export function modelThumbnail(kind: ModelKind): string {
     };
 
     let best = { heading: 0.6, lean: 0, score: -1 };
-    for (let step = 0; step < 8; step++) {
-      const heading = 0.6 + (step * Math.PI) / 4;
-      const score = draw(heading, 0);
-      if (score > best.score * 1.03) best = { heading, lean: 0, score };
-    }
-    for (const lean of [-0.72, 0.72]) {
-      const score = draw(best.heading, lean);
-      if (score > best.score * 1.1) best = { heading: best.heading, lean, score };
+    const posed = POSES[kind];
+    if (posed) best = { heading: posed[0], lean: posed[1], score: 0 };
+    else {
+      for (let step = 0; step < 8; step++) {
+        const heading = 0.6 + (step * Math.PI) / 4;
+        const score = draw(heading, 0);
+        if (score > best.score * 1.03) best = { heading, lean: 0, score };
+      }
+      for (const lean of [-0.72, 0.72]) {
+        const score = draw(best.heading, lean);
+        if (score > best.score * 1.1) best = { heading: best.heading, lean, score };
+      }
     }
     draw(best.heading, best.lean);
     const url = renderer.domElement.toDataURL('image/png');
@@ -1970,21 +1259,40 @@ export function modelThumbnail(kind: ModelKind): string {
   }
 }
 
-/** A small, slowly turning view of a model for the info card (its own tiny renderer). */
+/**
+ * A slowly turning view of a model, with its own small renderer: the info card's picture, and
+ * the large one in the spacecraft catalogue. There it can also be turned by hand (turn, hold).
+ */
 export class ModelPreview {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(32, 2, 0.1, 20);
-  private readonly holder = new THREE.Group();
+  private readonly holder = new THREE.Group(); // turns about the model's own vertical axis
+  private readonly tilt = new THREE.Group(); // tips it towards or away from the viewer
+  private readonly across = new THREE.Vector3(); // the direction that runs left to right on the screen
   private readonly canvas: HTMLCanvasElement;
+  private readonly fit: boolean;
+  private yaw = 0;
+  private pitch = 0;
+  private held = false;
+  private last = 0;
 
-  constructor(canvas: HTMLCanvasElement) {
+  /**
+   * @param fit  place the camera to suit the picture's shape: a little closer than usual, and
+   *             further back when the picture is narrow (a phone held upright). The info card's
+   *             picture is always wide and leaves it off.
+   */
+  constructor(canvas: HTMLCanvasElement, fit = false) {
     this.canvas = canvas;
+    this.fit = fit;
     this.renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.camera.position.set(1.5, 0.95, 1.9);
     this.camera.lookAt(0, 0, 0);
-    this.scene.add(this.holder);
+    this.camera.updateMatrixWorld(true);
+    this.across.setFromMatrixColumn(this.camera.matrixWorld, 0);
+    this.tilt.add(this.holder);
+    this.scene.add(this.tilt);
     const sun = addLights(this.scene);
     sun.position.set(2.5, 3, 1.5);
     const rim = new THREE.DirectionalLight(0x5ad1ff, 1.4);
@@ -1995,17 +1303,37 @@ export class ModelPreview {
   show(kind: ModelKind): void {
     disposeModel(this.holder);
     this.holder.add(buildModel(kind));
+    this.yaw = 0;
+    this.pitch = 0;
+  }
+
+  /** Turn the model by hand (radians): `yaw` about its own vertical axis, `pitch` towards the viewer. */
+  turn(yaw: number, pitch: number): void {
+    this.yaw += yaw;
+    this.pitch = THREE.MathUtils.clamp(this.pitch + pitch, -1.35, 1.35); // short of upside down
+  }
+
+  /** While held (a finger or the mouse is on it) the model stops turning by itself. */
+  hold(on: boolean): void {
+    this.held = on;
   }
 
   render(realSeconds: number): void {
     const width = this.canvas.clientWidth, height = this.canvas.clientHeight;
     if (width === 0 || height === 0) return; // card hidden
-    if (this.canvas.width !== Math.round(width * this.renderer.getPixelRatio())) {
+    const pixels = this.renderer.getPixelRatio();
+    if (this.canvas.width !== Math.round(width * pixels) || (this.fit && this.canvas.height !== Math.round(height * pixels))) {
       this.renderer.setSize(width, height, false);
       this.camera.aspect = width / height;
+      // A large picture can stand closer than the info card's does. But the lens angle is measured top
+      // to bottom, so in a tall narrow picture the camera steps back, or the model's sides would be cut off.
+      if (this.fit) this.camera.position.set(1.5, 0.95, 1.9).multiplyScalar(Math.max(0.85, 0.9 / this.camera.aspect));
       this.camera.updateProjectionMatrix();
     }
-    this.holder.rotation.y = realSeconds * 0.45;
+    if (this.held) this.yaw -= (realSeconds - this.last) * 0.45; // cancels the idle turn below: it stays where the hand left it
+    this.last = realSeconds;
+    this.holder.rotation.y = realSeconds * 0.45 + this.yaw;
+    this.tilt.quaternion.setFromAxisAngle(this.across, this.pitch);
     this.renderer.render(this.scene, this.camera);
   }
 }

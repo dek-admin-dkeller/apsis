@@ -78,6 +78,7 @@ status line sit along the bottom.
 | Constellations | Objects panel: pick GPS, Starlink, Iridium and so on to draw all its orbits and a live map of how many of its satellites can see each point on the ground |
 | Aurora | Layers → Earth: tonight's aurora oval from NOAA's forecast, with the current geomagnetic activity |
 | Sharp ground | zoom in and the ground under the camera is redrawn from detailed NASA imagery, about sixteen times finer than the globe's own picture (Layers → Earth → *Sharp ground*) |
+| Spacecraft catalogue | Objects panel → Tools → **Spacecraft** (also in About): every 3D model on one page, grouped by where the craft work. Pick one to see it large and turn it round with the mouse or a finger (`←` `→` step through them); **Show one in orbit** selects an object of that kind in the tracker |
 | Hover card | point at any dot for a small card: a photo or a 3D picture of it, what it is, who runs it, its height and speed now |
 | People in space | who is aboard the ISS and Tiangong right now, in those stations' Record tab |
 | Contact timeline | Watchlist → **Contact timeline**: when each of several ground stations can see each starred object over the next 24 hours |
@@ -209,6 +210,7 @@ src/
     catalog.ts           loads the snapshot; builds the Map/Set indexes (by NORAD id, name, prefix, category, orbit)
     categorize.ts        category + orbit class (LEO / MEO / GEO / HEO) from name and mean motion
     describe.ts          operator / purpose / model shape, inferred from the name
+    spacecraft.ts        one sentence about each kind of model, and the catalogue's groups
     ephemeris.ts         orbit maths for one or two objects: sampled orbit, look angles, passes, closest approach
     satcat.ts            catalogue facts (owner, launch, size) in a Map keyed by NORAD id
     wiki.ts              name → Wikipedia article; fetches the summary and lead photo on demand
@@ -233,7 +235,11 @@ src/
     geoOverlay.ts        coastlines and borders, latitude / longitude grid, day / night line
     sky.ts               Milky Way, real bright stars, constellation figures, planets, Sun, Moon
     satellites.ts        all objects as one THREE.Points draw call; GPU-side interpolation; picking
-    satModels.ts         procedural 3D models (21 kinds of spacecraft) and their cropped thumbnails
+    satModels.ts         procedural 3D models: the 24 kinds found in Earth orbit, building and caching, cropped thumbnails
+    modelParts.ts        the kit they are built from: painted textures, shared materials, one helper per part
+    observatoryModels.ts  Webb, Euclid, TESS, Chandra, XMM-Newton, SOHO, the solar-wind monitors, STEREO
+    deepModels.ts        Voyager, Pioneer, New Horizons, Juno, Lucy, Psyche, BepiColombo, Parker Solar Probe …
+    planetaryModels.ts   a lunar orbiter, a Mars orbiter, a rover, a lander, and an asteroid
     cameraRig.ts         fly-to, object-centred focus camera, view presets
     firstPerson.ts       ride-along and sky-view cameras        siteMarker.ts   the ground-station dot
     constellation.ts     all orbits of a group + ground coverage map   aurora.ts   live aurora oval
@@ -256,6 +262,7 @@ src/
     featureList.ts       every feature in one list; the home page is drawn from it
     app.ts               the App interface: all a feature module may know about the rest
     objectTabs.ts        the Objects panel's Browse / Activity / Tools tabs
+    gallery.ts           the spacecraft catalogue: every model on one page, and one at a time, large
     launch.ts            the loading screen's launch scene         intro.ts   loading progress and hand-over
     howto.ts             the walkthrough page                     hashTrace.ts   one object through the hash
     filters.ts  search.ts  settings.ts  timeControls.ts  labels.ts  benchmarkModal.ts  intro.ts
@@ -344,7 +351,8 @@ two `Map<noradId, record>` tables that the orbit-change comparison joins, and th
 - **Operator, purpose and 3D model are inferred from the object's name** against a table
   of well-known programmes. The models are one representative shape per kind of object,
   not replicas of individual spacecraft, and are drawn far larger than life so they are
-  visible.
+  visible. Long booms are drawn shorter than life (Voyager's is 13 m on a 3.7 m dish), and
+  the craft beyond Earth orbit are posed to be looked at, not turned towards the real Sun.
 - **Coastlines and borders** are Natural Earth data via the `world-atlas` package.
 
 ## Limitations

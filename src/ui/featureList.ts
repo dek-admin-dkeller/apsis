@@ -58,7 +58,7 @@ export const FEATURES: FeatureGroup[] = [
     summary: 'Pick anything and stay with it: where it is, what it is, and what it can see.',
     items: [
       { name: 'Inspector', text: 'Live height, speed and position, the path over the ground, the shape of the orbit, and its record: owner, launch date, size.' },
-      { name: '3D models and photos', text: 'Twenty-one kinds of spacecraft modelled in 3D, beside a real photo where one exists.' },
+      { name: '3D models and photos', text: 'Forty-nine kinds of spacecraft modelled in 3D, from a CubeSat to the Webb telescope, beside a real photo where one exists.' },
       { name: 'Ride along', text: 'Sit on a satellite and look out from it.' },
       { name: 'Passes over you', text: 'When it will next cross your sky, and the path it will take across it.' },
       { name: 'Watchlist and contact timeline', text: 'Star the objects you care about and see when ground stations can reach each of them.' },
@@ -92,6 +92,7 @@ export const FEATURES: FeatureGroup[] = [
       { name: 'Upcoming launches', text: 'What is due to launch next, with a countdown and the pads marked on the globe.', fresh: true },
       { name: 'Orbit changes', text: 'Which satellites have raised or lowered their orbits since the data was last refreshed, and what is new or gone.', fresh: true },
       { name: 'Space weather and re-entries', text: 'How active the Sun is today, and roughly how long the lowest objects have left.', fresh: true },
+      { name: 'Spacecraft catalogue', text: 'Every 3D model on one page. Pick one to turn it round, read what it is, and go and find one in orbit.', fresh: true },
       { name: 'Command bar', text: 'Press Ctrl K and type an object, a place, a time or an action.', fresh: true },
     ],
   },

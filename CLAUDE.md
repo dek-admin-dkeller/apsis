@@ -61,7 +61,7 @@ Node ≥ 22.18 (the bench imports `.ts` files directly; `erasableSyntaxOnly` kee
   touch; later sections override earlier ones — section 6 is the current phone look), and a
   few feature stylesheets imported by their own module (`tour.css`, `cinema.css`,
   `designer.css`, `constellations.css`, `contacts.css`, `crew.css`, `firstPerson.css`,
-  `launch.css`).
+  `launch.css`, `gallery.css`).
 - Shaders: a NaN anywhere becomes black squares after the bloom pass. Never `pow()` a
   possibly negative base, never `smoothstep` with reversed edges (write
   `1.0 - smoothstep(lo, hi, x)`), guard `normalize(0)` / `atan(0,0)` / divisions, clamp output.
@@ -132,6 +132,7 @@ worker/lookahead.worker.ts: started on demand for the "Coming hours" scan (hashi
 src/main.ts                 creates every module, per-frame loop, keyboard, share links, home/reset
 src/data/                   catalog, categorize, describe (operator/purpose/model kind from the name), ephemeris
                             (orbit series, look angles, passes, closest approach), satcat, wiki (name → article),
+                            spacecraft (a sentence about each model kind, for the catalogue),
                             regions ("over the South Pacific"), crew (people in space), types; and for the feature
                             modules: radio + doppler (SatNOGS records, Doppler shift), changes (compare two downloads),
                             decay + spaceWeather (time left, NOAA flux and Kp), launches (Launch Library 2), visibility
@@ -140,7 +141,8 @@ src/hashing/                SpatialHash, conjunction, lookahead, benchmark, grou
 src/worker/                 sim.worker (+ SimClient, protocol, propagate), lookahead.worker, tonight.worker (visible passes)
 src/render/                 scene (renderer, bloom, quality presets), globe (Earth shader), tiles (close-up ground:
                             NASA GIBS map tiles streamed in below ~6,000 km), geoOverlay (borders, grid, terminator), sky (Milky Way, stars, constellations, planets, Sun, Moon), aurora, satellites
-                            (the point cloud, colour modes, highlighting, picking), satModels (21 procedural models,
+                            (the point cloud, colour modes, highlighting, picking), satModels + modelParts + observatoryModels +
+                            deepModels + planetaryModels (49 procedural models: see "3D models"; satModels also holds the
                             previews, thumbnails), cameraRig (fly-to, object focus, Earth drift), firstPerson (ride-along,
                             sky view, phone motion), orbitLine, groundTrack, encounterViz (close-approach drawing),
                             conjunctionMarkers, gridViz, constellation (orbits + coverage map), siteMarker, padMarkers
@@ -150,7 +152,7 @@ src/ui/                     app (the App interface), featureList (every feature,
                             Objects panel's three tabs), inspector (+ charts), monitor (live pairs), ahead (prediction), encounterPanel, howto
                             (walkthrough), hashTrace, benchmarkModal, filters, search, settings, timeControls, labels,
                             watchlist, feed (launches, trains, lowest), designer, constellations, contacts, crew,
-                            share (QR), tour, cinema (autopilot + recording), sheet (phone sheets), landing (welcome
+                            gallery (the spacecraft catalogue), share (QR), tour, cinema (autopilot + recording), sheet (phone sheets), landing (welcome
                             page), launch + intro (loading screen), dom (DOM, number, unit and clock helpers)
 index.html                  all static markup; ids are the contract between HTML and the ui modules
 scripts/                    fetch-data.mjs, fetch-radio.mjs, diff-elements.mjs (writes changes.json), carry-over.mjs (push
@@ -213,7 +215,7 @@ Top bar (logo = home/reset, search, readouts, tools; picture and video sit in th
 `#capture` menu so they cannot be hit by accident) · left tool rail opening ONE panel at a
 time (`panel-objects`, `panel-layers`, `panel-conj`, `panel-settings`) · right dock holding
 `#inspector` or `#encounter` · bottom time bar (rests as a small pill, opens on hover) ·
-status line. Overlays: `#howto`, `#keys`, `#about`, `#share-dialog`, `#bench`, `#contacts`.
+status line. Overlays: `#howto`, `#keys`, `#about`, `#share-dialog`, `#bench`, `#contacts`, `#gallery`.
 
 The Objects panel has three tabs (`src/ui/objectTabs.ts`). **Browse** is a page of controls
 (watchlist, notable objects, type / orbit filters, appearance). **Activity** and **Tools** are
@@ -229,7 +231,7 @@ of description each ("just a list, a lot of text, an AI feel"). Do not go back t
   listen for `toggle` did not change. Sections in one tab share a `name`: one open at a time.
 - A module puts a figure on its tile with `sectionNote(element, text)` (`dom.ts`): it keeps a
   `.sum-note` in the section's `<summary>`, and the tile copies whatever is there.
-- Tiles that are not sections (contact timeline, benchmark, walkthrough, tour, command bar)
+- Tiles that are not sections (spacecraft catalogue, contact timeline, benchmark, walkthrough, tour, command bar)
   are in `SHORTCUTS` in `objectTabs.ts`; each presses a button that already exists.
 - A new feature gets a section in the right tab plus an icon in `ICONS`. Never a fourth tab.
 
@@ -401,17 +403,75 @@ an in-app yes plus the browser's own prompt, and stays in `localStorage`.
   back as they separate and in again during a replay; a manual zoom switches that off until
   the pair is re-centred from the panel.
 
-## 3D models (`render/satModels.ts`)
+## 3D models (`render/satModels.ts` and four files beside it)
 
-- 21 kinds (`ModelKind` in `data/describe.ts`), each a builder in `BUILDERS`, built once,
-  merged by material, normalised and cloned by `buildModel(kind)`. Materials are shared
-  (`makeMaterials()`): painted canvas textures, normal maps computed from painted height
-  fields, and a small painted environment map so foil and glass glint.
+- 49 kinds (`ModelKind` in `data/describe.ts`), each a builder, built once, merged by
+  material, normalised and cloned by `buildModel(kind)`. The files:
+  - `modelParts.ts`: the kit, and nothing about any one spacecraft. `makeMaterials()` (painted
+    canvas textures, normal maps computed from painted height fields, a small painted
+    environment map so foil and glass glint) and one helper per part: `bus`, `prism`, `slab`,
+    `cyl`, `dish`, `buildWing` / `wingPair`, `fan` (round array), `lattice` (boom), `rtg`,
+    `scope`, `plate`, `thrusters`, `tracker` …
+  - `satModels.ts`: the 24 kinds found in Earth orbit (`BUILDERS`, which also spreads in the
+    three tables below), `buildModel`, `modelBase`, `modelThumbnail`, `SatelliteModel`,
+    `ModelPreview`.
+  - `observatoryModels.ts` (webb, euclid, tess, chandra, xmm, soho, l1monitor, stereo),
+    `deepModels.ts` (voyager, pioneer, newhorizons, probe, juno, clipper, lucy, psyche,
+    samplereturn, bepi, parker, solarorbiter), `planetaryModels.ts` (lunarorbiter, marsorbiter,
+    rover, lander, asteroid).
+- **The kind names are a contract.** The deep-space data file names models as plain strings
+  (`Craft.model` in `space/types.ts`); check one with `isModelKind(name)` and fall back to
+  `'probe'`. Renaming a kind breaks that file silently.
+- A new kind needs: the name in `ModelKind`, a label in `KIND_LABEL`, a builder, a sentence in
+  `KIND_FACT` and a place in a group (`data/spacecraft.ts`; a kind left out of the groups
+  still shows, at the end). TypeScript refuses to build until the first four exist.
+- Only the original 21 kinds (`WARMED` in `satModels.ts`) are built behind the loading screen.
+  Everything else is built the first time it is shown (a few ms; the asteroid about 30 ms).
+  Do not add to `WARMED` without a reason: start-up pays for every kind in it.
 - Brightness budget: the main view has bloom and a headlight, so pale paint stays ~0.75 grey
   with high roughness and nothing large and flat is smoother than ~0.45, or it blows out.
-- Axes for builders: +X = direction of travel, +Y = away from Earth, Z = across the track.
+  (The laser-ranging sphere is `dullMetal` for this reason: polished, it was one white blob.)
+- Axes for builders: +X = direction of travel, +Y = away from the body the craft is shown at,
+  Z = across the track. The rover and lander stand on y = 0 with +Y up; `modelBase(kind)` says
+  how far below the normalised model's centre its lowest point is, to stand it on the ground.
+  Dish-first probes (Voyager, Pioneer, New Horizons, `probe`) are built in a tilted frame
+  (`probeFrame` in `deepModels.ts`) so the bowl shows from the usual three-quarter view.
+- Booms are shorter than life on purpose (a 13 m boom on a 3.7 m dish makes the craft a dot in
+  its own thumbnail), and the giant wings of Clipper, BepiColombo and Solar Orbiter a little.
+- `TUMBLE` in `satModels.ts`: debris, rocket bodies and the asteroid turn slowly instead of
+  flying nose-first.
 - `spinner` (Fengyun-2, Meteosat 8–11) is a spin-stabilised drum; add name patterns to
-  `SHAPES` in `describe.ts` before the general weather line.
+  `SHAPES` in `describe.ts` before the general weather line. `SHAPES` also sends CXO to
+  `chandra`, XMM-NEWTON to `xmm`, SDO to `soho`, the magnetosphere probes (MMS, THEMIS, Arase,
+  TRACERS, Polar, IMAGE) to `l1monitor`, the laser-ranging spheres (LAGEOS, LARES, Starlette,
+  Stella, Ajisai, Etalon, Westpac, Larets) to `lasersphere`, TDRS / Luch /
+  Tianlian to `relay` and BlueWalker / SpaceMobile to `phasedarray`.
+- To look at models while working on them, draw `modelThumbnail(kind)` and a few large
+  renders into a throwaway page and capture it with headless Chrome over the DevTools protocol
+  (as `scripts/shots.mjs` does). Check the thumbnails of the kinds you did not touch against a
+  capture taken before your change: they should be byte-identical.
+
+## Spacecraft catalogue (`ui/gallery.ts`, `ui/gallery.css`, `data/spacecraft.ts`)
+
+- An overlay (`#gallery`, empty in `index.html`, filled the first time it opens) with a grid of
+  every kind in groups and, in place of the grid, one model large: a `ModelPreview` made with
+  `fit = true`, dragged round with `turn()` / `hold()`, with its label, its `KIND_FACT`
+  sentence and, when the Earth catalogue has objects of that kind, "Show one in orbit".
+- It opens when anything presses **`#gallery-open`** (a link in the About sheet). The Tools
+  tab's "Spacecraft" tile and the home page press that button; `gallery.open(kind?)` is the
+  call. It lies above the home page (`z-index: 210`, like `#howto`).
+- `main.ts` gives it a host: `count(kind)` and `show(kind)`, from `ofKind()`, which sorts the
+  catalogue by shape once per catalogue (oldest object first, so "a telescope" is Hubble) and
+  steps to the next object each time it is asked again. The host knows only the Earth
+  catalogue: craft beyond Earth orbit get no button until `count` / `show` are taught about them.
+- Keys while it is open are caught on the way down (capture) and go no further: the tracker's
+  one-letter shortcuts must not fire behind it, and from the home page the tracker's own key
+  handler is switched off anyway. Escape steps back (model → grid → closed), arrows step
+  between models, Tab stays inside.
+- Thumbnails are drawn one per idle moment while it is open, into squares that already have
+  their size. In the head, the title is the way back from a model (as in the Objects panel).
+- The owner's rule for it: very little text, no card template look. Tiles are a hairline grid
+  on `--cell`; the only prose is one sentence per model.
 
 ## Thumbnails and the hover card
 
