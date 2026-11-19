@@ -1193,8 +1193,26 @@ function updateDataNote(): void {
     if (lead) select(lead);
   });
   $('about-data').textContent = `${fmtInt(catalog.sats.length)} objects, elements from ${clockStamp(Date.parse(catalog.fetchedAt))}`;
-  $('data-age').textContent = `${clockStamp(Date.parse(catalog.fetchedAt))}${catalog.live ? ' (live)' : ''}`;
+  showDataAge();
 }
+
+/**
+ * The top bar's "Tracking data": how OLD the orbital data is ("2 h 57 min old"), not the time
+ * it was downloaded. Shown as a bare time ("12:11 EST") beside the other readouts it was read
+ * as a clock running hours slow (the owner, at 3 pm). The exact time is in the tooltip.
+ */
+function showDataAge(): void {
+  if (!catalog) return;
+  const at = Date.parse(catalog.fetchedAt);
+  const age = Math.max(0, Date.now() - at);
+  const minutes = Math.floor(age / 60000), hours = Math.floor(minutes / 60), days = Math.floor(hours / 24);
+  const old = minutes < 2 ? 'new' : minutes < 60 ? `${minutes} min old` : hours < 48 ? `${hours} h ${minutes % 60} min old` : `${days} days old`;
+  $('data-age').textContent = catalog.live ? 'just downloaded' : old;
+  $('readout-data').title = `Orbital elements downloaded from CelesTrak at ${clockStamp(at)}${catalog.live ? ' (by you)' : '; the site refreshes them every 3 hours'}`;
+}
+window.setInterval(() => {
+  if (!document.hidden) showDataAge();
+}, 30000);
 
 $('refresh').addEventListener('click', async () => {
   const button = $<HTMLButtonElement>('refresh');

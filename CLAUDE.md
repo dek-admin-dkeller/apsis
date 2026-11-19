@@ -306,8 +306,9 @@ for a two-way choice, `.row-toggle` for a switch); anything longer than a name g
 Layers, and name tags are set in Layers only. Controls that mean nothing on a phone carry
 `d-only`.
 
-The top bar says "Apsis" as the home page writes it (plain, not spaced capitals; no tagline)
-and shows ONE object count: "of 19,572" appears only while a filter is hiding something.
+The top bar says "Apsis" as the home page writes it (plain, not spaced capitals; no tagline),
+shows the orbital data's AGE as "Tracking data · 2 h 57 min old" (`showDataAge`; never a bare
+download time: "Elements from 12:11" was read as a slow clock), and shows ONE object count: "of 19,572" appears only while a filter is hiding something.
 
 Settings are generic: any control with `data-setting="name"` edits `Settings[name]`
 (`src/ui/settings.ts`), persisted in `localStorage`. To add a toggle: add the field + default
