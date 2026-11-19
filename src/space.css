@@ -15,9 +15,8 @@
 
 /* ---------- what does not apply away from the Earth ---------- */
 
-body.away :is(.readouts, .statusbar, .dock-right, #labels, #reticle, #range-tag, #locate-top, #m-sky, #m-system, #panel-objects) { display: none !important; }
+body.away :is(.readouts, .dock-right, #labels, #reticle, #range-tag, #locate-top, #m-sky, #m-system, #panel-objects) { display: none !important; }
 body.away .rail :is([data-view], #view-sky) { display: none; }
-body.away .rail { bottom: 0; }
 /* Each place has views of its own in the rail's View group: the Earth's, another world's, the solar system's. */
 body:not(.away) :is([data-place-view], .m-views-place), body.on-map :is([data-place-view], .m-views-place) { display: none; }
 body:not(.on-map) :is([data-map-view], .m-views-map) { display: none; }

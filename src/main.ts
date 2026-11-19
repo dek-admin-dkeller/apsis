@@ -65,6 +65,7 @@ import { alertDistance, clockStamp, duration, Inspector } from './ui/inspector.t
 import { LoadingScreen } from './ui/intro.ts';
 import { Landing, updateRows } from './ui/landing.ts';
 import { EclipseShadow } from './render/eclipseShadow.ts';
+import { BODIES } from './space/bodies.ts';
 import { WorldStrip } from './ui/worldStrip.ts';
 import { WHATS_NEW } from './ui/featureList.ts';
 import type { App, FrameInfo, SearchProvider } from './ui/app.ts';
@@ -2093,7 +2094,31 @@ function updateStatus(realSeconds: number): void {
   const geo = eciToGeodetic(cameraEci, gstime(new Date(clock.time)));
   const lat = THREE.MathUtils.radToDeg(geo.latitude), lon = wrapLon(THREE.MathUtils.radToDeg(geo.longitude));
   $('sb-cam').textContent = `${fmtKm(geo.height)} up`;
-  $('sb-sub').textContent = `${fmt(Math.abs(lat), 1)}° ${lat >= 0 ? 'N' : 'S'}  ${fmt(Math.abs(lon), 1)}° ${lon >= 0 ? 'E' : 'W'}`;
+  $('sb-sub-label').textContent = 'Below';
+  $('sb-sub').textContent = latLonText(lat, lon);
+}
+
+const latLonText = (lat: number, lon: number): string => `${fmt(Math.abs(lat), 1)}° ${lat >= 0 ? 'N' : 'S'}  ${fmt(Math.abs(lon), 1)}° ${lon >= 0 ? 'E' : 'W'}`;
+
+/**
+ * The status bar at another world or on the solar system (the owner wanted it everywhere, not
+ * only at the Earth): the camera's height above THAT world and the point below it, in its own
+ * latitude and longitude; on the solar system, the world the camera is beside.
+ */
+function updatePlaceStatus(realSeconds: number): void {
+  if (realSeconds - lastStatusAt < 0.25) return;
+  lastStatusAt = realSeconds;
+  const read = places.readout();
+  if (!read) return;
+  if (read.kind === 'map') {
+    $('sb-cam').textContent = 'on the solar system';
+    $('sb-sub-label').textContent = 'Beside';
+    $('sb-sub').textContent = read.beside ? BODIES[read.beside].name : 'the whole of it';
+    return;
+  }
+  $('sb-cam').textContent = `${fmtKm(read.heightKm)} above ${BODIES[read.body].name === 'Sun' ? 'the Sun' : BODIES[read.body].name}`;
+  $('sb-sub-label').textContent = 'Below';
+  $('sb-sub').textContent = latLonText(read.latDeg, wrapLon(read.lonDeg));
 }
 
 // ---- frame-rate watchdog: in Auto quality, step down if the GPU cannot keep up ------------
@@ -2195,6 +2220,7 @@ function step(now: number): void {
     sky.update(new Date(clock.time), globe.sunDirection, realSeconds); // keeps the shared star material's pixel size and twinkle current
     places.lead(dt, clock.time, realSeconds);
     places.follow(dt, clock.time, realSeconds);
+    if (!uiHidden) updatePlaceStatus(realSeconds);
     updateRest(now);
     timeControls.render();
     updateTimeChip();

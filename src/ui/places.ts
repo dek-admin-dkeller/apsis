@@ -560,6 +560,11 @@ export class Places {
    * last name is where the visitor is; each name before it is one step out. On the solar
    * system, a world the camera has gone up to is added in amber as the way in.
    */
+  /** The status bar's numbers for the scene on screen (SpaceView.readout); null in the tracker. */
+  readout(): ReturnType<SpaceView['readout']> {
+    return this.spot === 'tracker' ? null : this.view(this.spot).readout();
+  }
+
   /** Told whenever where the visitor is (or is heading) changes: a phone's world strip follows it. */
   onWhere: (() => void) | null = null;
 

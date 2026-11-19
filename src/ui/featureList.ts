@@ -164,6 +164,8 @@ export const WHATS_NEW: Update[] = [
       'Planets and spacecraft are easier to hit with a finger.',
       'In full screen, Escape steps out of a world without leaving full screen (Chrome and Edge); on the whole solar system it leaves full screen as usual.',
       'The top bar shows how old the tracking data is (“2 h 57 min old”), and a clock that is paused or moved says so in words.',
+      'The status bar at the bottom works at every world: how high you are above it and what is below you.',
+      'Fixed: dragging the view to look straight down past a followed satellite (the Space Station, say) made it flip back and forth.',
     ],
   },
   {

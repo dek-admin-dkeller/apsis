@@ -1471,6 +1471,29 @@ export class SpaceView {
     return this.items.some((item) => item.mesh !== null && !item.centre);
   }
 
+  /**
+   * For the status bar: at a place, the camera's height above this world's surface and the
+   * latitude and (east) longitude under it, in the world's own turning frame; on the solar
+   * system, the world the camera is beside (null: the whole of it).
+   */
+  readout(): { kind: 'place'; body: BodyId; heightKm: number; latDeg: number; lonDeg: number } | { kind: 'map'; beside: BodyId | null } | null {
+    const where = this.where;
+    if (!where) return null;
+    if (where.kind === 'system') return { kind: 'map', beside: this.focus?.kind === 'body' ? this.focus.body.id : null };
+    const mesh = this.item(null)?.mesh?.mesh;
+    if (!mesh) return null;
+    const local = mesh.worldToLocal(this.camera.position.clone());
+    const r = local.length();
+    const kmPerUnit = BODIES[where.body].radiusKm / R;
+    return {
+      kind: 'place', body: where.body,
+      heightKm: Math.max(0, (r - R) * kmPerUnit),
+      // The body's own axes: longitude 0 on +X, north on +Y, 90° east on −Z.
+      latDeg: (Math.asin(THREE.MathUtils.clamp(local.y / Math.max(r, 1e-9), -1, 1)) * 180) / Math.PI,
+      lonDeg: (Math.atan2(-local.z, local.x) * 180) / Math.PI,
+    };
+  }
+
   /** Give one body its full map now, ahead of the camera going up to it (see sharpen). */
   warmBody(body: BodyId): void {
     const item = this.item(`body:${body}`);

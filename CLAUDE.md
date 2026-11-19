@@ -724,6 +724,13 @@ it is used. So:
 - **Escape and full screen**: entering full screen claims Escape with the Keyboard Lock API
   (Chrome/Edge; "hold Esc to exit"); `Places.back()` returns false on the whole solar system and
   only then does Escape leave full screen. Safari/Firefox keep the browser's own behaviour.
+- **The status bar at every world** (`updatePlaceStatus`, `SpaceView.readout`): height above
+  THAT world's surface and the latitude / east longitude under the camera in its turning frame;
+  on the solar system "Beside <world>". The rail no longer runs to the bottom away from the Earth.
+- **Following an object, the camera's tilt is limited** (`cameraRig.ts`, `POLE_MARGIN` 0.12 rad
+  from its vertical, and never so far under it that the camera would be inside the Earth). At
+  the vertical the view had no heading and flipped 180° a frame; under the object it fought the
+  "never inside the planet" push (83° jumps). Measured both ways with a scripted drag.
 - **CI**: actions at checkout@v7, setup-node@v7, configure-pages@v6, upload-pages-artifact@v5
   (it leaves out dotfiles: the site has none), deploy-pages@v5; the smoke test on pushes.
 

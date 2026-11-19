@@ -29,6 +29,9 @@ const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t 
 export const easeIn = (t: number) => t * t * t;
 export const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
 
+/** How close (radians, ~7°) the camera may come to straight above or below an object it follows. */
+const POLE_MARGIN = 0.12;
+
 export class CameraRig {
   follow = false;
   /** While following and left alone, drift slowly around the object. */
@@ -216,6 +219,25 @@ export class CameraRig {
     // Dragging has the same problem: one pixel always turns the camera by the same angle about
     // the Earth's centre, so close to the surface the ground races past. The turn rate is tied
     // to altitude so the ground moves roughly with the finger at any height.
+    // Tied to an object, the camera may not tilt all the way to straight above it (its "up" is
+    // the object's own vertical, so looking straight down that line leaves no heading: the view
+    // flipped every frame as the object moved), nor so far under it that the camera would pass
+    // into the Earth (the rule below then pushed it out each frame while the drag pushed it back
+    // in: the owner saw the view "glitching" looking down past the Space Station at the Earth).
+    if (this.follow && this.focus && !this.flight) {
+      const at = controls.target;
+      const r = at.length(), d = Math.max(camera.position.distanceTo(at), 1e-6);
+      const floor = EARTH_RADIUS * 1.02;
+      // The widest angle from the object's vertical at which the camera, d away, is still above the ground.
+      const c = (floor * floor - r * r - d * d) / (2 * r * d);
+      const horizon = c <= -1 ? Math.PI : Math.acos(Math.min(1, c));
+      controls.minPolarAngle = POLE_MARGIN;
+      controls.maxPolarAngle = Math.max(POLE_MARGIN + 0.05, Math.min(Math.PI - POLE_MARGIN, horizon));
+    } else {
+      controls.minPolarAngle = 0;
+      controls.maxPolarAngle = Math.PI;
+    }
+
     if (!this.focus && controls.target.lengthSq() < 1) {
       const distance = camera.position.length();
       const altitude = Math.max(0, distance - EARTH_RADIUS); // scene units (1,000 km)
