@@ -396,18 +396,31 @@ check('the reference positions are from the same download as deep.json', referen
     if (!size) problems.push(`${id}: ${path} is not a readable picture`);
     else if (width !== null && (size[0] !== width || size[1] * 2 !== size[0])) problems.push(`${id}: ${path} is ${size[0]} × ${size[1]}, not ${width} × ${width / 2}`);
   };
+  const HALF_WIDTH = ['enceladus', 'phoebe', 'miranda', 'ariel', 'umbriel', 'titania', 'oberon']; // sources no finer than 1024 px
+  let smalls = 0;
+  /** The 256 px copy the solar-system view draws from: <name>_s.jpg beside the map. */
+  const lookSmall = (id, path) => {
+    const copy = path.replace(/\.(jpg|png)$/, '_s.jpg');
+    try {
+      const size = sizeOf(readFileSync(join(HERE, '../public', copy)));
+      if (!size || size[0] !== 256 || size[1] !== 128) problems.push(`${id}: ${copy} is not 256 × 128`);
+      else smalls++;
+    } catch { problems.push(`${id}: ${copy} is missing`); }
+  };
   for (const body of BODY_LIST) {
     const im = IMAGERY[body.id];
     if (!im) { if (body.visitable) problems.push(`${body.id}: a place to visit with no map`); continue; }
-    look(body.id, im.base, im.base.startsWith('textures/space/') ? (body.id === 'enceladus' ? 1024 : 2048) : null);
+    if (!body.visitable) problems.push(`${body.id}: has a map but cannot be visited`);
+    look(body.id, im.base, im.base.startsWith('textures/space/') ? (HALF_WIDTH.includes(body.id) ? 1024 : 2048) : null);
+    lookSmall(body.id, im.base);
     if (im.baseHigh) look(body.id, im.baseHigh, 4096);
-    if (im.clouds) look(body.id, im.clouds, 2048);
+    if (im.clouds) { look(body.id, im.clouds, 2048); lookSmall(body.id, im.clouds); }
     if (im.ring) { look(body.id, im.ring.strip, null); if (!(im.ring.innerKm > body.radiusKm && im.ring.outerKm > im.ring.innerKm)) problems.push(`${body.id}: ring radii`); }
     if (im.tiles && !(/^https:\/\/trek\.nasa\.gov\/tiles\/.+\{z\}\/\{y\}\/\{x\}\.(jpg|png)$/.test(im.tiles.url) && im.tiles.maxZoom >= 3)) problems.push(`${body.id}: tile address`);
     if (!im.credit) problems.push(`${body.id}: no credit`);
   }
   if (IMAGE_CREDITS.some((c) => !c.body || !c.source || !c.licence || !/^https:\/\//.test(c.url))) problems.push('an incomplete credit line');
-  check(`maps: ${files} pictures present, each 2:1 at its stated width, every visitable body has one`, problems.length === 0 && total < 10 * 1048576, problems.join('; ') || `${(total / 1048576).toFixed(1)} MB in public/textures/space, ${IMAGE_CREDITS.length} credit lines`);
+  check(`maps: ${files} pictures present, each 2:1 at its stated width, with ${smalls} small copies; a body can be visited exactly when it has a map`, problems.length === 0 && total < 16 * 1048576, problems.join('; ') || `${(total / 1048576).toFixed(1)} MB of maps in public/textures/space, ${IMAGE_CREDITS.length} credit lines`);
 }
 
 console.log(failed ? `\n${failed} failed` : '\nAll deep-space checks passed.');

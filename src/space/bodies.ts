@@ -22,8 +22,8 @@
  * direction (Venus, Uranus and its moons, Triton, Pluto and Charon) and 0 where there is no
  * steady rotation to state (Hyperion tumbles).
  *
- * `visitable` = it has a map in imagery.ts. Twelve small moons have never been mapped (or are
- * too small to have a surface worth standing on in this app): they are plain coloured balls.
+ * `visitable` = it has a map in imagery.ts. Fourteen small moons have none (never mapped, or,
+ * for Deimos, no public-domain global map): they are plain coloured balls beside their planet.
  */
 
 import type { Body, BodyId } from './types.ts';
@@ -67,7 +67,7 @@ export const BODIES: Record<BodyId, Body> = {
   },
   phobos: {
     id: 'phobos', name: 'Phobos', parent: 'mars', kind: 'moon', radiusKm: 11.08, gm: 7.087e-4,
-    dayHours: 7.6538, periodDays: 0.31891023, visitable: false, color: [0.52, 0.47, 0.43],
+    dayHours: 7.6538, periodDays: 0.31891023, visitable: true, color: [0.52, 0.47, 0.43],
     blurb: 'The larger moon of Mars: a 22 km lump that goes round three times in a Martian day.',
     wiki: 'Phobos (moon)', discovered: 'Asaph Hall, 1877',
   },
@@ -145,31 +145,31 @@ export const BODIES: Record<BodyId, Body> = {
   },
   mimas: {
     id: 'mimas', name: 'Mimas', parent: 'saturn', kind: 'moon', radiusKm: 198.2, gm: 2.50349,
-    dayHours: 22.6181, periodDays: 0.942421959, visitable: false, color: [0.78, 0.78, 0.78],
+    dayHours: 22.6181, periodDays: 0.942421959, visitable: true, color: [0.78, 0.78, 0.78],
     blurb: 'A small ball of ice whose one huge crater, Herschel, is a third as wide as the moon itself.',
     wiki: 'Mimas', discovered: 'William Herschel, 1789',
   },
   enceladus: {
     id: 'enceladus', name: 'Enceladus', parent: 'saturn', kind: 'moon', radiusKm: 252.1, gm: 7.21037,
-    dayHours: 32.8852, periodDays: 1.370218, visitable: false, color: [0.95, 0.96, 0.98],
+    dayHours: 32.8852, periodDays: 1.370218, visitable: true, color: [0.95, 0.96, 0.98],
     blurb: 'A small, brilliantly white moon that sprays water from an ocean under its south pole into space.',
     wiki: 'Enceladus', discovered: 'William Herschel, 1789', tempC: -201,
   },
   tethys: {
     id: 'tethys', name: 'Tethys', parent: 'saturn', kind: 'moon', radiusKm: 531.1, gm: 41.21353,
-    dayHours: 45.3072, periodDays: 1.88780216, visitable: false, color: [0.88, 0.88, 0.87],
+    dayHours: 45.3072, periodDays: 1.88780216, visitable: true, color: [0.88, 0.88, 0.87],
     blurb: 'A ball of almost pure water ice, split by Ithaca Chasma, a canyon that runs three quarters of the way round it.',
     wiki: 'Tethys (moon)', discovered: 'Giovanni Domenico Cassini, 1684',
   },
   dione: {
     id: 'dione', name: 'Dione', parent: 'saturn', kind: 'moon', radiusKm: 561.4, gm: 73.11607,
-    dayHours: 65.686, periodDays: 2.736914742, visitable: false, color: [0.82, 0.82, 0.8],
+    dayHours: 65.686, periodDays: 2.736914742, visitable: true, color: [0.82, 0.82, 0.8],
     blurb: 'An icy moon whose trailing side is laced with bright cliffs of ice hundreds of metres high.',
     wiki: 'Dione (moon)', discovered: 'Giovanni Domenico Cassini, 1684',
   },
   rhea: {
     id: 'rhea', name: 'Rhea', parent: 'saturn', kind: 'moon', radiusKm: 763.5, gm: 153.94175,
-    dayHours: 108.437, periodDays: 4.518212, visitable: false, color: [0.8, 0.79, 0.77],
+    dayHours: 108.42, periodDays: 4.5175, visitable: true, color: [0.8, 0.79, 0.77],
     blurb: 'Saturn\'s second-largest moon: a heavily cratered ball of ice and rock.',
     wiki: 'Rhea (moon)', discovered: 'Giovanni Domenico Cassini, 1672',
   },
@@ -187,13 +187,13 @@ export const BODIES: Record<BodyId, Body> = {
   },
   iapetus: {
     id: 'iapetus', name: 'Iapetus', parent: 'saturn', kind: 'moon', radiusKm: 734.3, gm: 120.51511,
-    dayHours: 1903.92, periodDays: 79.330183, visitable: false, color: [0.62, 0.55, 0.47],
+    dayHours: 1903.92, periodDays: 79.330183, visitable: true, color: [0.62, 0.55, 0.47],
     blurb: 'A two-toned moon, one half as dark as coal and the other bright as snow, with a mountain ridge along its equator.',
     wiki: 'Iapetus (moon)', discovered: 'Giovanni Domenico Cassini, 1671',
   },
   phoebe: {
     id: 'phoebe', name: 'Phoebe', parent: 'saturn', kind: 'moon', radiusKm: 106.5, gm: 0.55479,
-    dayHours: 9.2735, periodDays: 550.31, visitable: false, color: [0.36, 0.34, 0.33],
+    dayHours: 9.2735, periodDays: 550.31, visitable: true, color: [0.36, 0.34, 0.33],
     blurb: 'A dark moon that orbits Saturn backwards, far out: almost certainly a body captured from the outer solar system.',
     wiki: 'Phoebe (moon)', discovered: 'William Henry Pickering, 1899',
   },
@@ -211,31 +211,31 @@ export const BODIES: Record<BodyId, Body> = {
   },
   miranda: {
     id: 'miranda', name: 'Miranda', parent: 'uranus', kind: 'moon', radiusKm: 235.8, gm: 4.3,
-    dayHours: -33.9235, periodDays: 1.413479, visitable: false, color: [0.74, 0.74, 0.74],
+    dayHours: -33.9235, periodDays: 1.413479, visitable: true, color: [0.74, 0.74, 0.74],
     blurb: 'A small moon with a patchwork surface and Verona Rupes, a cliff about 20 km high: the tallest known.',
     wiki: 'Miranda (moon)', discovered: 'Gerard Kuiper, 1948',
   },
   ariel: {
     id: 'ariel', name: 'Ariel', parent: 'uranus', kind: 'moon', radiusKm: 578.9, gm: 83.5,
-    dayHours: -60.4891, periodDays: 2.520379, visitable: false, color: [0.78, 0.77, 0.75],
+    dayHours: -60.4891, periodDays: 2.520379, visitable: true, color: [0.78, 0.77, 0.75],
     blurb: 'The brightest of Uranus\'s moons, with the youngest surface: long fault valleys floored by frozen flows.',
     wiki: 'Ariel (moon)', discovered: 'William Lassell, 1851',
   },
   umbriel: {
     id: 'umbriel', name: 'Umbriel', parent: 'uranus', kind: 'moon', radiusKm: 584.7, gm: 85.1,
-    dayHours: -99.4602, periodDays: 4.144176, visitable: false, color: [0.45, 0.45, 0.46],
+    dayHours: -99.4602, periodDays: 4.144176, visitable: true, color: [0.45, 0.45, 0.46],
     blurb: 'The darkest of Uranus\'s large moons, ancient and cratered, with one bright ring on the floor of the crater Wunda.',
     wiki: 'Umbriel (moon)', discovered: 'William Lassell, 1851',
   },
   titania: {
     id: 'titania', name: 'Titania', parent: 'uranus', kind: 'moon', radiusKm: 788.9, gm: 226.9,
-    dayHours: -208.941, periodDays: 8.705867, visitable: false, color: [0.68, 0.65, 0.62],
+    dayHours: -208.941, periodDays: 8.705867, visitable: true, color: [0.68, 0.65, 0.62],
     blurb: 'The largest moon of Uranus, crossed by canyons hundreds of kilometres long.',
     wiki: 'Titania (moon)', discovered: 'William Herschel, 1787',
   },
   oberon: {
     id: 'oberon', name: 'Oberon', parent: 'uranus', kind: 'moon', radiusKm: 761.4, gm: 205.3,
-    dayHours: -323.118, periodDays: 13.463234, visitable: false, color: [0.6, 0.56, 0.54],
+    dayHours: -323.118, periodDays: 13.463234, visitable: true, color: [0.6, 0.56, 0.54],
     blurb: 'The outermost large moon of Uranus, heavily cratered, with something dark on the floors of its craters.',
     wiki: 'Oberon (moon)', discovered: 'William Herschel, 1787',
   },
@@ -253,7 +253,7 @@ export const BODIES: Record<BodyId, Body> = {
   },
   triton: {
     id: 'triton', name: 'Triton', parent: 'neptune', kind: 'moon', radiusKm: 1352.6, gm: 1428.49546,
-    dayHours: -141.0445, periodDays: 5.876854, visitable: false, color: [0.8, 0.74, 0.72],
+    dayHours: -141.0445, periodDays: 5.876854, visitable: true, color: [0.8, 0.74, 0.72],
     blurb: 'Neptune\'s large moon orbits backwards, which marks it as a captured world from the Kuiper belt.',
     wiki: 'Triton (moon)', discovered: 'William Lassell, 1846', tempC: -235, air: 'A trace of nitrogen',
   },
@@ -271,7 +271,7 @@ export const BODIES: Record<BodyId, Body> = {
   },
   charon: {
     id: 'charon', name: 'Charon', parent: 'pluto', kind: 'moon', radiusKm: 606, gm: 106.1,
-    dayHours: -153.2928, periodDays: 6.3872304, visitable: false, color: [0.6, 0.58, 0.57],
+    dayHours: -153.2928, periodDays: 6.3872304, visitable: true, color: [0.6, 0.58, 0.57],
     blurb: 'Pluto\'s moon is half Pluto\'s width; the two keep the same faces towards each other all the time.',
     wiki: 'Charon (moon)', discovered: 'James Christy, 1978',
   },
