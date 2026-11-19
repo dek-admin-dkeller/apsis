@@ -46,6 +46,7 @@ import { IMAGERY } from '../../space/imagery.ts';
 import type { Body, BodyId, Craft, Vec } from '../../space/types.ts';
 import { easeIn, easeOut } from '../cameraRig.ts';
 import { buildModel } from '../satModels.ts';
+import { GroundTiles } from '../tiles.ts';
 import type { OtherView, SceneKit } from '../scene.ts';
 import { addRing, createBody, glowTexture, MAX_OCCLUDERS, type BodyMesh } from './bodyMesh.ts';
 
@@ -179,6 +180,9 @@ export class SpaceView {
   private readonly shift = { x: 0, y: 0, wantX: 0, wantY: 0 }; // how far the picture is moved aside, fractions of the screen
   private readonly scratch = new THREE.Vector3();
   private readonly vec: Vec = [0, 0, 0];
+  private ground: GroundTiles | null = null; // close-up ground of the place's body, where its map is served in tiles
+  private sharpGround = true; // the Layers switch (Settings.sharpGround)
+  private lastT = 0; // the clock at the previous frame, to tell how fast time is running
 
   constructor(kit: SceneKit, backdrop: THREE.Group, host: SpaceHost) {
     this.kit = kit;
@@ -320,6 +324,8 @@ export class SpaceView {
 
   /** Put everything away (the view is then not drawn or updated). */
   clear(): void {
+    this.ground?.dispose(); // its patches are children of the body's mesh, which goes next
+    this.ground = null;
     for (const item of this.items) {
       item.tag?.remove();
       item.mesh?.dispose();
@@ -438,7 +444,30 @@ export class SpaceView {
     const pole = bodyAxes(id, tMs).pole;
     this.frame.setFromUnitVectors(this.scratch.set(pole[0], pole[2], -pole[1]).normalize(), UP);
 
-    this.addBody(body, R, true, 'full');
+    const centre = this.addBody(body, R, true, 'full');
+    // Close-up ground, where this world's map is served in tiles (render/tiles.ts): patches
+    // that are children of the body's mesh, so they turn with it, lit through the body's own
+    // uniforms, so they are lit exactly as it is. Nothing is fetched until the camera comes
+    // close, and each patch fades in, so entering or leaving the place shows none of it.
+    const tiles = IMAGERY[id]?.tiles;
+    if (tiles && centre.mesh) {
+      this.ground = new GroundTiles(centre.mesh.mesh, {
+        // NASA Trek: a plain latitude / longitude map, two squares at level 0. Level 4 is the
+        // first that shows more than a 4096-pixel map of the whole body does.
+        source: { url: tiles.url, grid: 'degrees', lowZoom: 2, nearZoom: 4, maxZoom: tiles.maxZoom, quietWhenMissing: true },
+        radiusKm: body.radiusKm,
+        light: { like: 'body', uniforms: centre.mesh.uniforms, occluders: MAX_OCCLUDERS },
+        farCover: 1, // no clouds to keep in view: the tiles cover the map completely from the start
+        anisotropy: this.kit.quality === 'fast' ? 1 : Math.min(8, this.kit.renderer.capabilities.getMaxAnisotropy()),
+        matchTone: true,
+      });
+      this.ground.enabled = this.sharpGround;
+      // The tiles are toned to match the body's own map, once that has arrived (or failed to).
+      const ground = this.ground, base = IMAGERY[id]!.base;
+      this.loadMap(base, (texture) => {
+        if (this.ground === ground) ground.setReference(texture ? (texture.image as CanvasImageSource) : null);
+      });
+    }
     // Company: its moons; and for a moon, the planet it circles and the other moons there.
     const family = BODY_LIST.filter((other) => other.id !== id && (other.parent === id || (body.kind === 'moon' && (other.id === body.parent || other.parent === body.parent))));
     // Their maps too, except from the Sun: at true scale a planet seen from there is less than a pixel.
@@ -775,6 +804,13 @@ export class SpaceView {
     if (slave) this.adopt(slave.key, slave.pose);
     else this.moveCamera(dt, focusItem);
     this.camera.updateMatrixWorld();
+    if (this.ground) {
+      // The body turns under a camera that stays put among the stars, so with the clock running
+      // fast the ground streams past; the tiles are told the rate and settle for a coarser level.
+      const rate = dt > 0 ? Math.abs(tMs - this.lastT) / 1000 / dt : 1;
+      this.ground.update(this.camera, this.sunDir, realSeconds, dt, undefined, rate);
+    }
+    this.lastT = tMs;
     this.backdrop.position.copy(this.camera.position);
     this.backdrop.quaternion.copy(this.frame);
 
@@ -887,7 +923,28 @@ export class SpaceView {
     const map = this.where?.kind === 'system';
     const item = this.focus ? this.item(targetKey(this.focus)) : null;
     if (item && !item.centre) this.controls.minDistance = item.radius > 0 ? item.radius * (map ? 2.2 : 1.15) : map ? 0.6 : 0.03;
-    else this.controls.minDistance = map ? 12 : R * 1.06;
+    else this.controls.minDistance = map ? 12 : R * (1 + this.lowest);
+  }
+
+  /**
+   * How close to the ground of the place's body the camera may come, in radii above the
+   * surface. A whole-body map is not worth a closer look than 0.06 (400 km at the Earth).
+   * Where there is close-up ground the camera may go on down until the finest level is drawn
+   * about three times life size (below that only its pixels grow): 0.0375 for a map that
+   * stops at level 7, less for a finer one. Never below 0.025: the camera looks at the body's
+   * centre, and SceneKit sets its near plane at 2 % of the distance to what it looks at, so
+   * ground closer than 0.02 radii would be cut away.
+   */
+  private get lowest(): number {
+    if (!this.ground || this.where?.kind !== 'place') return 0.06;
+    const finest = IMAGERY[this.where.body]?.tiles?.maxZoom ?? 0;
+    return THREE.MathUtils.clamp(4.8 / 2 ** finest, 0.025, 0.06);
+  }
+
+  /** The Layers switch "Sharp ground": close-up tiles at a place whose body has them. */
+  setSharpGround(on: boolean): void {
+    this.sharpGround = on;
+    if (this.ground) this.ground.enabled = on;
   }
 
   private fly(toOffset: THREE.Vector3, duration: number, ease = easeInOut, toTarget: THREE.Vector3 | null = null): void {
@@ -957,7 +1014,11 @@ export class SpaceView {
       // Stay with whatever is being looked at as it moves.
       const offset = camera.position.clone().sub(controls.target);
       this.idle = this.interacting ? 0 : this.idle + dt;
-      if (this.live && this.host.drift() && this.idle > 4) offset.applyAxisAngle(UP, dt * 0.022 * Math.min(1, (this.idle - 4) / 4));
+      if (this.live && this.host.drift() && this.idle > 4) {
+        // Close to the ground the same turn would send the surface racing past: slower there.
+        const low = anchor === ORIGIN && this.where?.kind === 'place' ? THREE.MathUtils.clamp((offset.length() - R) / (R * 0.5), 0.03, 1) : 1;
+        offset.applyAxisAngle(UP, dt * 0.022 * low * Math.min(1, (this.idle - 4) / 4));
+      }
       controls.target.copy(anchor);
       camera.position.copy(anchor).add(offset);
     }
@@ -977,7 +1038,7 @@ export class SpaceView {
       const distance = camera.position.length();
       const altitude = Math.max(0, distance - R);
       controls.zoomSpeed = 0.9 * THREE.MathUtils.clamp((altitude / distance) * 1.3, 0.06, 1);
-      controls.rotateSpeed = THREE.MathUtils.clamp(altitude * 0.033, 0.02, 0.55);
+      controls.rotateSpeed = THREE.MathUtils.clamp(altitude * 0.033, 0.004, 0.55); // (the floor is for the lowest the camera goes: see `lowest`)
     } else {
       controls.zoomSpeed = 0.9;
       controls.rotateSpeed = 0.55;

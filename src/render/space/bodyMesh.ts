@@ -103,6 +103,7 @@ const BODY_FRAGMENT = /* glsl */ `
 
     // Dusty airless ground scatters light back, so its lit disc is nearly evenly bright with a
     // hard edge; a thick atmosphere wraps the light a little way round into the night.
+    // (render/tiles.ts repeats this lighting for the close-up ground of a body: change both.)
     float hard = pow(max(ndl, 0.0), 0.75);
     float soft = clamp((ndl + 0.12) / 1.12, 0.0, 1.0);
     float lit = mix(hard, soft * soft * (3.0 - 2.0 * soft), uHaze);
