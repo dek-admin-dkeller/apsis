@@ -81,6 +81,11 @@ status line sit along the bottom.
 | Screening cells in a close approach (`G`) | with a close approach open, the cells drawing is about that pair: the grid of occupied cells dimmed around them, one object's cell in cyan with an outline of the 27 cells its search covers, the other's in amber, both lit red while the two are inside the alert distance. The camera keeps both objects in view as they fly apart, and their flight paths are drawn as long arcs |
 | Share | the link button in the top bar copies an address that reopens the same object, close approach, time or camera position |
 | Tour | offered on the first visit and always available from the controls sheet (`?`) |
+| Launch climbs | every launch with a known pad and minute is drawn rising from its pad to orbit on an ESTIMATED path (pad, time and target orbit; no one publishes a rocket's live position), with T+, height, speed and stage, **Follow** and **Watch live**. In the launches list: **Preview / Watch / Replay the climb** (the clock moves to lift-off) |
+| New launches | objects launched in the last three days are brighter, mint, and named "New" (Layers → New launches) |
+| Rover paths | at Mars, the routes Curiosity and Perseverance have driven, from NASA's daily record; each rover stands at the end of its path (Layers → Rover paths) |
+| Eclipses and transits | the bell lists the next solar and lunar eclipses (an alert while one is happening), a planet crossing the Sun, and the shadows of Jupiter's moons on the planet (routine); choosing one moves the clock to its peak and goes to where the shadow falls. Worked out in the app (`space/skyEvents.ts`) and checked against NASA's eclipse tables |
+| What's new | the home page and About list the latest additions, newest first |
 | Live and coming up | the bell in the top bar (on a phone, in the menu): spacecraft a Deep Space Network dish is talking to now, a launch in flight or about to lift off, an active meteor shower, then the next launches, asteroid and shower peak. A green dot and count while anything is live; each row goes to it |
 | Filters | while any filter hides part of the catalogue (a type chosen in the search, the type and orbit chips, the height range, the year slider), an amber banner at the top of the globe says how many are shown and why, and **Show all** clears every one of them |
 | Autopilot (`A`) | a hands-free cinematic tour of the view; any key or click stops it. Away from the Earth the same button is **Autoplay**: a trip from the Sun out to Pluto, stopping at each world with a caption |
@@ -247,6 +252,8 @@ src/
     changes.ts           compares two downloads: raised, lowered, tilted, new, gone
     decay.ts             rough time left in orbit for the lowest objects        spaceWeather.ts   NOAA solar flux and Kp
     launches.ts          upcoming launches (Launch Library 2), cached           places.ts   cities the search can fly to
+    ascent.ts            an ESTIMATED climb to orbit for any listed launch (pad, time, target orbit)
+    fresh.ts             what was launched in the last three days, grouped by launch
     names.ts             readable names for objects filed under a code: "Hubble Space Telescope (HST)"
     freshness.ts         a tab left open asks its own site for newer data files (headers only, every 30 minutes)
     visibility.ts        which passes are bright enough to see, and when        approachData.ts   numbers for the report
@@ -269,6 +276,9 @@ src/
     observatoryModels.ts  Webb, Euclid, TESS, Chandra, XMM-Newton, SOHO, the solar-wind monitors, STEREO
     deepModels.ts        Voyager, Pioneer, New Horizons, Juno, Lucy, Psyche, BepiColombo, Parker Solar Probe …
     planetaryModels.ts   a lunar orbiter, a Mars orbiter, a rover, a lander, and an asteroid
+    constellationModels.ts  Starlink V2 Mini, Amazon Kuiper, Iridium NEXT, O3b, Galileo, GLONASS, GOES-R
+    vehicleModels.ts     Shenzhou, Starliner, Orion, Dream Chaser, and the Tesla Roadster with Starman
+    rocketModels.ts      Falcon 9 and Heavy, Starship, Electron, Long March, Soyuz, Atlas V, Vulcan, Ariane 6, New Glenn, a generic launcher
     prewarm.ts           builds the models in idle moments when there is no loading screen to work behind
     cameraRig.ts         fly-to, object-centred focus camera, view presets
     space/spaceView.ts   a scene away from the tracker: one body at true scale ("a place") or the solar system; poses for dissolving between scenes
@@ -285,6 +295,8 @@ src/
     deep.ts              loads public/data/deep.json; where each spacecraft is at any moment
     imagery.ts           each body's map, its streamed tile layer and the picture credits
     dsn.ts               NASA's live Deep Space Network feed           showers.ts   the annual meteor showers
+    skyEvents.ts         solar and lunar eclipses, Mercury/Venus transits, Jupiter's moons crossing its face
+    rovers.ts            the Mars rovers' driven paths (public/data/rovers.json, from NASA/JPL)
   features/              later additions, each one file installed through the App interface (ui/app.ts):
     radio.ts             last heard, transmitters, Doppler            changes.ts   orbit changes and data age
     weather.ts           space weather and time-left estimates        launches.ts  upcoming launches and pads
@@ -292,6 +304,7 @@ src/
     growth.ts            growth by year                               commands.ts  places, times and actions for the search field (+ commandParse.ts)
     flybys.ts            asteroid fly-bys                             fireballs.ts fireballs, marked on the globe
     showers.ts           meteor showers                               dsn.ts       the Deep Space Network, live
+    bell.ts              the bell: happening now, ongoing, coming up  ascent.ts    rockets climbing on their estimated paths
   ui/
     inspector.ts         the selected object's four tabs          charts.ts   hand-drawn canvas charts
     monitor.ts           close-approach list (right now)          encounterPanel.ts   one pair in detail

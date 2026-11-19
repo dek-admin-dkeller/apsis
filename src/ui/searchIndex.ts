@@ -67,6 +67,11 @@ const KIND_TOPIC: Partial<Record<ModelKind, string>> = {
   chandra: 'Space telescopes', xmm: 'Space telescopes', webb: 'Space telescopes', euclid: 'Space telescopes', tess: 'Space telescopes',
   lasersphere: 'Laser-ranging spheres', relay: 'Data-relay satellites', phasedarray: 'Direct-to-phone satellites',
   soho: 'Solar observatories', l1monitor: 'Space-weather and magnetosphere probes',
+  // Kinds added with their own models (Nov 2026): the same topics as before, so a model of its
+  // own never splits a type ("starlink" still finds every Starlink, V1 and V2 Mini alike).
+  starlinkv2: 'Starlink satellites', kuiper: 'Amazon Kuiper satellites', iridium: 'Iridium satellites', o3b: 'O3b satellites',
+  galileo: 'Navigation satellites', glonass: 'Navigation satellites', goes: 'Weather satellites',
+  shenzhou: 'Crewed spacecraft', starliner: 'Crewed spacecraft', orion: 'Crewed spacecraft', dreamchaser: 'Cargo spacecraft',
 };
 
 const CATEGORY_TOPIC: Partial<Record<Category, string>> = {

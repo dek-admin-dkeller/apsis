@@ -4,8 +4,15 @@
  * "Home page" is the plain site address.
  */
 
-import qrcode from 'qrcode-generator';
 import { $ } from './dom.ts';
+
+/**
+ * The QR library is only needed once the window opens, so it is not in the first file the page
+ * loads; `warmShare()` fetches it in an idle moment after start-up, so it is there when wanted.
+ */
+type QrFactory = typeof import('qrcode-generator');
+let qrLibrary: Promise<QrFactory> | null = null;
+export const warmShare = (): Promise<QrFactory> => (qrLibrary ??= import('qrcode-generator').then((m) => m.default));
 
 export class ShareDialog {
   private readonly overlay = $('share-dialog');
@@ -63,6 +70,12 @@ export class ShareDialog {
 
   /** Dark squares on white, with the quiet margin scanners need. */
   private drawQr(text: string): void {
+    void warmShare().then((qrcode) => {
+      if (this.field.value === text) this.paintQr(qrcode, text); // the link may have changed while it loaded
+    });
+  }
+
+  private paintQr(qrcode: QrFactory, text: string): void {
     const qr = qrcode(0, 'M'); // 0 = smallest version that fits; M = survives ~15% damage
     qr.addData(text);
     qr.make();

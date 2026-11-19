@@ -43,6 +43,7 @@ import { BODIES, BODY_LIST } from '../../space/bodies.ts';
 import { craftPeriodMs, craftPosition } from '../../space/deep.ts';
 import { bodyAxes, bodyPosition, bodyRelative } from '../../space/ephem.ts';
 import { IMAGERY } from '../../space/imagery.ts';
+import { loadRovers, onRoversRefresh, roverPath } from '../../space/rovers.ts';
 import type { Body, BodyId, Craft, Vec } from '../../space/types.ts';
 import { easeIn, easeOut } from '../cameraRig.ts';
 import { buildModel, modelBase } from '../satModels.ts';
@@ -79,6 +80,8 @@ export interface SpaceOptions {
   allCraft: boolean;
   /** Historic landing sites. */
   sites: boolean;
+  /** The paths the rovers have driven (public/data/rovers.json). */
+  roverPaths: boolean;
   /** Names of the constellations. */
   skyNames: boolean;
   /** For the craft being looked at: its orbit, its path over the ground, the ground that can see it, its 3D model. */
@@ -112,6 +115,9 @@ const SUN_RADIUS_KM = 695700;
 const UP = new THREE.Vector3(0, 1, 0);
 const ORIGIN = new THREE.Vector3();
 const DAY = 86400000;
+/** A rover's driven path: the warm amber of a craft's dot, and lighter for the rover being looked at. */
+const ROVER_PATH = 0xffc56e;
+const ROVER_PATH_CHOSEN = 0xffe2b0;
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
 // ---- the map's scale -------------------------------------------------------------------------
@@ -218,7 +224,7 @@ export class SpaceView {
   private readonly contact: THREE.Mesh;
   private readonly cast: THREE.Mesh;
   private footprint2 = { size: 1, x: 0, z: 0, base: -0.5 }; // the model's outline on the ground, in its own units
-  private groundAt = { key: '', radius: 0, checked: -Infinity }; // the drawn ground's radius under it, measured now and then
+  private groundAt = { key: '', radius: 0, target: 0, checked: -Infinity, at: 0 }; // the drawn ground's radius under it: measured now and then, eased
   private readonly ray = new THREE.Raycaster();
   private modelKey = '';
   private modelKind: ModelKind = 'probe';
@@ -240,7 +246,7 @@ export class SpaceView {
   private ground: GroundTiles | null = null; // close-up ground of the place's body, where its map is served in tiles
   private sharpGround = true; // the Layers switch (Settings.sharpGround)
   private lastT = 0; // the clock at the previous frame, to tell how fast time is running
-  private options: SpaceOptions = { orbits: true, craftOrbits: true, names: true, craft: true, moons: true, allCraft: false, sites: true, skyNames: true, selOrbit: true, selTrack: false, selFootprint: false, selModel: true };
+  private options: SpaceOptions = { orbits: true, craftOrbits: true, names: true, craft: true, moons: true, allCraft: false, sites: true, roverPaths: true, skyNames: true, selOrbit: true, selTrack: false, selFootprint: false, selModel: true };
   private skyRoot: HTMLElement | null = null; // constellation names, made on first use
   private readonly skyTags: { tag: HTMLElement; direction: THREE.Vector3 }[] = [];
   private track: THREE.Line | null = null; // the selected craft's path over the ground (a child of the body, so it turns with it)
@@ -249,6 +255,8 @@ export class SpaceView {
   private cells: THREE.LineSegments | null = null; // occupied cells of the screening grid (see setCells)
   private casters: Item[] = []; // the bodies of a place that can cast a shadow, biggest first
   private readonly footprint: THREE.LineLoop; // the edge of the ground that can see the selected craft
+  private roverLines: { line: THREE.Line; key: string; anchor: THREE.Vector3; checked: number }[] = []; // driven paths, children of the body (see roverPaths)
+  private roverWatch = false; // listening for a newer rovers.json
 
   constructor(kit: SceneKit, backdrop: THREE.Group, host: SpaceHost) {
     this.kit = kit;
@@ -450,6 +458,7 @@ export class SpaceView {
   /** Put everything away (the view is then not drawn or updated). */
   clear(): void {
     this.dropTrack();
+    this.dropRoverPaths();
     this.cells = null; // (a child of `content`, which is emptied below; its buffers are small)
     this.casters = [];
     this.footprint.visible = false;
@@ -632,6 +641,7 @@ export class SpaceView {
     // copy until one is looked at — a planet can have a dozen, and each full map is megabytes.
     for (const other of family) this.addBody(other, other.radiusKm * this.unitsPerKm, false, detail === 'full' && other.id !== body.parent ? 'small' : detail);
     for (const craft of this.crafts) if (craft.centre === id) this.addCraft(craft);
+    this.roverPaths(id);
 
     // Orbits: the path of everything here that circles something else here (moons round their
     // planet; from the Sun, the planets themselves, at true scale), and each craft's round this body.
@@ -1084,6 +1094,7 @@ export class SpaceView {
 
     this.updateModel(focusItem, tMs, realSeconds);
     this.updateGround(focusItem, tMs);
+    this.updateRoverPaths(focusItem, realSeconds);
     if (this.live) this.updateTags(focusItem);
     this.updateSkyNames();
   }
@@ -1157,6 +1168,99 @@ export class SpaceView {
     centre.mesh.mesh.add(this.track);
     this.trackKey = craft.id;
     this.trackAt = tMs;
+  }
+
+  // ---- the paths the rovers have driven ----------------------------------------------------------
+
+  /**
+   * Lines on the ground where each rover of this place has driven (public/data/rovers.json,
+   * NASA's own traverse maps; space/rovers.ts). The file is fetched the first time a place with
+   * something standing on its ground is built, so a visitor who never goes to Mars never loads
+   * it. Each line is a child of the body's mesh (it turns with the ground) at radius R, and is
+   * raised each frame to whatever ground is drawn there (see updateRoverPaths).
+   */
+  private roverPaths(id: BodyId): void {
+    const mesh = this.item(null)?.mesh?.mesh;
+    if (!mesh || !this.crafts.some((craft) => craft.centre === id && craft.motion.type === 'surface')) return;
+    if (!this.roverWatch) {
+      this.roverWatch = true;
+      // A newer file (a tab left open overnight): draw the longer paths in place of the old ones.
+      onRoversRefresh(() => {
+        if (this.where?.kind !== 'place') return;
+        this.dropRoverPaths();
+        this.roverPaths(this.where.body);
+      });
+    }
+    void loadRovers().then(() => {
+      // The view may have moved on, or been rebuilt, while the file was on its way.
+      if (this.where?.kind !== 'place' || this.where.body !== id || this.item(null)?.mesh?.mesh !== mesh || this.roverLines.length > 0) return;
+      for (const craft of this.crafts) {
+        const path = craft.centre === id ? roverPath(craft.id) : null;
+        if (!path) continue;
+        const position = new Float32Array(path.points.length * 3);
+        const anchor = new THREE.Vector3();
+        path.points.forEach(([latDeg, lonDeg], i) => {
+          const lat = (latDeg * Math.PI) / 180, lon = (lonDeg * Math.PI) / 180;
+          // The body's own axes: longitude 0 on +X, north on +Y, 90° east on −Z.
+          position[i * 3] = R * Math.cos(lat) * Math.cos(lon);
+          position[i * 3 + 1] = R * Math.sin(lat);
+          position[i * 3 + 2] = -R * Math.cos(lat) * Math.sin(lon);
+          anchor.x += position[i * 3];
+          anchor.y += position[i * 3 + 1];
+          anchor.z += position[i * 3 + 2];
+        });
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
+        // Lines take no polygonOffset (WebGL nudges only filled triangles), so the line is kept off
+        // the tile patches by height instead; depthWrite off so it never hides what is on it.
+        const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: ROVER_PATH, transparent: true, opacity: 0, depthWrite: false }));
+        line.visible = false;
+        mesh.add(line);
+        this.roverLines.push({ line, key: `craft:${craft.id}`, anchor: anchor.setLength(R), checked: -Infinity });
+      }
+    });
+  }
+
+  private dropRoverPaths(): void {
+    for (const { line } of this.roverLines) {
+      line.removeFromParent();
+      line.geometry.dispose();
+      (line.material as THREE.Material).dispose();
+    }
+    this.roverLines = [];
+  }
+
+  /**
+   * Show a path only once the camera has come down to it: a drive of a few tens of kilometres
+   * is a speck from the ordinary view of the whole world, and would read as a stray mark beside
+   * the rover's dot. The rover being looked at has its path drawn brighter.
+   */
+  private updateRoverPaths(focusItem: Item | null, realSeconds: number): void {
+    if (this.roverLines.length === 0) return;
+    const mesh = this.item(null)?.mesh?.mesh;
+    for (const path of this.roverLines) {
+      const line = path.line;
+      if (!mesh || !this.options.roverPaths) {
+        line.visible = false;
+        continue;
+      }
+      const scale = mesh.scale.x || 1;
+      const at = this.scratch.copy(path.anchor).applyMatrix4(mesh.matrixWorld);
+      const fade = 1 - THREE.MathUtils.smoothstep(at.distanceTo(this.camera.position) / (R * scale), 0.3, 0.6);
+      line.visible = fade > 0.01;
+      if (!line.visible) continue;
+      // The ground drawn here is the body's faceted sphere or a tile patch floating up to 0.11 %
+      // above the radius, each level at its own height; the line sits just over whichever it is
+      // (a ray straight down, twice a second: the patches change only as they load).
+      if (realSeconds - path.checked > 0.5) {
+        path.checked = realSeconds;
+        line.scale.setScalar((this.groundUnder(at, R * scale * 1.0014) / (R * scale)) * 1.00005);
+      }
+      const chosen = focusItem?.key === path.key;
+      const material = line.material as THREE.LineBasicMaterial;
+      material.color.setHex(chosen ? ROVER_PATH_CHOSEN : ROVER_PATH);
+      material.opacity = (chosen ? 1 : 0.6) * fade;
+    }
   }
 
   // ---- screening cells --------------------------------------------------------------------------
@@ -1607,19 +1711,31 @@ export class SpaceView {
    */
   private groundRadius(key: string, position: THREE.Vector3, realSeconds: number): number {
     const at = this.groundAt;
-    if (at.key === key && realSeconds - at.checked < 0.5) return at.radius;
-    at.key = key;
-    at.checked = realSeconds;
-    at.radius = position.length() / 1.0014; // the true surface, if nothing is hit
+    const fresh = at.key !== key;
+    if (fresh || realSeconds - at.checked >= 0.25) {
+      at.key = key;
+      at.checked = realSeconds;
+      at.target = this.groundUnder(position, position.length() / 1.0014); // the true surface, if nothing is hit
+      if (fresh) at.radius = at.target;
+    }
+    // Ease to a new height rather than jump: the levels of the close-up ground sit at slightly
+    // different heights, and while they stream in the rover hopped between them (the owner saw it stutter).
+    const dt = Math.min(0.2, Math.max(0, realSeconds - at.at));
+    at.at = realSeconds;
+    at.radius += (at.target - at.radius) * Math.min(1, dt * 4);
+    return at.radius;
+  }
+
+  /** One ray straight down through `position` (world, near the ground): the radius of what is drawn there, or `fallback` if nothing is hit. */
+  private groundUnder(position: THREE.Vector3, fallback: number): number {
     const globe = this.items.find((item) => item.centre)?.mesh?.mesh;
-    if (!globe) return at.radius;
+    if (!globe) return fallback;
     const down = position.clone().normalize().negate();
     this.ray.set(position.clone().multiplyScalar(1.01), down);
     this.ray.far = R * 0.02;
     globe.updateMatrixWorld(true);
-    const hits = this.ray.intersectObjects([globe, ...(this.ground?.enabled ? this.ground.shownPatches() : [])], false);
-    if (hits.length) at.radius = hits[0].point.length();
-    return at.radius;
+    const hits = this.ray.intersectObjects([globe, ...(this.ground?.enabled ? this.ground.shownPatches(0.6) : [] /* only patches mostly faded in: one still arriving is nearly invisible */)], false);
+    return hits.length ? hits[0].point.length() : fallback;
   }
 
   /** The shadow under a craft standing on the ground: where it touches, and cast away from the Sun. */

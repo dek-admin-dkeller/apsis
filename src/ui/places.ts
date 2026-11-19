@@ -37,6 +37,7 @@ import { craftPeriodMs, craftPosition, loadDeep } from '../space/deep.ts';
 import { watchDsn } from '../space/dsn.ts';
 import { bodyAxes, bodyPosition, bodyRelative } from '../space/ephem.ts';
 import { IMAGERY } from '../space/imagery.ts';
+import { loadRovers, onRoversRefresh, roverPath } from '../space/rovers.ts';
 import { SITES } from '../space/sites.ts';
 import type { Body, BodyId, Craft, DeepData, DsnLink, Flyby, Motion, Site, Vec } from '../space/types.ts';
 import type { SearchHit } from './app.ts';
@@ -269,6 +270,7 @@ export class Places {
     void loadDeep().then((deep) => {
       if (deep) this.refreshData(deep);
     });
+    onRoversRefresh(() => this.placeRovers());
   }
 
   /**
@@ -278,9 +280,30 @@ export class Places {
    */
   refreshData(deep: DeepData): void {
     this.crafts = [...deep.craft, ...deep.flybys.map(rockCraft).filter((rock): rock is Craft => rock !== null), ...SITES.map(siteCraft)];
+    this.placeRovers();
     this.place.setCraft(this.crafts, this.host.time());
     this.map.setCraft(this.crafts, this.host.time());
     if (this.spot === 'place') this.fillHere();
+  }
+
+  /**
+   * A rover stands where its driven path ends (space/rovers.ts, NASA's own daily record), not
+   * where Horizons puts it: deep.json's rovers sit at their landing sites, 12–14 km from where
+   * Curiosity and Perseverance have since driven, and the model sat at the START of its path.
+   * Applied whenever either file arrives or is refreshed.
+   */
+  private placeRovers(): void {
+    const moved = new Set<string>();
+    for (const craft of this.crafts) {
+      const path = craft.motion.type === 'surface' && !craft.site ? roverPath(craft.id) : null;
+      const end = path?.points[path.points.length - 1];
+      if (!end || craft.motion.type !== 'surface' || (craft.motion.latDeg === end[0] && craft.motion.lonDeg === end[1])) continue;
+      craft.motion = { type: 'surface', latDeg: end[0], lonDeg: end[1] };
+      moved.add(craft.id);
+    }
+    // A card already open on a rover that has just moved was written with the old place: write it again.
+    const focus = this.current?.focus;
+    if (focus?.kind === 'craft' && moved.has(focus.craft.id)) this.show(focus);
   }
 
   // ---- state the rest of the program may ask about ---------------------------------------------
@@ -417,6 +440,8 @@ export class Places {
   /** Make sure the place view holds `body` (built now, unless it already does and is recent). */
   private ensurePlace(body: BodyId): void {
     const t = this.host.time();
+    // A world with rovers on it: stand them at the ends of their driven paths (fetched once).
+    if (this.crafts.some((craft) => craft.centre === body && craft.motion.type === 'surface' && !craft.site)) void loadRovers().then(() => this.placeRovers());
     const where = this.place.where;
     if (where?.kind === 'place' && where.body === body && Math.abs(t - this.place.builtTime) < 3600000) this.place.setFocus(null, t, 0);
     else this.place.build({ kind: 'place', body }, t);
@@ -853,6 +878,7 @@ export class Places {
 
   /** Look at one craft, wherever it is: in its body's place, or on the solar system if it is out between the planets. */
   showCraft(craft: Craft): void {
+    if (craft.motion.type === 'surface' && !craft.site) void loadRovers().then(() => this.placeRovers()); // stand it at the end of its path
     const target: Target = { kind: 'craft', craft };
     // An asteroid can only be shown around its pass: go to a little before its closest moment.
     if (craft.passing && Math.abs(this.host.time() - craft.passing.timeMs) > 2 * DAY) this.host.jumpTo(craft.passing.timeMs - 40 * 60000);
@@ -1241,7 +1267,18 @@ export class Places {
       if (craft.massKg) rows.push(['Mass at launch', `${fmtInt(craft.massKg)} kg`]);
       if (craft.agency) rows.push(['Run by', craft.agency]);
       if (!site && !pass) rows.push(['Status', craft.status === 'silent' ? 'No longer answering' : 'Operational']);
+      // A rover's odometry, from NASA's traverse maps (space/rovers.ts). The file may still be on
+      // its way, so the row is filled when it arrives, and taken away if this rover has no path.
+      const driven = el('span');
+      if (motion.type === 'surface' && craft.model === 'rover') rows.push(['Driven so far', driven]);
       if (rows.length > 0) into.append(this.facts(rows));
+      if (driven.parentElement) {
+        void loadRovers().then(() => {
+          const path = roverPath(craft.id);
+          if (path) driven.textContent = `${fmtKm(path.drivenKm, 1)} by sol ${fmtInt(path.sol)}`;
+          else driven.closest('div')?.remove();
+        });
+      }
       about(into, craft.blurb);
     }]);
     return tabs;
@@ -1252,16 +1289,25 @@ export class Places {
   /** Bodies and craft for the search field (App.addSearch). */
   search(query: string): SearchHit[] {
     const hits: SearchHit[] = [];
+    // At another world, what is THERE comes first: its moons and the craft round it or on its
+    // ground get a lift and a heading of their own ("At Mars"), so "curiosity" at Mars or "ice"
+    // at Jupiter finds the local thing before a namesake elsewhere.
+    const at = this.spot === 'place' ? this.hereBody : null;
+    const local = (centre: BodyId | null): boolean => at !== null && centre !== null && (centre === at || BODIES[centre].parent === at || BODIES[at].parent === centre);
+    const here = at ? `At ${BODIES[at].name}` : '';
+    const lift = (score: number, isLocal: boolean): number => (isLocal ? Math.min(1, score + 0.12) : score);
     const system = this.host.match(query, 'solar system', 'planets', 'the solar system', 'map of the solar system');
     if (system > 0) hits.push({ title: 'The solar system', note: 'Every planet, where it is now', group: 'Beyond Earth orbit', score: system, run: () => void this.travel({ kind: 'map', focus: null }) });
     for (const body of BODY_LIST) {
       const score = this.host.match(query, body.name, ...(body.id === 'moon' ? ['the moon', 'luna'] : body.id === 'sun' ? ['the sun'] : []));
       if (score <= 0 || body.id === 'earth') continue;
-      hits.push({ title: body.name, note: kindText(body), group: 'Beyond Earth orbit', score, run: () => this.goBody(body.id) });
+      const near = local(body.parent) && body.id !== at;
+      hits.push({ title: body.name, note: kindText(body), group: near ? here : 'Beyond Earth orbit', score: lift(score, near), run: () => this.goBody(body.id) });
     }
     for (const craft of this.crafts) {
       const score = this.host.match(query, craft.name, craft.short, ...craft.aliases);
-      if (score > 0) hits.push({ title: craft.name, note: craft.role, group: 'Beyond Earth orbit', score, run: () => this.showCraft(craft) });
+      const near = local(craft.centre);
+      if (score > 0) hits.push({ title: craft.name, note: craft.role, group: near ? here : 'Beyond Earth orbit', score: lift(score, near), run: () => this.showCraft(craft) });
     }
     return hits.sort((p, q) => q.score - p.score).slice(0, 8);
   }

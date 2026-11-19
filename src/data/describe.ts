@@ -15,6 +15,14 @@ export type ModelKind =
   | 'dragon' | 'soyuz' | 'cygnus' | 'capsule'
   | 'rocketbody' | 'debris'
   | 'lasersphere' | 'relay' | 'phasedarray'
+  // Particular constellations and vehicles common enough to deserve their own shape
+  // (render/constellationModels.ts, render/vehicleModels.ts).
+  | 'starlinkv2' | 'kuiper' | 'iridium' | 'o3b' | 'galileo' | 'glonass' | 'goes'
+  | 'shenzhou' | 'starliner' | 'orion' | 'dreamchaser' | 'roadster'
+  // Launch vehicles standing on their pad (render/rocketModels.ts): +Y is up the rocket's axis
+  // and y = 0 is the bottom of its engine bells, so modelBase() stands one on the ground.
+  | 'falcon9' | 'falconheavy' | 'starship' | 'electron' | 'longmarch' | 'soyuzrocket'
+  | 'atlasv' | 'vulcan' | 'ariane6' | 'newglenn' | 'launcher'
   // Beyond Earth orbit (render/deepModels.ts). The deep-space data file names these as plain
   // strings, so the spelling here is a contract: check with isModelKind before trusting one.
   | 'webb' | 'euclid' | 'tess' | 'chandra' | 'xmm' | 'soho' | 'l1monitor' | 'stereo'
@@ -41,7 +49,7 @@ const PROGRAMMES: [RegExp, string, string][] = [
   [/^GLOBALSTAR/, 'Globalstar', 'Satellite phone and data network'],
   [/^ORBCOMM/, 'ORBCOMM', 'Machine-to-machine messaging'],
   [/^(GPS |NAVSTAR)/, 'US Space Force', 'GPS navigation'],
-  [/^GLONASS|^COSMOS \d+ \([78]\d\d\)/, 'Roscosmos (Russia)', 'GLONASS navigation'],
+  [/^GLONASS|^COSMOS \d+ \([78]\d\d\)|\[GLONASS/, 'Roscosmos (Russia)', 'GLONASS navigation'],
   [/GALILEO/, 'European Union / ESA', 'Galileo navigation'],
   [/^BEIDOU/, 'China', 'BeiDou navigation'],
   [/^QZS/, 'Japan', 'QZSS regional navigation'],
@@ -53,6 +61,9 @@ const PROGRAMMES: [RegExp, string, string][] = [
   [/^CYGNUS/, 'Northrop Grumman', 'Cargo spacecraft'],
   [/^(SHENZHOU|TIANZHOU)/, 'China Manned Space Agency', 'Crew / cargo spacecraft'],
   [/^HTV/, 'JAXA (Japan)', 'Cargo spacecraft'],
+  [/^(STARLINER|CST-100)/, 'Boeing', 'Crew spacecraft'],
+  [/^DREAM CHASER/, 'Sierra Space', 'Cargo spaceplane'],
+  [/^ORION\b/, 'NASA / ESA', 'Crew spacecraft'],
   [/^HST$/, 'NASA / ESA', 'Hubble Space Telescope'],
   [/^(NOAA|GOES|JPSS|SUOMI)/, 'NOAA (USA)', 'Weather satellite'],
   [/^(METEOSAT|METOP)/, 'EUMETSAT', 'Weather satellite'],
@@ -101,9 +112,13 @@ const SHAPES: [RegExp, ModelKind][] = [
   [/^ISS( \(|$)/, 'iss'],
   [/^(CSS\b|TIANHE|WENTIAN|MENGTIAN|TIANGONG)/, 'tiangong'],
   [/^(CREW DRAGON|CARGO DRAGON|DRAGON\b)/, 'dragon'],
-  [/^(SOYUZ|PROGRESS|SHENZHOU)/, 'soyuz'],
+  [/^SHENZHOU/, 'shenzhou'],
+  [/^(SOYUZ|PROGRESS)/, 'soyuz'],
   [/^CYGNUS/, 'cygnus'],
-  [/^(TIANZHOU|HTV|DREAM CHASER|STARLINER|CST-100)/, 'capsule'],
+  [/^(STARLINER|CST-100)/, 'starliner'],
+  [/^DREAM CHASER/, 'dreamchaser'],
+  [/^ORION\b/, 'orion'],
+  [/^(TIANZHOU|HTV)/, 'capsule'],
   [/^CXO\b/, 'chandra'],
   [/^XMM\b/, 'xmm'],
   [/^SDO$/, 'soho'],
@@ -112,7 +127,16 @@ const SHAPES: [RegExp, ModelKind][] = [
   [/^(TDRS|LUCH|TIANLIAN)/, 'relay'],
   [/^(SPACEMOBILE|BLUEWALKER|BLUEBIRD)/, 'phasedarray'], // (must come before the constellation line below, which used to claim them)
   [/^(HST|FGRST|SWIFT|FERMI|NUSTAR|IXPE|XPOSAT|ASTROSAT|CHEOPS|TESS|XRISM|HXMT|DAMPE|INTEGRAL|NEOSSAT|EINSTEIN PROBE|SVOM|SPHEREX|HINODE)\b|^IRIS$/, 'telescope'],
+  // V2 Mini satellites (from 2023) are numbered from 10,000 up, the V1.0 and V1.5 ones below
+  // that; the Direct-to-Cell satellites ("[DTC]") are V2 Minis with a bigger phone antenna.
+  [/^STARLINK-\d{5}\b/, 'starlinkv2'],
   [/^STARLINK/, 'starlink'],
+  [/^KUIPER/, 'kuiper'],
+  [/^IRIDIUM 1\d\d$/, 'iridium'], // Iridium NEXT (100–180); the first generation, numbered below 100, keeps the comsat shape
+  [/^O3B/, 'o3b'],
+  [/GALILEO/, 'galileo'],
+  [/\[GLONASS-M\]|^GLONASS/, 'glonass'], // the pressurised GLONASS-M; the newer GLONASS-K are plain boxes (gnss)
+  [/^GOES (1[6-9]|2\d)\b/, 'goes'], // GOES-R series: GOES 16 onwards
   [/^ONEWEB/, 'oneweb'],
   [/^(ICEYE|CAPELLA|UMBRA|TERRASAR|TANDEM|RADARSAT|RCM-|COSMO-SKYMED|CSG-|SAOCOM|SENTINEL-1|ALOS|RISAT|NISAR|PAZ\b|KOMPSAT-[56]|SAR-LUPE|SARAH|STRIX|QPS-SAR|NOVASAR|IRIDE-MS|LUTAN|HISEA|CONDOR)/, 'radarsat'],
   // Spin-stabilised drums (must come before the general weather line, which would claim them).
@@ -177,6 +201,29 @@ export const KIND_LABEL: Record<ModelKind, string> = {
   lasersphere: 'Laser-ranging sphere',
   relay: 'Data-relay satellite',
   phasedarray: 'Direct-to-phone satellite',
+  starlinkv2: 'Starlink V2 Mini',
+  kuiper: 'Amazon Kuiper satellite',
+  iridium: 'Iridium NEXT satellite',
+  o3b: 'O3b medium-orbit satellite',
+  galileo: 'Galileo navigation satellite',
+  glonass: 'GLONASS navigation satellite',
+  goes: 'GOES-R weather satellite',
+  shenzhou: 'Shenzhou spacecraft',
+  starliner: 'Starliner capsule',
+  orion: 'Orion spacecraft',
+  dreamchaser: 'Dream Chaser spaceplane',
+  roadster: 'Tesla Roadster',
+  falcon9: 'Falcon 9',
+  falconheavy: 'Falcon Heavy',
+  starship: 'Starship',
+  electron: 'Electron',
+  longmarch: 'Long March 5',
+  soyuzrocket: 'Soyuz rocket',
+  atlasv: 'Atlas V',
+  vulcan: 'Vulcan Centaur',
+  ariane6: 'Ariane 6',
+  newglenn: 'New Glenn',
+  launcher: 'Launch vehicle',
   webb: 'James Webb Space Telescope',
   euclid: 'Survey telescope',
   tess: 'Planet-hunting telescope',
@@ -203,6 +250,28 @@ export const KIND_LABEL: Record<ModelKind, string> = {
   lander: 'Lander',
   asteroid: 'Asteroid',
 };
+
+// [rocket name pattern, model] — first match wins. Names as Launch Library 2 writes them
+// (rocket.configuration.name: "Falcon 9 Block 5", "Long March 3B", "Soyuz 2.1b", "Ariane 64" …).
+const ROCKETS: [RegExp, ModelKind][] = [
+  [/falcon heavy/i, 'falconheavy'],
+  [/falcon 9/i, 'falcon9'],
+  [/starship|super heavy/i, 'starship'],
+  [/electron/i, 'electron'],
+  // Long Marches with strap-on boosters look like the 5 (core, boosters with pointed noses);
+  // the others (2C, 2D, 4, 6, 11, 12 …) are plain two- or three-stage rockets.
+  [/(long march |chang ?zheng |\bcz-)(5b?|7a?|8a?|3b|3c|2f)\b/i, 'longmarch'],
+  [/soyuz/i, 'soyuzrocket'],
+  [/atlas v/i, 'atlasv'],
+  [/vulcan/i, 'vulcan'],
+  [/ariane 6/i, 'ariane6'],
+  [/new glenn/i, 'newglenn'],
+];
+
+/** The model for a rocket, from its name; anything not listed is drawn as a generic launcher. */
+export function rocketKind(rocket: string): ModelKind {
+  return ROCKETS.find(([pattern]) => pattern.test(rocket))?.[1] ?? 'launcher';
+}
 
 /**
  * Is this string the name of a model? Data files name models as plain text (the deep-space

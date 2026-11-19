@@ -37,7 +37,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const read = (path) => JSON.parse(readFileSync(join(HERE, path), 'utf8'));
 const DEG = Math.PI / 180;
 const C_KM_S = 299792.458;
-const MODELS = ['webb', 'voyager', 'pioneer', 'newhorizons', 'juno', 'parker', 'solarorbiter', 'soho', 'l1monitor', 'tess', 'euclid', 'lunarorbiter', 'marsorbiter', 'rover', 'lander', 'clipper', 'lucy', 'psyche', 'bepi', 'samplereturn', 'stereo', 'probe'];
+const MODELS = ['webb', 'voyager', 'pioneer', 'newhorizons', 'juno', 'parker', 'solarorbiter', 'soho', 'l1monitor', 'tess', 'euclid', 'lunarorbiter', 'marsorbiter', 'rover', 'lander', 'clipper', 'lucy', 'psyche', 'bepi', 'samplereturn', 'stereo', 'roadster', 'probe'];
 
 let failed = 0;
 const check = (name, ok, detail = '') => {

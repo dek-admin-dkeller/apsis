@@ -19,7 +19,7 @@ import * as THREE from 'three';
 
 export type V3 = readonly [number, number, number];
 export type Axis = 'x' | 'y' | 'z';
-type Painter = (ctx: CanvasRenderingContext2D, size: number) => void;
+export type Painter = (ctx: CanvasRenderingContext2D, size: number) => void;
 export const UP = new THREE.Vector3(0, 1, 0);
 export const TAU = Math.PI * 2;
 
@@ -38,8 +38,12 @@ export function random(seed: number): () => number {
 // Textures and materials (made once, shared by every model)
 // ---------------------------------------------------------------------------------------
 
-/** A colour texture painted on a square canvas. */
-function paint(size: number, draw: Painter): THREE.CanvasTexture {
+/**
+ * A colour texture painted on a square canvas. Exported so that a family of models with
+ * materials of its own (rocketModels.ts) can paint them the first time one is built, instead
+ * of every visitor paying for them at start-up in makeMaterials().
+ */
+export function paint(size: number, draw: Painter): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
   draw(canvas.getContext('2d')!, size);

@@ -31,7 +31,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const DATA = join(dirname(fileURLToPath(import.meta.url)), '..', 'public/data');
-const FILES = ['satellites.json', 'radio.json', 'satcat.json', 'deep.json'];
+const FILES = ['satellites.json', 'radio.json', 'satcat.json', 'deep.json', 'rovers.json'];
 
 const site = process.argv[2];
 if (!site || !/^https:\/\//.test(site)) {

@@ -7,6 +7,10 @@
  * of date. Keep each line to what the visitor can do, in plain words, without overselling.
  *
  * `fresh: true` puts a small "new" mark beside a feature; take it off again after a while.
+ *
+ * WHATS_NEW (below) is the change log visitors see: on the home page ("What's new") and in
+ * About. Add an entry at the TOP for every visible change, in plain words; it is how returning
+ * visitors discover what they have not tried yet.
  */
 
 export interface Feature {
@@ -65,7 +69,7 @@ export const FEATURES: FeatureGroup[] = [
     summary: 'Pick anything and stay with it: where it is, what it is, and what it can see.',
     items: [
       { name: 'Inspector', text: 'Live height, speed and position, the path over the ground, the shape of the orbit, its record (owner, launch date, size) and a link to its Wikipedia article.' },
-      { name: '3D models and photos', text: 'Forty-nine kinds of spacecraft modelled in 3D, from a CubeSat to the Webb telescope, beside a real photo where one exists.' },
+      { name: '3D models and photos', text: 'Seventy-two kinds of spacecraft and rockets modelled in 3D, from a CubeSat and the Starlink V2 Mini to the Webb telescope, Starship and the Tesla Roadster, beside a real photo where one exists.', fresh: true },
       { name: 'Ride along', text: 'Sit on a satellite and look out from it.' },
       { name: 'Passes over you', text: 'When it will next cross your sky, and the path it will take across it.' },
       { name: 'Watchlist and contact timeline', text: 'Star the objects you care about and see when ground stations can reach each of them.' },
@@ -97,6 +101,8 @@ export const FEATURES: FeatureGroup[] = [
       { name: 'Spacecraft out there', text: 'The Webb telescope, the orbiters and rovers at Mars, Juno, the Voyagers: fifty craft placed from NASA’s own trajectory data, with how far away each is and how long its signal takes.', fresh: true },
       { name: 'In contact now', text: 'A green mark on any craft that one of NASA’s deep-space dishes is talking to this minute.', fresh: true },
       { name: 'Asteroids passing', text: 'Follow a near-Earth asteroid along its real path as it goes past.', fresh: true },
+      { name: 'Rover paths', text: 'The routes Curiosity and Perseverance have driven, drawn on the Martian ground from NASA’s daily record, with each rover standing where it is now and how far it has gone.', fresh: true },
+      { name: 'Search where you are', text: 'At another world, what is there comes first: at Mars, “curiosity” or “orbiter” finds Mars’s own before anything else.', fresh: true },
       { name: 'Landing sites', text: 'Where the Apollo crews, the Vikings and the other historic landers came down, each with its date and whether the Sun is up there now.', fresh: true },
       { name: 'A full card for every craft', text: 'A photo, what it is for, its orbit, how far its signal has to travel, and switches for its orbit, its path over the ground and the ground that can see it.', fresh: true },
       { name: 'Close approaches at every world', text: 'The same screening as round the Earth, on the craft at Mars or the Moon: who is nearest whom now, the closest passes of the coming day, and the grid that finds them.', fresh: true },
@@ -115,11 +121,14 @@ export const FEATURES: FeatureGroup[] = [
       { name: 'Share', text: 'A link or QR code that reopens exactly what you are looking at.' },
       { name: 'Visible tonight', text: 'The bright passes you could see with your own eyes in the next 24 hours from where you are, and where to look. On a phone it opens inside the sky view.', fresh: true },
       { name: 'Upcoming launches', text: 'What is due to launch next, with a countdown and the pads marked on the globe.', fresh: true },
+      { name: 'Watch a launch climb', text: 'A rocket rising from its pad to orbit on the globe, live as it launches: an estimated path from the pad, the time and the target orbit, with its height, speed and stages, and a link to the webcast. Preview any upcoming launch, or replay a recent one.', fresh: true },
+      { name: 'New launches', text: 'What went up in the last three days stands out: brighter dots and a “New” name, until the novelty wears off.', fresh: true },
       { name: 'Orbit changes', text: 'Which satellites have raised or lowered their orbits since the data was last refreshed, and what is new or gone.', fresh: true },
       { name: 'Space weather and re-entries', text: 'How active the Sun is today, and roughly how long the lowest objects have left.', fresh: true },
       { name: 'Spacecraft catalogue', text: 'Every 3D model on one page. Pick one to turn it round, read what it is, and go and find one in orbit.', fresh: true },
       { name: 'Asteroid fly-bys', text: 'The rocks passing the Earth in the coming weeks: when, how far away in kilometres and Moon-distances, how big and how fast. Choose one to move the clock to its closest approach.', fresh: true },
       { name: 'Fireballs', text: 'The brightest meteors recorded lately, with the energy of each, marked on the globe where they exploded.', fresh: true },
+      { name: 'Eclipses and transits', text: 'The next solar and lunar eclipses and the shadows of Jupiter’s moons crossing its face, worked out in the app and listed in the bell. Choose one to move the clock to it and see the shadow where it falls.', fresh: true },
       { name: 'Meteor showers', text: 'Which annual showers are active now and which come next, with the hour of each peak worked out for this year.', fresh: true },
       { name: 'Deep Space Network', text: 'Which of NASA’s giant dishes is talking to which spacecraft this minute, how far away it is and how long the signal takes.', fresh: true },
     ],
@@ -130,6 +139,60 @@ export const FEATURES: FeatureGroup[] = [
     items: [
       { name: 'Hold it up to the sky', text: 'The sky button fills the screen with what is overhead in the direction the phone is pointing.' },
       { name: 'Built around the globe', text: 'Few controls on screen, and panels you can drag out of the way.' },
+    ],
+  },
+];
+
+/** One release as visitors see it: newest first in WHATS_NEW. */
+export interface Update {
+  date: string; // YYYY-MM-DD
+  title: string;
+  items: string[];
+}
+
+export const WHATS_NEW: Update[] = [
+  {
+    date: '2026-11-19',
+    title: 'Launches you can watch, rovers that move, eclipses ahead',
+    items: [
+      'Watch a rocket climb: every launch with a known pad and time is drawn rising from its pad to orbit on an estimated path, with “Follow” and “Watch live”. Preview any upcoming launch, or replay a recent one.',
+      'New launches stand out: what went up in the last three days is brighter and named “New” on the globe.',
+      'Curiosity and Perseverance now stand where they really are, at the end of the paths they have driven, drawn on the ground from NASA’s own record.',
+      'Eclipses and transits: the next solar and lunar eclipses, and the moons of Jupiter crossing its face, in the bell.',
+      'More 3D models, among them the Starlink V2 Mini, Falcon 9, Starship and the Tesla Roadster that flew to space.',
+      'Search knows where you are: at Mars, Mars’s rovers and orbiters come first.',
+      'Starts faster: the extras load alongside the globe instead of before it.',
+    ],
+  },
+  {
+    date: '2026-11-19',
+    title: 'The bell, a solar-system tour, and filters you cannot miss',
+    items: [
+      'The bell (top right) lists what is happening now and what is coming up: launches, meteor showers, asteroids passing, spacecraft talking to NASA’s dishes. Only the unusual raises an alert.',
+      'Autoplay: away from the Earth the play button tours the solar system from the Sun to Pluto.',
+      'Escape takes you out of the Earth to the solar system, as it does at every other world.',
+      'A banner says when a filter is hiding objects, and “Show all” clears every filter at once.',
+      'Point at any world or spacecraft for a hover card; the cursor shows what can be clicked.',
+      'Rovers and landers stand on the ground with soft shadows; planet and spacecraft orbits switch on and off separately.',
+    ],
+  },
+  {
+    date: '2026-11-19',
+    title: 'One tool, many worlds',
+    items: [
+      'Every world has the same card, views, layers and close-approach monitor as the Earth; where you are is a path in the top bar.',
+      'Thirty-five moons, each where it really is, and 32 historic landing sites.',
+      'Sharp close-up ground at the Moon, Mars and Mercury.',
+      'An open tab picks up the newest tracking data by itself.',
+    ],
+  },
+  {
+    date: '2026-11-18',
+    title: 'Beyond Earth orbit',
+    items: [
+      'Zoom out of the Earth into the solar system, and into any world in it, with no cut between them.',
+      'Fifty spacecraft placed from NASA JPL’s trajectory data, asteroid fly-bys, fireballs, meteor showers and the live Deep Space Network.',
+      'Twenty-eight new 3D models and a catalogue of every model; one search field for everything.',
     ],
   },
 ];

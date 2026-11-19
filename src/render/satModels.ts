@@ -14,8 +14,10 @@
  *      ISS (several hundred parts) costs about a dozen draw calls
  *   3. buildModel() centres the result and scales its largest dimension to 1 unit
  *
- * This file holds the builders for everything in Earth orbit; deepModels.ts holds the
- * observatories, planetary craft and probes that fly beyond it.
+ * This file holds the builders for the general shapes in Earth orbit; observatoryModels.ts,
+ * deepModels.ts and planetaryModels.ts hold the craft that fly beyond it, constellationModels.ts
+ * particular satellite families (Starlink V2 Mini, Kuiper, Galileo …), vehicleModels.ts the
+ * newer crew and cargo ships (and the Tesla Roadster), rocketModels.ts the launch vehicles.
  *
  *   buildModel      a model of one kind (built once, then cloned); modelBase: its lowest point
  *   modelThumbnail  a still picture of a kind, for lists
@@ -34,6 +36,9 @@ import {
 import { OBSERVATORY_BUILDERS } from './observatoryModels.ts';
 import { DEEP_BUILDERS } from './deepModels.ts';
 import { PLANETARY_BUILDERS } from './planetaryModels.ts';
+import { CONSTELLATION_BUILDERS } from './constellationModels.ts';
+import { VEHICLE_BUILDERS } from './vehicleModels.ts';
+import { ROCKET_BUILDERS } from './rocketModels.ts';
 
 // ---------------------------------------------------------------------------------------
 // Crew and cargo vehicles (also reused, scaled down, as the craft docked to the stations).
@@ -944,10 +949,14 @@ const BUILDERS: Record<ModelKind, Builder> = {
     g.add(sail);
   },
 
-  // Everything that flies beyond Earth orbit is built in its own files.
+  // Everything that flies beyond Earth orbit is built in its own files, and so are the
+  // particular constellations, the newer crew and cargo vehicles, and the rockets.
   ...OBSERVATORY_BUILDERS,
   ...DEEP_BUILDERS,
   ...PLANETARY_BUILDERS,
+  ...CONSTELLATION_BUILDERS,
+  ...VEHICLE_BUILDERS,
+  ...ROCKET_BUILDERS,
 };
 
 /** Weld every part that shares a material into a single mesh (far fewer draw calls). */
@@ -1012,8 +1021,10 @@ function disposeModel(holder: THREE.Group): void {
 }
 
 // The kinds built behind the loading screen: the original set, which covers nearly the whole catalogue.
+// (starlinkv2 joined in Nov 2026: it is now the shape of 8,000 objects, the commonest of all, so
+// the first click on a Starlink must not pay for it. One kind costs a few ms here.)
 const WARMED: ModelKind[] = [
-  'starlink', 'oneweb', 'comsat', 'geocomsat', 'gnss', 'smallsat', 'cubesat', 'observer', 'radarsat', 'weather', 'spinner',
+  'starlinkv2', 'starlink', 'oneweb', 'comsat', 'geocomsat', 'gnss', 'smallsat', 'cubesat', 'observer', 'radarsat', 'weather', 'spinner',
   'telescope', 'iss', 'tiangong', 'station', 'dragon', 'soyuz', 'cygnus', 'capsule', 'rocketbody', 'debris',
 ];
 
@@ -1147,6 +1158,9 @@ const POSES: Partial<Record<ModelKind, readonly [number, number]>> = {
   euclid: [0.6 + 3 * EIGHTH, 0],
   solarorbiter: [0.6 + 5 * EIGHTH, 0],
   rover: [0.6 + EIGHTH, 0],
+  // A capsule's best-covered side is its round end, a car's is its tail: both are turned to show their profile, a little from the front.
+  starliner: [0.32, 0],
+  roadster: [0.2, 0],
 };
 
 /**

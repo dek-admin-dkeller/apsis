@@ -51,6 +51,8 @@ const KIND_NOTE: Partial<Record<ModelKind, string>> = {
   smallsat: 'Satellite', cubesat: 'CubeSat', observer: 'Earth imaging', radarsat: 'Radar imaging', weather: 'Weather',
   spinner: 'Weather', telescope: 'Telescope', iss: 'Space station', tiangong: 'Space station', station: 'Space station',
   dragon: 'Spacecraft', soyuz: 'Spacecraft', cygnus: 'Spacecraft', capsule: 'Spacecraft', rocketbody: 'Rocket stage', debris: 'Debris',
+  starlinkv2: 'Starlink', kuiper: 'Amazon Kuiper', iridium: 'Communications', o3b: 'Communications', galileo: 'Navigation',
+  glonass: 'Navigation', goes: 'Weather', shenzhou: 'Spacecraft', starliner: 'Spacecraft', orion: 'Spacecraft', dreamchaser: 'Spacecraft',
 };
 
 /** Small line icons for rows that have no picture, by heading (20 × 20, drawn like the tool rail's). */
@@ -194,7 +196,7 @@ export class Search {
     const kind = describe(sat).kind;
     return {
       sat,
-      hit: { title: displayName(sat), note: `${KIND_NOTE[kind] ?? KIND_LABEL[kind]} · ${sat.noradId}`, group: 'Objects', score, run: () => this.app.select(sat) },
+      hit: { title: displayName(sat), note: `${KIND_NOTE[kind] ?? KIND_LABEL[kind]} · ${sat.noradId}`, group: 'Objects', score: this.app.away() ? score * 0.9 : score, run: () => this.app.select(sat) }, // away from the Earth, what is there comes first (places.ts)
     };
   }
 

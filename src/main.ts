@@ -51,7 +51,7 @@ import { BenchmarkModal } from './ui/benchmarkModal.ts';
 import { Cinema } from './ui/cinema.ts';
 import { SpaceTour } from './ui/spaceTour.ts';
 import { ConstellationsPanel } from './ui/constellations.ts';
-import { Contacts } from './ui/contacts.ts';
+import type { Contacts } from './ui/contacts.ts';
 import { renderCrew, renderCrewSummary } from './ui/crew.ts';
 import { CUSTOM_NORAD_ID, Designer } from './ui/designer.ts';
 import { renderFeed } from './ui/feed.ts';
@@ -63,26 +63,15 @@ import { Gallery } from './ui/gallery.ts';
 import { HowTo } from './ui/howto.ts';
 import { alertDistance, clockStamp, duration, Inspector } from './ui/inspector.ts';
 import { LoadingScreen } from './ui/intro.ts';
-import { Landing } from './ui/landing.ts';
+import { Landing, updateRows } from './ui/landing.ts';
+import { WHATS_NEW } from './ui/featureList.ts';
 import type { App, FrameInfo, SearchProvider } from './ui/app.ts';
-import { installChanges } from './features/changes.ts';
-import { installCommands } from './features/commands.ts';
-import { installDsn } from './features/dsn.ts';
-import { installBell } from './features/bell.ts';
-import { installFireballs } from './features/fireballs.ts';
-import { installFlybys } from './features/flybys.ts';
-import { installGrowth } from './features/growth.ts';
-import { installLaunches } from './features/launches.ts';
-import { installRadio } from './features/radio.ts';
-import { installReport } from './features/report.ts';
-import { installShowers } from './features/showers.ts';
-import { installTonight } from './features/tonight.ts';
-import { installWeather } from './features/weather.ts';
+import { freshLaunches, type FreshLaunch } from './data/fresh.ts';
 import { Labels } from './ui/labels.ts';
 import { DOCKED_KM, Monitor } from './ui/monitor.ts';
 import { Search } from './ui/search.ts';
 import { DEFAULT_SITE, SettingsStore, type Settings } from './ui/settings.ts';
-import { ShareDialog } from './ui/share.ts';
+import { ShareDialog, warmShare } from './ui/share.ts';
 import { Sheets } from './ui/sheet.ts';
 import { thumbnail } from './ui/thumb.ts';
 import { TimeControls, type SimClock } from './ui/timeControls.ts';
@@ -361,6 +350,7 @@ function applySettings(s: Settings, changed: keyof Settings | null): void {
   for (const mode of ['category', 'orbit', 'altitude']) document.body.classList.toggle(`color-${mode}`, s.colorMode === mode);
   if (changed === null || changed === 'colorMode') renderLegend(s.colorMode);
   labels.mode = s.labels;
+  if (changed === 'newLaunches') markFresh();
   cloud.setPointSize(s.pointSize);
   kit.setBloom(s.glow);
   orbit.enabled = s.orbitPath;
@@ -390,7 +380,7 @@ function applySettings(s: Settings, changed: keyof Settings | null): void {
   setClockZone(s.clockZone);
   places.setSky(s.stars, s.constellations);
   places.setOptions({
-    orbits: s.spaceOrbits, craftOrbits: s.spaceCraftOrbits, names: s.spaceNames, craft: s.spaceCraft, moons: s.spaceMoons, allCraft: s.spaceAllCraft, sites: s.landingSites,
+    orbits: s.spaceOrbits, craftOrbits: s.spaceCraftOrbits, names: s.spaceNames, craft: s.spaceCraft, moons: s.spaceMoons, allCraft: s.spaceAllCraft, sites: s.landingSites, roverPaths: s.roverPaths,
     skyNames: s.skyLabels, selOrbit: s.orbitPath, selTrack: s.groundTrack, selFootprint: s.footprint, selModel: s.model,
   });
   if (changed === null || changed === 'units') $('d-label').textContent = alertDistance(screeningDistance);
@@ -1149,14 +1139,42 @@ const constPanel = new ConstellationsPanel($('constellation-body'), {
   stats: () => ({ coveredFraction: constView.coveredFraction, maxInView: constView.maxInView }),
 });
 
-const contacts = new Contacts({
-  watchlist: () => (catalog ? watch.indices().map((i) => catalog!.sats[i]) : []),
-  home: () => observer,
-  now: () => clock.time,
-  select: (sat) => select(sat),
-  jumpTo: (timeMs) => jumpTo(timeMs),
+/**
+ * Fetch, in idle moments once everything needed to start is in, the few pieces that are only
+ * used on a click (the share window's QR code, the contact timeline), so a click never waits
+ * on a download. One at a time; each is a small file the browser then keeps.
+ */
+function warmLater(): void {
+  const idle = (run: () => void): void => {
+    if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 4000 });
+    else setTimeout(run, 1500);
+  };
+  idle(() => void warmShare().then(() => idle(() => void loadContacts())));
+}
+
+// The contact timeline is opened by a click and is not needed to start: it is loaded then (or
+// earlier, in an idle moment after start-up: `warmLater`), and made the first time it opens.
+let contacts: Promise<Contacts> | null = null;
+const loadContacts = (): Promise<typeof import('./ui/contacts.ts')> => import('./ui/contacts.ts');
+$('contacts-open').addEventListener('click', () => {
+  contacts ??= loadContacts().then(({ Contacts: Timeline }) => new Timeline({
+    watchlist: () => (catalog ? watch.indices().map((i) => catalog!.sats[i]) : []),
+    home: () => observer,
+    now: () => clock.time,
+    select: (sat) => select(sat),
+    jumpTo: (timeMs) => jumpTo(timeMs),
+  }));
+  void contacts.then((timeline) => timeline.open());
 });
-$('contacts-open').addEventListener('click', () => contacts.open());
+
+// What was launched in the last three days (data/fresh.ts): marked on the globe and named "New".
+let fresh: FreshLaunch[] = [];
+function markFresh(): void {
+  fresh = catalog ? freshLaunches(catalog, facts, Date.now()) : [];
+  const on = store.settings.newLaunches;
+  cloud.setFresh(on ? fresh.flatMap((launch) => launch.members) : null);
+  labels.setFresh(on ? fresh.map((launch) => launch.lead) : []);
+}
 
 function updateDataNote(): void {
   if (!catalog) return;
@@ -1167,6 +1185,7 @@ function updateDataNote(): void {
     + (facts.size > 0 ? '' : ' Owner, launch and size details are not loaded.');
   const all = catalog;
   cloud.setOwners((index) => facts.get(all.sats[index].noradId)?.owner);
+  markFresh();
   renderFeed(catalog, facts, (sat) => select(sat), (members, lead) => {
     cloud.setHighlight(members); // a satellite train: light up the whole batch
     if (lead) select(lead);
@@ -1419,6 +1438,12 @@ aboutOverlay.addEventListener('pointerdown', (event) => {
 $('about-how').addEventListener('click', () => {
   setAbout(false);
   howto.open();
+});
+// What's new (the whole change log) and the way to the list of every feature on the home page.
+$('about-new').replaceChildren(...updateRows(WHATS_NEW, 'about'));
+$('about-features').addEventListener('click', () => {
+  setAbout(false);
+  landing.openAtFeatures();
 });
 
 // ---- spacecraft catalogue -------------------------------------------------------------------
@@ -2096,11 +2121,16 @@ const app: App = {
   settings: () => store.settings,
   setSetting: (name, value) => store.set(name, value as string | number | boolean),
 
-  select: (sat) => select(sat),
+  select: (sat) => {
+    // An Earth object chosen while at another world: back to the Earth first, then select it.
+    if (sat && places.elsewhere) void places.visit('earth').then(() => select(sat));
+    else select(sat);
+  },
   search: (query, limit) => (catalog ? searchCatalog(catalog, query, limit) : []),
   addSearch: (provider) => void searchProviders.push(provider),
   showFlyby: (name) => places.showFlyby(name),
   showDeepCraft: (code) => places.showByDsn(code),
+  goWorld: (body) => places.goBody(body),
   goEarth: () => (places.elsewhere ? places.visit('earth') : Promise.resolve()),
   focusSearch: (text) => search.focus(text),
   flyToGround: (latDeg, lonDeg, altitudeKm = 2500) => {
@@ -2115,6 +2145,21 @@ const app: App = {
     rig.follow = false;
     rig.flyToView(globe.earth.localToWorld(overhead), ORIGIN.clone(), 2);
     rig.holdStill(); // stay over the place: the idle drift would slide it out of view
+  },
+  follow: (focus, distance = 0.9) => {
+    if (!focus) return rig.release();
+    if (fp.mode !== 'off') fp.exit();
+    closeEncounter(true);
+    if (selected) select(null);
+    rig.follow = true;
+    rig.flyToFocus(focus, distance, 2);
+  },
+  away: () => places.elsewhere,
+  freshLaunches: () => fresh,
+  showLaunchGroup: (members) => {
+    const lead = catalog?.sats[members[0]];
+    cloud.setHighlight(members); // the whole batch stands out, as a satellite train does
+    if (lead) select(lead);
   },
   view: (which) => {
     if (which === 'home') return goHome();
@@ -2157,11 +2202,25 @@ const app: App = {
   camera: kit.camera,
 
   onFrame: (run) => void frameHooks.push(run),
-  onSelect: (run) => void selectHooks.push(run),
-  onCatalog: (run) => void catalogHooks.push(run),
-  onFacts: (run) => void factsHooks.push(run),
+  // A hook registered after the fact (the feature modules load in parallel with start-up and may
+  // arrive after the catalogue) is told the current state at once, as if it had been there.
+  onSelect: (run) => {
+    selectHooks.push(run);
+    if (selected) run(selected);
+  },
+  onCatalog: (run) => {
+    catalogHooks.push(run);
+    if (catalog) run(catalog, null);
+  },
+  onFacts: (run) => {
+    factsHooks.push(run);
+    if (facts.size > 0) run(facts);
+  },
   onSettings: (run) => void settingsHooks.push(run),
-  onEncounter: (run) => void encounterHooks.push(run),
+  onEncounter: (run) => {
+    encounterHooks.push(run);
+    if (encPanel.isOpen && encPanel.encounter) run(encPanel.encounter);
+  },
   onHome: (run) => void homeHooks.push(run),
   onSkyView: (run) => void skyHooks.push(run),
   useMyLocation,
@@ -2171,15 +2230,43 @@ app.addSearch((query) => places.search(query));
 // The search field asks the catalogue, the keyword index and every source in `searchProviders`.
 const search = new Search(app, searchProviders);
 
-// One line per module. A module that throws while setting itself up is reported and skipped:
-// an optional extra must never stop the tracker from starting.
-for (const install of [installRadio, installChanges, installWeather, installLaunches, installTonight, installReport, installGrowth, installCommands, installFlybys, installFireballs, installShowers, installDsn, installBell]) {
-  try {
-    install(app);
-  } catch (error) {
-    console.error('A feature module failed to start', error);
+// One line per module. They are NOT in the first file the page loads: each is fetched in
+// parallel as soon as this script runs (so the globe has less to parse before it can appear),
+// and all are installed together, in this order, the moment they have arrived — long before
+// the visitor can reach any of them (the home page or the loading screen is still up). Hooks
+// registered late are told the current catalogue, facts and selection (see `onCatalog`). A
+// module that fails to load or to set itself up is reported and skipped: an optional extra
+// must never stop the tracker from starting.
+type Installer = (app: App) => void;
+const FEATURES: (() => Promise<Installer>)[] = [
+  () => import('./features/radio.ts').then((m) => m.installRadio),
+  () => import('./features/changes.ts').then((m) => m.installChanges),
+  () => import('./features/weather.ts').then((m) => m.installWeather),
+  () => import('./features/launches.ts').then((m) => m.installLaunches),
+  () => import('./features/tonight.ts').then((m) => m.installTonight),
+  () => import('./features/report.ts').then((m) => m.installReport),
+  () => import('./features/growth.ts').then((m) => m.installGrowth),
+  () => import('./features/commands.ts').then((m) => m.installCommands),
+  () => import('./features/flybys.ts').then((m) => m.installFlybys),
+  () => import('./features/fireballs.ts').then((m) => m.installFireballs),
+  () => import('./features/showers.ts').then((m) => m.installShowers),
+  () => import('./features/dsn.ts').then((m) => m.installDsn),
+  () => import('./features/bell.ts').then((m) => m.installBell),
+  () => import('./features/ascent.ts').then((m) => m.installAscent),
+];
+void Promise.all(FEATURES.map((load) => load().catch((error: unknown) => {
+  console.error('A feature module failed to load', error);
+  return null;
+}))).then((installers) => {
+  for (const install of installers) {
+    if (!install) continue;
+    try {
+      install(app);
+    } catch (error) {
+      console.error('A feature module failed to start', error);
+    }
   }
-}
+});
 
 // ---------------------------------------------------------------- a tab left open: newer data from our own site
 //
@@ -2338,6 +2425,7 @@ async function boot(): Promise<void> {
     loaded = true;
     performance.mark('apsis:loaded');
     landing.ready(first.sats.length);
+    warmLater();
     const home = homeView();
     // Still on the home page: the tracker is that page's picture, the globe held a little
     // closer than the normal whole-Earth view, until the visitor comes in.

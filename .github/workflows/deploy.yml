@@ -15,6 +15,7 @@
 #   CelesTrak catalogue   once a day              one file
 #   SatNOGS radio         every second run (6 h)  at most 22 requests, 1.5 s apart
 #   JPL Horizons + CNEOS  every second run (6 h)  about 130 requests, strictly one at a time
+#   NASA rover traverses  once a day              4 requests, 1.5 s apart
 #
 # A script that declines, or a source that cannot be reached, never stops the deployment: the
 # site is simply published again with the data it already had.
@@ -105,6 +106,13 @@ jobs:
         timeout-minutes: 20
         continue-on-error: true
         run: node scripts/fetch-deep.mjs || echo "JPL unreachable - publishing the deep-space data the site already has"
+      # Where the Mars rovers have driven, from NASA/JPL's own traverse maps: four requests, once
+      # a day (the script declines while its file is younger than 23.5 h); an outage keeps the old paths.
+      - name: Refresh rover paths (NASA/JPL traverse maps; once a day, never fatal)
+        if: github.event_name != 'push'
+        timeout-minutes: 4
+        continue-on-error: true
+        run: node scripts/fetch-rovers.mjs || echo "NASA rover maps unreachable - publishing the rover paths the site already has"
       # GitHub switches off scheduled workflows in a repository that has had no activity for
       # 60 days (the site stays up; only this refresh would stop). Re-enabling the workflow
       # through the API on each scheduled run resets that timer.

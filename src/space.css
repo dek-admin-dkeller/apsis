@@ -252,3 +252,7 @@ body.ui-hidden #place-hud { display: none; }
   height: 36vh;
   background: linear-gradient(to top, rgba(2, 4, 10, 0.62), rgba(2, 4, 10, 0));
 }
+
+/* The search field's type filter applies to the Earth's catalogue only: away from it the chip is put by. */
+body.away .search-filter { display: none; }
+body.away .search.has-filter input { padding-right: 10px !important; }

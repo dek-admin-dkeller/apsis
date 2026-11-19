@@ -30,7 +30,7 @@ import './landing.css';
 import { KIND_LABEL, type ModelKind } from '../data/describe.ts';
 import { modelThumbnail } from '../render/satModels.ts';
 import { $, fmtInt } from './dom.ts';
-import { FEATURES, SHOTS, type Shot } from './featureList.ts';
+import { FEATURES, SHOTS, WHATS_NEW, type Shot } from './featureList.ts';
 import { HashDemo } from './hashDemo.ts';
 
 export interface LandingHost {
@@ -39,7 +39,7 @@ export interface LandingHost {
 }
 
 /** The plate: six kinds that look nothing like one another. The rest are a button away. */
-const PLATE: ModelKind[] = ['iss', 'telescope', 'starlink', 'gnss', 'dragon', 'weather'];
+const PLATE: ModelKind[] = ['iss', 'telescope', 'starlinkv2', 'falcon9', 'dragon', 'roadster'];
 
 const SLIDE_HOLD_MS = 20000; // after the visitor chooses a screen themselves, how long the slideshow leaves it alone
 const TOUCH_HOLD_MS = 4000; // … and after a finger has been on it
@@ -70,6 +70,7 @@ export class Landing {
 
     this.drawShowcase();
     this.drawIndex();
+    this.drawUpdates();
     this.slots = this.layPlate();
     this.demo = new HashDemo($<HTMLCanvasElement>('ld-demo-canvas'), {
       objects: $('ld-demo-n'), checks: $('ld-demo-checks'), pairs: $('ld-demo-pairs'), mode: $('ld-demo-mode'),
@@ -320,6 +321,19 @@ export class Landing {
     later(next, 80);
   }
 
+  // ---- what's new: the change log, newest first ----------------------------------------------
+
+  /** The three newest updates as rows (date and title, then their points); the rest are in About. */
+  private drawUpdates(): void {
+    $('ld-updates').replaceChildren(...updateRows(WHATS_NEW.slice(0, 3), 'ld'));
+  }
+
+  /** Open the page at its list of every feature (About's link). */
+  openAtFeatures(): void {
+    this.open();
+    requestAnimationFrame(() => document.getElementById('ld-all')?.scrollIntoView({ block: 'start' }));
+  }
+
   // ---- everything it does: a compact index ---------------------------------------------------
 
   /**
@@ -454,4 +468,21 @@ export class Landing {
     for (const el of this.root.querySelectorAll('[data-ld-count]')) el.textContent = fmtInt(objects);
     for (const el of this.root.querySelectorAll('[data-ld-pairs-exact]')) el.textContent = fmtInt(pairs);
   }
+}
+
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/** Rows for a list of updates (the home page's "What's new", About's), with class names under `prefix`. */
+export function updateRows(updates: typeof WHATS_NEW, prefix: string): HTMLElement[] {
+  return updates.map((update) => {
+    const row = document.createElement('article');
+    row.className = `${prefix}-update`;
+    const [y, m, d] = update.date.split('-').map(Number);
+    const when = Object.assign(document.createElement('time'), { dateTime: update.date, textContent: `${d} ${MONTH_NAMES[m - 1]} ${y}` });
+    const title = Object.assign(document.createElement('h3'), { textContent: update.title });
+    const list = document.createElement('ul');
+    for (const item of update.items) list.append(Object.assign(document.createElement('li'), { textContent: item }));
+    row.append(when, title, list);
+    return row;
+  });
 }

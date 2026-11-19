@@ -29,10 +29,12 @@ import { loadLaunches, type Launch } from '../data/launches.ts';
 import { loadDeep } from '../space/deep.ts';
 import { latestDsn, watchDsn } from '../space/dsn.ts';
 import { activeShowers, nextShowers } from '../space/showers.ts';
+import { skyEvents, type SkyEvent } from '../space/skyEvents.ts';
 import type { DsnLink, Flyby } from '../space/types.ts';
 import type { App } from '../ui/app.ts';
 import { $ } from '../ui/dom.ts';
 import { clockStamp, duration } from '../ui/inspector.ts';
+import { watchLaunch } from './ascent.ts';
 
 /** A launch counts as "now" from this long before lift-off (if its time is known to the minute)… */
 const SOON_MS = 20 * 60000;
@@ -41,7 +43,7 @@ const AFTER_MS = 15 * 60000;
 const DSN_EVERY_MS = 5 * 60000;
 const LAUNCHES_EVERY_MS = 15 * 60000; // loadLaunches() answers from its hour-old copy in between
 
-type Icon = 'dish' | 'rocket' | 'shower' | 'rock';
+type Icon = 'dish' | 'rocket' | 'shower' | 'rock' | 'eclipse';
 type Kind = 'alert' | 'ongoing' | 'coming';
 /** A shower counts as news within this long of its peak; the rest of its weeks it is routine. */
 const PEAK_NEWS_MS = 24 * 3600000;
@@ -62,6 +64,7 @@ const ICONS: Record<Icon, string> = {
   rocket: '<path d="M10 2.5c2.4 2 3.4 4.8 3 8.5H7c-.4-3.7.6-6.5 3-8.5z" /><path d="M7 11l-2 3h3M13 11l2 3h-3M9 14.5h2l-1 3z" />',
   shower: '<path d="M15.5 3.5 9 10M12.5 2.5 8 7M16.5 7 12 11.5" /><circle cx="6.5" cy="13.5" r="2.2" />',
   rock: '<path d="M5 6.5 9 4l5 1.5 2 4-1.5 4.5L10 16l-4.5-1.5L3.5 10z" />',
+  eclipse: '<circle cx="8.5" cy="10" r="5.5" /><path d="M12.6 5.6a5.5 5.5 0 1 1 0 8.8 5.5 5.5 0 0 0 0-8.8z" fill="currentColor" stroke="none" opacity="0.7" />',
 };
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = ''): HTMLElementTagNameMap[K] => {
@@ -123,10 +126,14 @@ export function installBell(app: App): void {
           : until > 0 ? `${imminent ? 'Lift-off' : clockStamp(launch.netMs)} ${fromNow(until)} · ${launch.place}`
           : `Lift-off was due ${fromNow(until)} · ${launch.place}`,
         at: launch.netMs,
-        run: () => void app.goEarth().then(() => {
-          app.openSection('launches');
-          if (launch.latDeg !== null && launch.lonDeg !== null) app.flyToGround(launch.latDeg, launch.lonDeg, 3000);
-        }),
+        run: () => {
+          // Lifting off or flying: watch its (estimated) climb. Otherwise show the pad.
+          if ((flying || imminent) && watchLaunch(launch)) return;
+          void app.goEarth().then(() => {
+            app.openSection('launches');
+            if (launch.latDeg !== null && launch.lonDeg !== null) app.flyToGround(launch.latDeg, launch.lonDeg, 3000);
+          });
+        },
       });
     }
 
@@ -144,6 +151,32 @@ export function installBell(app: App): void {
         kind: 'coming', icon: 'shower', title: `${next.shower.name} meteor shower`, at: next.peakMs,
         note: `Peak ${fromNow(next.peakMs - now)} · up to ${next.shower.rate} an hour`,
         run: () => app.openSection('showers'),
+      });
+    }
+
+    // Launched in the last three days and now in the tracking data (ongoing: it is news, not an alarm).
+    for (const launch of app.freshLaunches().slice(0, 3)) {
+      out.push({
+        kind: 'ongoing', icon: 'rocket', title: launch.title, at: now,
+        note: `Launched ${launch.date ? `on ${clockStamp(Date.parse(`${launch.date}T12:00:00Z`)).replace(/ \d\d:\d\d.*$/, '')}` : 'in the last day'} · now tracked`,
+        run: () => void app.goEarth().then(() => app.showLaunchGroup(launch.members)),
+      });
+    }
+
+    // Eclipses and transits (space/skyEvents.ts): an Earth eclipse or a planet crossing the Sun
+    // is rare, an alert while it happens; the shadows of Jupiter's moons happen most days, so
+    // they are ongoing. Coming up: the next rare one of each kind, and the next shadow on Jupiter.
+    const events = sky(now);
+    const nextOf = new Set<string>();
+    for (const event of events) {
+      const live = event.startMs <= now && now <= event.endMs;
+      const key = event.rare ? event.kind : 'jupiter';
+      if (!live && (event.startMs < now || nextOf.has(key))) continue;
+      if (!live) nextOf.add(key);
+      out.push({
+        kind: live ? (event.rare ? 'alert' : 'ongoing') : 'coming', icon: 'eclipse', title: event.title, at: event.peakMs,
+        note: live ? `Now · ${event.detail}` : `${clockStamp(event.peakMs)} · ${event.detail}`,
+        run: () => showSkyEvent(event),
       });
     }
 
@@ -167,6 +200,32 @@ export function installBell(app: App): void {
     const coming = out.filter((row) => row.kind === 'coming').sort((a, b) => a.at - b.at);
     let rockets = 0;
     return [...alerts, ...ongoing, ...coming.filter((row) => row.icon !== 'rocket' || ++rockets <= 4)];
+  }
+
+  /** The clock to the event's peak, at the world where it shows: the shadows are drawn there. */
+  function showSkyEvent(event: SkyEvent): void {
+    app.jumpTo(event.peakMs);
+    if (event.kind === 'solar-eclipse') {
+      void app.goEarth().then(() => {
+        if (event.latDeg !== undefined && event.lonDeg !== undefined) app.flyToGround(event.latDeg, event.lonDeg, 12000);
+      });
+    } else {
+      app.goWorld(event.body);
+    }
+  }
+
+  // Worked out for the next two months; kept for ten minutes (the bell asks every 30 s).
+  let skyCache: { at: number; events: SkyEvent[] } | null = null;
+  function sky(now: number): SkyEvent[] {
+    if (!skyCache || now - skyCache.at > 10 * 60000) {
+      try {
+        skyCache = { at: now, events: skyEvents(now - 12 * 3600000, now + 60 * 86400000) };
+      } catch (error) {
+        console.error('Sky events could not be worked out', error);
+        skyCache = { at: now, events: [] };
+      }
+    }
+    return skyCache.events;
   }
 
   // ---- drawing ------------------------------------------------------------------------------

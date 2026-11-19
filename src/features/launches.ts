@@ -19,6 +19,7 @@
 import './launches.css';
 import { loadLaunches, type Launch, type LaunchList, type LaunchProblem } from '../data/launches.ts';
 import { PadMarkers } from '../render/padMarkers.ts';
+import { canWatch, watchLaunch } from './ascent.ts';
 import type { App } from '../ui/app.ts';
 import { $ } from '../ui/dom.ts';
 import { clockStamp, duration } from '../ui/inspector.ts';
@@ -138,6 +139,15 @@ export function installLaunches(app: App): void {
       pick.addEventListener('blur', unpoint);
       item.classList.toggle('is-on', launch.id === pickedId);
       item.append(pick);
+      // Every launch whose pad and minute are known can be watched climbing (an estimated path;
+      // features/ascent.ts): live, or ahead of time / again by moving the clock to lift-off.
+      if (canWatch(launch)) {
+        const climb = el('button', 'launch-climb', launch.state === 'flying' ? 'Watch it climb' : launch.netMs < now ? 'Replay the climb' : 'Preview the climb');
+        climb.type = 'button';
+        climb.title = 'An estimated path from the pad to orbit, on the globe';
+        climb.addEventListener('click', () => watchLaunch(launch));
+        item.append(climb);
+      }
       return { launch, item, when, count, pad };
     });
     listBox.replaceChildren(...rows.map((row) => row.item));

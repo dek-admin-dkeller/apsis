@@ -17,6 +17,8 @@
  */
 
 import type * as THREE from 'three';
+import type { FreshLaunch } from '../data/fresh.ts';
+import type { BodyId } from '../space/types.ts';
 import type { Catalog } from '../data/catalog.ts';
 import type { Observer } from '../data/ephemeris.ts';
 import type { CatalogFacts } from '../data/satcat.ts';
@@ -110,6 +112,8 @@ export interface App {
   showFlyby(name: string): boolean;
   /** Go and look at a craft beyond Earth orbit, named by its Deep Space Network code ('JNO'). False if none has that code. */
   showDeepCraft(dsnCode: string): boolean;
+  /** Go to a world (its place; the Earth is the tracker), as a click on it would. */
+  goWorld(body: BodyId): void;
   /** Back to the Earth's tracker (a journey, if the visitor is elsewhere); resolves once there. */
   goEarth(): Promise<void>;
   /** Offer more things in the search field (bodies, spacecraft beyond Earth orbit …). */
@@ -118,6 +122,17 @@ export interface App {
   focusSearch(text?: string): void;
   /** Fly to look straight down at a place from `altitudeKm` up (default 2,500). */
   flyToGround(latDeg: number, lonDeg: number, altitudeKm?: number): void;
+  /**
+   * Keep the camera on a moving point (scene units), `distance` scene units away, as it does
+   * for a selected satellite; null lets go. (Used for a rocket on its estimated climb.)
+   */
+  follow(focus: (() => THREE.Vector3 | null) | null, distance?: number): void;
+  /** The visitor is somewhere other than the Earth's tracker (another world, the solar system). */
+  away(): boolean;
+  /** Launches of the last three days found in the catalogue (data/fresh.ts), newest first. */
+  freshLaunches(): FreshLaunch[];
+  /** Light up one launch's objects (indices) and select the first. */
+  showLaunchGroup(members: number[]): void;
   view(which: ViewName): void;
   /** Open one of the left-hand panels (or close them all with null). */
   openPanel(name: PanelName | null): void;

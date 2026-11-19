@@ -50,6 +50,7 @@
         <nav class="ld-nav" aria-label="On this page">
           <button data-ld-jump="ld-features">What it does</button>
           <button data-ld-jump="ld-how">How it works</button>
+          <button data-ld-jump="ld-new">What's new</button>
         </nav>
         <button class="ld-button ld-small" data-ld-enter>Open the tracker</button>
       </header>
@@ -123,12 +124,21 @@
         <!-- Drawn by src/ui/landing.ts from the tracker's own 3D models once it has loaded. -->
         <section class="ld-section" id="ld-craft">
           <div class="ld-head">
-            <h2>Forty-nine kinds of spacecraft</h2>
-            <p class="ld-intro">From a CubeSat to the Webb telescope, the Voyagers and the Mars rovers, every object is drawn as a model like these. They are built in code from reference photos, so nothing has to be downloaded to show them.</p>
+            <h2>Seventy-two kinds of spacecraft</h2>
+            <p class="ld-intro">From a CubeSat to the Webb telescope, the Mars rovers, Starship and the Tesla Roadster, every object is drawn as a model like these. They are built in code from reference photos, so nothing has to be downloaded to show them.</p>
           </div>
           <div class="ld-plate" id="ld-plate"></div>
           <!-- Presses #gallery-open, the catalogue of every model; hidden while that button is not on the page. -->
           <button class="ld-text-button" id="landing-models" hidden>See all models</button>
+        </section>
+
+        <!-- The change log, newest first: drawn by src/ui/landing.ts from WHATS_NEW in src/ui/featureList.ts. -->
+        <section class="ld-section" id="ld-new">
+          <div class="ld-head">
+            <h2>What's new</h2>
+            <p class="ld-intro">The latest additions, newest first. Everything it can do is listed below.</p>
+          </div>
+          <div class="ld-updates" id="ld-updates"></div>
         </section>
 
         <!-- The list itself is drawn by src/ui/landing.ts from src/ui/featureList.ts: edit it there. -->
@@ -650,6 +660,11 @@
                 <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 15c.5-5 1.5-8.5 3.5-10M8.5 15.5c.5-5.5 1.5-9 3.5-11M13 15c.5-4.5 1.3-7.5 3-9" /></svg>
                 <span>Aurora</span><small id="aurora-status"></small>
               </label>
+              <label class="layer-tile" title="Mark what was launched in the last three days: brighter mint dots, and a “New” name on each launch">
+                <input type="checkbox" data-setting="newLaunches" />
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5c2 1.7 2.8 4 2.5 7h-5c-.3-3 .5-5.3 2.5-7z" /><path d="M8 13.5h4M9 16h2" /><circle cx="15.5" cy="13.5" r="1.4" /><circle cx="4.5" cy="12" r="1" /></svg>
+                <span>New launches</span>
+              </label>
               <label class="layer-tile" data-everywhere title="Detailed NASA imagery under the camera when you zoom in">
                 <input type="checkbox" data-setting="sharpGround" />
                 <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2.5 15.5l4.8-7 3.2 4.2 2.3-2.7 4.7 5.5z" /><circle cx="14.5" cy="5.5" r="1.5" /></svg>
@@ -693,6 +708,11 @@
                 <input type="checkbox" data-setting="landingSites" />
                 <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 17.5s5-4.6 5-8.6a5 5 0 0 0-10 0c0 4 5 8.6 5 8.6z" /><circle cx="10" cy="8.8" r="1.7" /></svg>
                 <span>Landing sites</span>
+              </label>
+              <label class="layer-tile" title="Where the Mars rovers have driven, drawn on the ground once you come down close (NASA/JPL-Caltech)">
+                <input type="checkbox" data-setting="roverPaths" />
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 16.5c2.5-1 2-4.5 4.5-5s3 2.5 5.5 1.5 1.5-5 4-6.5" stroke-dasharray="2.2 1.6" /><circle cx="17" cy="6.5" r="1.6" /></svg>
+                <span>Rover paths</span>
               </label>
               <label class="layer-tile is-wide" title="On the solar system, name every spacecraft and draw every path, not only the well-known ones">
                 <input type="checkbox" data-setting="spaceAllCraft" />
@@ -1240,6 +1260,9 @@
         <div class="about-body">
           <p>Apsis shows every tracked object in Earth orbit and screens them for close approaches in real time. It began as a university algorithms project about hashing; the <button class="link" id="about-how">How it works</button> page explains the method.</p>
           <p>Every 3D model in one place, to turn and look at: the <button class="link" id="gallery-open">spacecraft catalogue</button>.</p>
+          <h3>What's new</h3>
+          <div class="about-new" id="about-new"></div>
+          <p><button class="link" id="about-features">Every feature, in one list</button> (on the home page).</p>
           <p class="about-warn">For learning and curiosity only. Positions are predictions from public orbital data, good to roughly a kilometre. Do not use Apsis for operational decisions.</p>
           <h3>Data</h3>
           <dl class="kv plain-dd">
@@ -1250,7 +1273,9 @@
             <div><dt>Operator logos</dt><dd>Loaded from each operator's Wikipedia article; they are trademarks of their owners, shown only to identify who runs an object</dd></div>
             <div><dt>Coastlines and borders</dt><dd>Natural Earth, public domain, via world-atlas</dd></div>
             <div><dt>Radio records</dt><dd><a href="https://satnogs.org" target="_blank" rel="noopener noreferrer">SatNOGS</a>, a volunteer ground-station network of the Libre Space Foundation, CC BY-SA</dd></div>
-            <div><dt>Upcoming launches</dt><dd><a href="https://thespacedevs.com" target="_blank" rel="noopener noreferrer">The Space Devs</a>, Launch Library 2</dd></div>
+            <div><dt>Upcoming launches</dt><dd><a href="https://thespacedevs.com" target="_blank" rel="noopener noreferrer">The Space Devs</a>, Launch Library 2. A rocket's climb is an estimate made in the app from the pad, the time and the target orbit, not tracking data</dd></div>
+            <div><dt>Rover paths</dt><dd>NASA's "Where is the rover" maps, courtesy NASA/JPL-Caltech</dd></div>
+            <div><dt>Eclipses and transits</dt><dd>Worked out in the app from the same positions of the Sun, Moon and planets, checked against NASA's published eclipse tables</dd></div>
             <div><dt>Space weather and aurora</dt><dd>NOAA Space Weather Prediction Center</dd></div>
             <div><dt>Beyond Earth orbit</dt><dd>Spacecraft and moons from <a href="https://ssd.jpl.nasa.gov/horizons/" target="_blank" rel="noopener noreferrer">NASA / JPL Horizons</a>; asteroid fly-bys and fireballs from <a href="https://cneos.jpl.nasa.gov" target="_blank" rel="noopener noreferrer">JPL CNEOS</a>; dish activity from NASA's Deep Space Network Now</dd></div>
             <div><dt>Maps of other worlds</dt><dd>NASA / JPL / USGS mosaics (public domain), close-up detail streamed from NASA Solar System Treks; the Sun, the giant planets, Saturn's rings and Venus's clouds by <a href="https://www.solarsystemscope.com/textures/" target="_blank" rel="noopener noreferrer">Solar System Scope</a>, CC BY 4.0</dd></div>

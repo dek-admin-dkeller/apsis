@@ -153,7 +153,7 @@ src/render/                 space/spaceView + space/bodyMesh (the scenes away fr
                             scene (renderer, bloom, quality presets, the dissolve between scenes), globe (Earth shader), tiles (close-up ground:
                             NASA GIBS map tiles streamed in below ~6,000 km), geoOverlay (borders, grid, terminator), sky (Milky Way, stars, constellations, planets, Sun, Moon), aurora, satellites
                             (the point cloud, colour modes, highlighting, picking), satModels + modelParts + observatoryModels +
-                            deepModels + planetaryModels (49 procedural models: see "3D models"; satModels also holds the
+                            deepModels + planetaryModels + constellationModels + vehicleModels + rocketModels (72 procedural models: see "3D models"; satModels also holds the
                             previews, thumbnails), prewarm (models built in idle slices from the home page), cameraRig (fly-to, object focus, Earth drift), firstPerson (ride-along,
                             sky view, phone motion), orbitLine, groundTrack, encounterViz (close-approach drawing),
                             conjunctionMarkers, gridViz, constellation (orbits + coverage map), siteMarker, padMarkers
@@ -562,6 +562,15 @@ craftPosition(craft, t) → km about craft.centre      bodyPosition / bodyRelati
   only where a primary source confirms them (the header says which); after editing run
   `node scripts/fetch-deep.mjs --facts`, which rewrites the facts in deep.json without the
   network. `--only-new` asks Horizons only for craft or moons the file lacks.
+- `skyEvents.ts`: eclipses (solar: Besselian-style shadow cones on the WGS84 ellipsoid;
+  lunar: Danjon's 1 % shadow enlargement, as Espenak's canon), Mercury/Venus transits, and the
+  Galilean moons' shadows and transits on Jupiter (IAU 1-bar ellipsoid, light time applied).
+  `skyEvents(from, to)` is what the bell calls (cached per lunation / conjunction / 4-day
+  Jupiter block: ~12 ms cold, < 1 ms after). `rare` = worth an alert (Earth eclipses, planet
+  transits); Jupiter events are routine. Evidence: `scripts/check-sky-events.mjs` against NASA's
+  eclipse and transit catalogues (2023–2032, 2000–2045) and IMCCE's Galilean tables for
+  2026–27 (`scripts/fixtures/galilean-imcce.json`); the timing limit is `ephem.ts`'s planetary
+  table (Callisto runs ~2 min late), not the geometry.
 - `dsn.ts`: `watchDsn()` polls NASA's DSN Now XML once a minute only while something
   watches. `showers.ts`: twelve annual showers; peaks solved from the Sun's longitude.
 - **The evidence** is `scripts/check-deep.mjs` (part of `npm run check`): it compares the
@@ -601,6 +610,7 @@ tracker. Each module draws inside an empty element reserved for it in `index.htm
 | `fireballs.ts` | `#fireballs-body` | Recent fireballs from deep.json; marks on the globe (it reuses `PadMarkers`) only while the section is on screen |
 | `showers.ts` | `#showers-body` | Meteor showers active / next on the SIMULATED clock (`space/showers.ts`); rebuilt when the simulated day changes |
 | `dsn.ts` | `#dsn-body` | Live Deep Space Network links (`space/dsn.ts`): one read 4 s after start for the tile, then once a minute only while on screen |
+| `ascent.ts` | `.ascent-tags` (its own layer), objects in `app.eciGroup` | Estimated climbs of launches (`data/ascent.ts`) on the simulated clock; `watchLaunch()` is used by `launches.ts` and `bell.ts` |
 | `bell.ts` | `#bell`, `#bell-menu` (top bar; phones: the menu's "Live and coming up") | Three kinds of row on the REAL clock: alerts (a launch in flight or within 20 min, a shower within a day of its peak, an asteroid within 6 h; counted on the bell), ongoing (DSN contacts, a shower in its active weeks: routine, never counted, the owner's rule) and coming up (next launches, asteroid, shower peak); each row goes there (`app.showDeepCraft`, `app.goEarth`). Launch list through `loadLaunches()` (its hour-old copy, so at most one request an hour), DSN feed once every 5 min while the tab is visible |
 
 To add a feature: write the module, reserve an element if it needs one (in the Objects panel:
@@ -613,6 +623,46 @@ add its entry to `featureList.ts`.
 `document.getElementById('landing')`; when the home page stopped being removed from the
 document, the bar silently never opened again. The search field's shortcut asks `app.ready()`.
 If a module needs to know something `App` cannot tell it, add a getter.
+
+## Loading in pieces (`vite.config.ts`, the end of `main.ts`)
+
+The owner's condition for splitting the code: nothing may ever wait on a download at the moment
+it is used. So:
+- three.js and satellite.js are chunks of their own (`manualChunks`): they rarely change, so a
+  returning visitor re-downloads only the app's code after a deploy.
+- The feature modules are `import()`ed in parallel as soon as `main.ts` runs (`FEATURES`) and
+  installed together, in order, when all have arrived — long before the home page or loading
+  screen lets anyone reach them. Because they can arrive after the catalogue, `onCatalog`,
+  `onFacts`, `onSelect` and `onEncounter` tell a late listener the current state at once.
+  (Settings are not replayed: features only ever reacted to changes.)
+- The share window's QR library (`warmShare`) and the contact timeline are fetched by
+  `warmLater()` in idle moments once loading is done, and made on first use.
+- Do NOT turn something the first frame needs (the globe, Places, the models the loading
+  screen warms) into a dynamic import. Do not group `src/features/` into one manual chunk
+  either: shared modules get dragged in with it and the main file then imports it eagerly
+  (tried; it put three.js inside "features").
+
+## Launches as they happen (`data/ascent.ts`, `features/ascent.ts`, `data/fresh.ts`)
+
+- **No one publishes a rocket's live position**, so a climb is a MODEL and always says so:
+  `planAscent(launch)` takes the pad, the time to the minute and the target orbit from Launch
+  Library 2 (`orbit`, `family`, `webcast` were added to `Launch`), picks an inclination (the
+  Station's for an ISS trip, known constellations by mission name, a pad's usual direction by
+  site, else due east), the azimuth from sin Az = cos i / cos φ (southward at pads that
+  cannot fly east), and a typical ~9-minute climb (height on an S-curve, speed ∝ t^1.4, range
+  the integral of speed). It is computed in the inertial frame frozen at lift-off and coasts
+  round two orbits after the burn. `ascentState` is pure: test it in Node.
+- `features/ascent.ts` draws it on the SIMULATED clock, from an hour before lift-off: the path
+  (flown part bright), a model (`rocketKind`: the family's model if one exists, else
+  `launcher`/`rocketbody`; the upper stage alone after staging), a glow while burning, and a
+  card with T+, height, speed, the stage, the basis of the estimate, Follow (`app.follow`)
+  and Watch live (the listed webcast, else a search). `watchLaunch(launch)` (exported; used by
+  the launches list's "Preview / Watch / Replay the climb" and the bell) moves the clock to
+  just before lift-off when needed.
+- `data/fresh.ts`: launches of the last three days found in the catalogue (by international
+  designator, dated by the SATCAT facts; newer than the facts = new). `cloud.setFresh` makes
+  them larger and mint without dimming anything; `labels.setFresh` names each launch's lead
+  object "New ·". Layers switch `newLaunches`; the bell lists them as ongoing.
 
 ## Small rules added in the polish pass (Nov 2026)
 
@@ -637,6 +687,16 @@ If a module needs to know something `App` cannot tell it, add a getter.
   only, every 50 ms), sets the hand cursor, and `Places.hover` fills the tracker's own
   `#tooltip` (a lit ball for a world, the model's thumbnail for a craft, distance from Earth).
   It follows `Settings.hoverCard` and hides on every change of scene.
+- **Rovers stand at the end of their driven path** (`Places.placeRovers`, from
+  `public/data/rovers.json` once loaded), not at Horizons' landing-site position (12–14 km
+  away). Paths: `scripts/fetch-rovers.mjs` (NASA MMGIS traverse, 23.5 h guard), drawn by
+  `spaceView.ts` (`roverPaths`), Layers switch `roverPaths`, credited NASA/JPL-Caltech.
+- **Search at another world** lifts that world's moons and craft by 0.12 under a heading of
+  their own ("At Mars"), and the Earth's catalogue objects score ×0.9 there. Choosing an Earth
+  object while away travels back to the Earth first (`app.select`).
+- **What's new**: `WHATS_NEW` in `featureList.ts` is the visitor-facing change log (home page
+  section `#ld-new`, About). Add an entry at the top for every visible change, as well as the
+  feature's own entry in `FEATURES`.
 - **A filter is announced** (`#filter-banner`, `ui/filters.ts`): count, reasons (`FilterAbout`
   labels from `app.setFilter`, plus types / orbits / height), and "Show all", which calls each
   module's `clear`. It pulses when the visitor comes back to the Earth.
@@ -839,9 +899,9 @@ addresses, never a third party) whether a file has been published again, and tak
   back as they separate and in again during a replay; a manual zoom switches that off until
   the pair is re-centred from the panel.
 
-## 3D models (`render/satModels.ts` and four files beside it)
+## 3D models (`render/satModels.ts` and the files beside it)
 
-- 49 kinds (`ModelKind` in `data/describe.ts`), each a builder, built once, merged by
+- 72 kinds (`ModelKind` in `data/describe.ts`), each a builder, built once, merged by
   material, normalised and cloned by `buildModel(kind)`. The files:
   - `modelParts.ts`: the kit, and nothing about any one spacecraft. `makeMaterials()` (painted
     canvas textures, normal maps computed from painted height fields, a small painted
@@ -855,6 +915,19 @@ addresses, never a third party) whether a file has been published again, and tak
     `deepModels.ts` (voyager, pioneer, newhorizons, probe, juno, clipper, lucy, psyche,
     samplereturn, bepi, parker, solarorbiter), `planetaryModels.ts` (lunarorbiter, marsorbiter,
     rover, lander, asteroid).
+- Added in Nov 2026 (23 kinds), in three more files spread into `BUILDERS`:
+  `constellationModels.ts` (starlinkv2 — every 5-digit Starlink, 8,000 objects, so it is in
+  `WARMED` —, kuiper, iridium, o3b, galileo, glonass, goes), `vehicleModels.ts` (shenzhou,
+  starliner, orion, dreamchaser, and `roadster`: the Tesla Roadster with Starman on its
+  adapter, deep.json's `roadster` craft), `rocketModels.ts` (falcon9, falconheavy, starship,
+  electron, longmarch, soyuzrocket, atlasv, vulcan, ariane6, newglenn, `launcher` = generic).
+  Rockets stand along +Y, nose up, engine bells at the bottom (`modelBase` −0.5); they are built
+  at true proportions (1 unit = 5 m) so they are slim. `rocketKind(name)` in `describe.ts` maps
+  a Launch Library rocket name to its kind (the launch climb uses it). Rocket materials are
+  painted the first time a rocket is built, not at start-up.
+- **A new kind must not split a search type**: give it a `KIND_TOPIC` (`searchIndex.ts`) and a
+  `KIND_NOTE` (`search.ts`) — starlinkv2 is "Starlink satellites" like starlink, or "starlink"
+  would have found only the old 3,000.
 - **The kind names are a contract.** The deep-space data file names models as plain strings
   (`Craft.model` in `space/types.ts`); check one with `isModelKind(name)` and fall back to
   `'probe'`. Renaming a kind breaks that file silently.

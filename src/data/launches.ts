@@ -24,6 +24,9 @@
  *   results[].launch_service_provider.name   who is launching it
  *   results[].pad.name, .pad.location.name   pad and launch site
  *   results[].pad.latitude / .longitude   degrees, as strings
+ *   results[].mission.orbit.abbrev        target orbit: "LEO", "SSO", "ISS", "GTO", "PO", "MEO", "GEO", "TLI", "Sub" …
+ *   results[].mission.vid_urls[].url      webcasts, when the service has them (often empty until launch day)
+ *   results[].rocket.configuration.family "Falcon", "Long March" …
  */
 
 const LAUNCHES_URL = 'https://ll.thespacedevs.com/2.2.0/launch/upcoming/?limit=12&mode=normal';
@@ -50,6 +53,12 @@ export interface Launch {
   precision: NetPrecision;
   state: LaunchState;
   status: string; // the word shown: "go", "to be confirmed", "hold" …
+  /** Target orbit as the service abbreviates it ("LEO", "SSO", "ISS", "GTO" …); '' if not given. */
+  orbit: string;
+  /** Rocket family ("Falcon", "Long March"), for choosing a model and a typical climb. */
+  family: string;
+  /** A webcast address, if the service lists one. */
+  webcast: string | null;
 }
 
 export interface LaunchList {
@@ -89,6 +98,16 @@ const field = (object: unknown, key: string): unknown =>
 const degrees = (value: unknown): number =>
   typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN;
 
+/** The first http(s) address in a list of {url} objects, or null. */
+function firstUrl(list: unknown): string | null {
+  if (!Array.isArray(list)) return null;
+  for (const item of list as unknown[]) {
+    const url = text(field(item, 'url'));
+    if (/^https:\/\//.test(url)) return url;
+  }
+  return null;
+}
+
 function precisionOf(name: string): NetPrecision {
   const lower = name.toLowerCase();
   if (lower === 'second' || lower === 'minute') return 'exact';
@@ -127,6 +146,9 @@ export function parseLaunches(file: unknown): Launch[] {
       precision: precisionOf(text(field(field(entry, 'net_precision'), 'name'))),
       state: known ? known[0] : 'unconfirmed',
       status: known ? known[1] : text(field(status, 'name')).toLowerCase() || 'status unknown',
+      orbit: text(field(field(field(entry, 'mission'), 'orbit'), 'abbrev')),
+      family: text(field(field(field(entry, 'rocket'), 'configuration'), 'family')),
+      webcast: firstUrl(field(field(entry, 'mission'), 'vid_urls')) ?? firstUrl(field(entry, 'vidURLs')),
     });
   }
   return launches.sort((a, b) => a.netMs - b.netMs);
@@ -148,7 +170,9 @@ function readSaved(): Saved {
     if (!saved || typeof saved.at !== 'number' || typeof saved.tried !== 'number' || !Array.isArray(saved.launches)) return empty;
     const now = Date.now();
     if (saved.at > now + 60000 || saved.tried > now + 60000) return empty; // the clock was wrong when it was written
-    const launches = saved.launches.filter((launch) => launch && typeof launch.netMs === 'number' && typeof launch.mission === 'string');
+    // (A copy saved by an older version lacks the newer fields: fill them in rather than throw it away.)
+    const launches = saved.launches.filter((launch) => launch && typeof launch.netMs === 'number' && typeof launch.mission === 'string')
+      .map((launch) => ({ ...launch, orbit: launch.orbit ?? '', family: launch.family ?? '', webcast: launch.webcast ?? null }));
     return { at: saved.at, tried: saved.tried, problem: saved.problem === 'limited' || saved.problem === 'unreachable' ? saved.problem : '', launches };
   } catch {
     return empty; // storage switched off, or something else wrote to the key

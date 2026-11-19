@@ -29,11 +29,13 @@ export interface Settings {
   spaceMoons: boolean; // moons, beside their planets and round the world being visited
   spaceAllCraft: boolean; // on the solar system: name every craft, not only the well-known ones
   landingSites: boolean; // historic landing sites on the ground
+  roverPaths: boolean; // where the rovers have driven (public/data/rovers.json), drawn once the camera is close
   autoOrbit: boolean;
   // Earth
   earthDrift: boolean;
   siteMarker: boolean;
   aurora: boolean;
+  newLaunches: boolean; // mark what was launched in the last three days (data/fresh.ts)
   clouds: boolean;
   sharpGround: boolean; // stream detailed imagery when zoomed in
   atmosphere: boolean;
@@ -81,10 +83,12 @@ const DEFAULTS: Settings = {
   spaceMoons: true,
   spaceAllCraft: false,
   landingSites: true,
+  roverPaths: true,
   autoOrbit: true,
   earthDrift: true,
   siteMarker: true,
   aurora: false,
+  newLaunches: true,
   clouds: true,
   sharpGround: true,
   atmosphere: true,

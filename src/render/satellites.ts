@@ -116,6 +116,9 @@ export function legendFor(mode: ColorMode): Legend {
   }
 }
 
+/** The mint of things just launched (the bell's live green, a touch paler). */
+const FRESH = new THREE.Color(0x8ff0b8);
+
 export class SatelliteCloud {
   readonly points: THREE.Points;
   /** 1 = shown, 0 = hidden by a filter. Shared with the screening worker as its mask. */
@@ -134,6 +137,7 @@ export class SatelliteCloud {
   private colorMode: ColorMode = 'category';
   private owners: (index: number) => string | undefined = () => undefined;
   private highlight: Set<number> | null = null; // when set: these stand out, the rest are dimmed
+  private fresh: Set<number> | null = null; // launched in the last few days: a little larger and mint-tinted, nothing dimmed
 
   constructor(kit: SceneKit, sim: SimClient) {
     this.kit = kit;
@@ -201,6 +205,12 @@ export class SatelliteCloud {
     this.repaint();
   }
 
+  /** Mark what was launched in the last few days (data/fresh.ts) without dimming anything else; null = none. */
+  setFresh(indices: number[] | null): void {
+    this.fresh = indices && indices.length > 0 ? new Set(indices) : null;
+    this.repaint();
+  }
+
   private repaint(): void {
     if (!this.catalog) return;
     const color = new THREE.Color();
@@ -211,11 +221,13 @@ export class SatelliteCloud {
     for (const sat of this.catalog.sats) {
       const i = sat.index;
       color.set(colorFor(sat, this.colorMode, this.owners(i), now)); // sRGB hex → linear working space
-      const level = !group ? 1 : group.has(i) ? 1.5 : 0.14;
+      const isFresh = !group && this.fresh?.has(i) === true;
+      if (isFresh) color.lerp(FRESH, 0.65);
+      const level = !group ? (isFresh ? 1.6 : 1) : group.has(i) ? 1.5 : 0.14;
       colors[i * 3] = color.r * level;
       colors[i * 3 + 1] = color.g * level;
       colors[i * 3 + 2] = color.b * level;
-      sizes[i] = this.baseSizes[i] * (group?.has(i) ? 1.7 : 1);
+      sizes[i] = this.baseSizes[i] * (group?.has(i) ? 1.7 : isFresh ? 1.9 : 1);
     }
     this.attrColor.needsUpdate = true;
     this.attrSize.needsUpdate = true;

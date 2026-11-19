@@ -446,8 +446,10 @@ const bodyFragmentShader = (occluders: number): string => /* glsl */ `
 export class GroundTiles {
   enabled = true;
   /** The patches drawn just now, for finding where the ground the visitor sees really is (a rover stands on it). */
-  shownPatches(): THREE.Object3D[] {
-    return this.group.children.filter((patch) => patch.visible);
+  shownPatches(minOpacity = 0): THREE.Object3D[] {
+    const out: THREE.Object3D[] = [];
+    for (const tile of this.tiles.values()) if (tile.mesh.visible && tile.opacity >= minOpacity) out.push(tile.mesh);
+    return out;
   }
   private readonly group = new THREE.Group();
   private readonly tiles = new Map<string, Tile>();

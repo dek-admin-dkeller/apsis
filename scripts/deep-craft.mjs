@@ -442,7 +442,7 @@ export const CRAFT = [
     wiki: 'Dawn (spacecraft)', dsn: ['DAWN'],
   },
   {
-    id: 'roadster', horizons: -143205, centre: 'sun', path: 'orbit', model: 'probe', status: 'silent',
+    id: 'roadster', horizons: -143205, centre: 'sun', path: 'orbit', model: 'roadster', status: 'silent',
     name: 'SpaceX Roadster ("Starman")', short: 'Roadster', aliases: ['tesla', 'tesla roadster', 'roadster', 'starman', 'spacex roadster', 'elon musk car', 'space car'],
     agency: 'SpaceX', launched: '2018-02-06', role: 'A car, launched as a test payload',
     blurb: 'The dummy cargo of the first Falcon Heavy: a sports car with a spacesuited mannequin at the wheel, on an orbit that reaches out past Mars. It was never able to send anything back.',
