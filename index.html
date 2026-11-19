@@ -190,6 +190,10 @@
     <div id="range-tag" class="is-hidden"></div>
     <div id="tooltip" class="is-hidden"></div>
 
+    <!-- Beyond Earth orbit (src/ui/places.ts): name tags over the other scene, and the curtain it changes behind -->
+    <div id="space-tags"></div>
+    <div id="space-fade"></div>
+
     <div id="hud" class="hud-hidden">
       <!-- ============ top bar ============ -->
       <header class="topbar">
@@ -280,6 +284,9 @@
           </button>
         </div>
         <!-- Things to do. -->
+        <button role="menuitem" data-places-open>
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="1.8" /><ellipse cx="10" cy="10" rx="8.2" ry="3.4" /><ellipse cx="10" cy="10" rx="5" ry="2" /><circle cx="16.6" cy="8" r="1" /></svg><span>Solar system</span>
+        </button>
         <button role="menuitem" data-proxy="#autopilot">
           <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5" /><path d="M8.2 6.8v6.4l5-3.2z" /></svg><span>Autopilot tour</span>
         </button>
@@ -326,10 +333,23 @@
         <button class="rail-view" data-view="5" title="Earth with the Moon beyond it (5)">
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15.5 12.8A6.5 6.5 0 0 1 7.2 4.5a6.5 6.5 0 1 0 8.3 8.3z" /></svg><span>Moon</span>
         </button>
+        <button class="rail-view" data-places-open title="The solar system: the Moon, the planets and the spacecraft out there">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="1.8" /><ellipse cx="10" cy="10" rx="8.2" ry="3.4" /><ellipse cx="10" cy="10" rx="5" ry="2" /><circle cx="16.6" cy="8" r="1" /></svg><span>System</span>
+        </button>
         <button class="rail-view" id="view-sky" title="Stand at the ground station and look up (4)">
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 15.5h16M4 15.5a6 6 0 0 1 12 0" /><path d="M10 4.5v1.5M5 6.5l1 1M15 6.5l-1 1" /></svg><span>Sky</span>
         </button>
       </nav>
+
+      <!-- ============ away from the tracker: the list of places, and the card about the one on screen ============ -->
+      <nav id="place-rail" class="is-hidden" aria-label="Places"></nav>
+      <section class="panel is-hidden" id="place-card" aria-live="polite">
+        <header class="pc-head">
+          <div class="pc-title"><h2 id="pc-name"></h2><p id="pc-kind"></p></div>
+          <button id="pc-close" class="icon-btn" aria-label="Close" title="Close">×</button>
+        </header>
+        <div class="pc-body" id="pc-body"></div>
+      </section>
 
       <!-- ============ left dock: one tool panel at a time ============ -->
       <aside class="dock dock-left">

@@ -780,6 +780,12 @@ export interface Sky {
   setConstellations(on: boolean): void;
   /** Name + unit direction (scene coordinates) of each figure's centre, for DOM labels. Fixed. */
   readonly constellations: { name: string; direction: THREE.Vector3 }[];
+  /**
+   * The same Milky Way and stars for ANOTHER scene (the views beyond Earth orbit): new objects
+   * that share these buffers, the baked texture and the materials, so they cost nothing extra.
+   * Keep the group at the camera's position — the stars are drawn at a fixed radius.
+   */
+  backdrop(): THREE.Group;
 }
 
 export function createSky(kit: SceneKit): Sky {
@@ -1010,6 +1016,17 @@ export function createSky(kit: SceneKit): Sky {
         planetsTime = t;
         updatePlanets(date);
       }
+    },
+    backdrop() {
+      const group = new THREE.Group();
+      const far = new THREE.Mesh(dome.geometry, dome.material);
+      far.renderOrder = dome.renderOrder;
+      far.frustumCulled = false;
+      const points = new THREE.Points(stars.geometry, stars.material);
+      points.renderOrder = stars.renderOrder;
+      points.frustumCulled = false;
+      group.add(far, points);
+      return group;
     },
     setStars(on) {
       starsOn = on;

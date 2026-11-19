@@ -98,6 +98,12 @@ export interface Craft {
   /** The names NASA's Deep Space Network feed uses for it (upper case), if it talks through that network. */
   dsn: string[];
   motion: Motion;
+  /**
+   * Set on an asteroid flying past the Earth. It is not a spacecraft, but it is drawn, named,
+   * found and followed exactly like one, so the views treat it as a craft that carries the
+   * numbers of its pass (ui/places.ts makes these from DeepData.flybys).
+   */
+  passing?: Flyby;
 }
 
 /** An asteroid passing the Earth (JPL CNEOS close-approach data). */

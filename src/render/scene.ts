@@ -41,6 +41,12 @@ export interface SceneKit {
   quality: Quality;
   setQuality(quality: Quality): void;
   setBloom(strength: number): void;
+  /**
+   * Draw another scene through the same renderer, bloom and output (the views beyond Earth
+   * orbit have a scene and camera of their own). `target` is what that camera looks at, for
+   * the near-plane rule in render(). Call with no arguments to go back to the tracker's scene.
+   */
+  show(scene?: THREE.Scene, camera?: THREE.PerspectiveCamera, target?: THREE.Vector3): void;
   render(): void;
 }
 
@@ -70,7 +76,9 @@ export function createScene(canvas: HTMLCanvasElement): SceneKit {
 
   // Post-processing: render (MSAA, HDR) → bloom → tone/colour output.
   const composer = new EffectComposer(renderer);
-  composer.addPass(new RenderPass(scene, camera));
+  const renderPass = new RenderPass(scene, camera);
+  composer.addPass(renderPass);
+  let shown: { camera: THREE.PerspectiveCamera; target: THREE.Vector3 } = { camera, target: controls.target };
   // Safety net. The bloom pass blurs the picture at many sizes, so ONE invalid pixel (a NaN
   // from some shader on some graphics driver) would spread until the whole screen is black.
   // This pass replaces any non-finite or absurd pixel with black before bloom ever sees it:
@@ -122,13 +130,20 @@ export function createScene(canvas: HTMLCanvasElement): SceneKit {
       bloom.enabled = strength > 0.01;
     },
 
+    show(otherScene, otherCamera, target) {
+      renderPass.scene = otherScene ?? scene;
+      renderPass.camera = otherCamera ?? camera;
+      shown = { camera: otherCamera ?? camera, target: target ?? controls.target };
+    },
+
     render() {
       // Keep the near plane proportional to the zoom level so depth precision stays good
       // both for the whole-Earth view and when the camera sits 50 km from a satellite.
-      const near = THREE.MathUtils.clamp(camera.position.distanceTo(controls.target) * 0.02, 0.000004, 0.5);
-      if (Math.abs(near - camera.near) > near * 0.05) {
-        camera.near = near;
-        camera.updateProjectionMatrix();
+      const eye = shown.camera;
+      const near = THREE.MathUtils.clamp(eye.position.distanceTo(shown.target) * 0.02, 0.000004, 0.5);
+      if (Math.abs(near - eye.near) > near * 0.05) {
+        eye.near = near;
+        eye.updateProjectionMatrix();
       }
       composer.render();
     },

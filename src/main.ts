@@ -39,6 +39,7 @@ import { behindEarth, legendFor, SatelliteCloud } from './render/satellites.ts';
 import { createScene, EARTH_RADIUS, EARTH_RADIUS_KM, KM } from './render/scene.ts';
 import { SiteMarker } from './render/siteMarker.ts';
 import { createSky } from './render/sky.ts';
+import { Places } from './ui/places.ts';
 import { EarthTiles } from './render/tiles.ts';
 import { TOGETHER_KM_S } from './hashing/conjunction.ts';
 import { AheadPanel } from './ui/ahead.ts';
@@ -202,6 +203,19 @@ const markers = new ConjunctionMarkers(kit, sim);
 const encViz = new EncounterViz(kit);
 const grid = new GridViz(kit, sim);
 const rig = new CameraRig(kit);
+// Everything beyond Earth orbit (the Moon, the planets, Webb, the Voyagers) is a second scene
+// with its own controls; `places.away` says whether that scene is the one on screen.
+const places = new Places({
+  kit,
+  backdrop: sky.backdrop(),
+  time: () => clock.time,
+  isPhone: () => isPhone(),
+  drift: () => store.settings.earthDrift,
+  match: roughMatch,
+  jumpTo: (timeMs) => jumpTo(timeMs),
+  onAway: (away) => setAway(away),
+  toast: (text) => toast(text),
+});
 const model = new SatelliteModel(kit);
 const encModels = [new SatelliteModel(kit, false), new SatelliteModel(kit, false)]; // the two objects of a close approach
 const labels = new Labels(kit, sim, cloud);
@@ -340,6 +354,7 @@ function applySettings(s: Settings, changed: keyof Settings | null): void {
     ahead.refreshUnits();
     designer.refreshUnits();
     filters.refreshUnits();
+    places.refreshUnits();
     updateDataNote();
   }
   if (changed === null || changed.startsWith('site') || changed === 'units' || changed === 'clockZone') inspector.observerChanged();
@@ -1179,6 +1194,7 @@ const tooltip = $('tooltip');
 const pointer = { x: 0, y: 0, dirty: false, downX: 0, downY: 0 };
 
 canvas.addEventListener('pointermove', (event) => {
+  if (places.away) return; // another scene is on screen: there is nothing of the tracker's under the pointer
   pointer.x = event.clientX;
   pointer.y = event.clientY;
   pointer.dirty = event.buttons === 0; // no hover test while dragging
@@ -1190,7 +1206,7 @@ canvas.addEventListener('pointerdown', (event) => {
   pointer.downY = event.clientY;
 });
 canvas.addEventListener('pointerup', (event) => {
-  if (!catalog || Math.hypot(event.clientX - pointer.downX, event.clientY - pointer.downY) > 4) return; // it was a drag
+  if (!catalog || places.away || Math.hypot(event.clientX - pointer.downX, event.clientY - pointer.downY) > 4) return; // it was a drag
   if (document.body.classList.contains('sky-immersive')) return; // full-screen sky: a tap must not bring a panel up
   const index = cloud.pick(event.clientX, event.clientY, 12);
   if (index >= 0 && index !== selected?.index) select(catalog.sats[index]);
@@ -1289,7 +1305,10 @@ for (const button of document.querySelectorAll<HTMLElement>('[data-view]')) {
 function shareUrl(): string {
   const q = new URLSearchParams();
   const enc = encPanel.encounter;
-  if (enc) {
+  if (places.away) {
+    places.linkParams(q);
+    if (Math.abs(clock.time - Date.now()) > 60000) q.set('t', String(Math.round(clock.time / 1000)));
+  } else if (enc) {
     q.set('pair', `${enc.a.noradId}-${enc.b.noradId}`);
     q.set('t', String(Math.round(enc.approach.tcaMs / 1000)));
   } else {
@@ -1307,6 +1326,12 @@ function applyLink(): boolean {
   if (!catalog) return false;
   const q = new URLSearchParams(location.hash.slice(1));
   const t = Number(q.get('t'));
+  if (q.has('place') || q.has('craft')) {
+    // A link to somewhere beyond Earth orbit: the Moon, a planet, a spacecraft out there.
+    if (q.has('t') && Number.isFinite(t)) jumpTo(t * 1000);
+    void places.applyLink(q);
+    return true;
+  }
   const byId = (id: string | undefined) => catalog!.byNorad.get(Number(id));
   const [idA, idB] = (q.get('pair') ?? '').split('-');
   const a = byId(idA), b = byId(idB), sat = byId(q.get('sat') ?? undefined);
@@ -1443,7 +1468,41 @@ cinema.onChange = () => {
 
 // ---- home: the logo puts everything back the way it started ---------------------------------
 
+/**
+ * Leaving the tracker for another place, or coming back from one (ui/places.ts calls this).
+ * On the way out everything of the tracker's is put away; while away the simulation is not
+ * kept up (see step()), so on the way back it starts again from fresh positions.
+ */
+function setAway(away: boolean): void {
+  if (away) {
+    if (cinema.isPlaying) cinema.stop();
+    if (fp.mode !== 'off') fp.exit();
+    closeEncounter(true);
+    if (selected) select(null);
+    openPanel(null);
+    setViewsMenu(false);
+    sheets.reset();
+  } else {
+    jumpTo(clock.time, true);
+    viewKey = '';
+  }
+  setResting(false);
+}
+
+/** A rough name match, 0…1: exact, starts with, contains. */
+function roughMatch(query: string, ...texts: string[]): number {
+  const q = query.trim().toLowerCase();
+  if (q.length < 2) return 0;
+  let best = 0;
+  for (const text of texts) {
+    const t = text.toLowerCase();
+    best = Math.max(best, t === q ? 1 : t.startsWith(q) ? 0.8 : t.includes(q) ? 0.5 : 0);
+  }
+  return best;
+}
+
 function goHome(): void {
+  places.leaveNow();
   if (cinema.isPlaying) cinema.stop();
   if (fp.mode !== 'off') fp.exit();
   closeEncounter(true);
@@ -1474,6 +1533,8 @@ window.addEventListener('keydown', (event) => {
   const el = event.target as HTMLElement;
   if (el instanceof HTMLInputElement && el.type !== 'checkbox' && el.type !== 'range') return; // typing in a field
   if (event.metaKey || event.ctrlKey || event.altKey) return;
+  // Away from the tracker, only the keys that mean something everywhere: time, picture, home, search.
+  if (places.away && !['0', 'r', '[', ']', 'n', 'p', 'm', 'f', 'h', '/', ' ', 'escape', '?'].includes(event.key.toLowerCase())) return;
   switch (event.key.toLowerCase()) {
     case '0': goHome(); break;
     case '1': preset(1); break;
@@ -1518,6 +1579,7 @@ window.addEventListener('keydown', (event) => {
       else if (shareDialog.isOpen) shareDialog.close();
       else if (fp.mode !== 'off') fp.exit();
       else if (document.body.classList.contains('ui-hidden')) document.body.classList.remove('ui-hidden');
+      else if (places.away) places.back();
       else if (encPanel.isOpen) closeEncounter();
       else if (selected) select(null);
       else openPanel(null);
@@ -1740,6 +1802,13 @@ function setResting(on: boolean): void {
   document.body.classList.toggle('ui-rest', on);
 }
 function updateRest(now: number): void {
+  if (places.away) {
+    const calm = places.drifting && now - lastTouchMs > 4000 && !landing.showing && !timeBar.classList.contains('is-open') &&
+      viewsMenu.classList.contains('is-hidden') && document.activeElement?.id !== 'search' &&
+      !document.querySelector('.overlay:not(.is-hidden), .tool-menu:not(.is-hidden)');
+    if (calm !== resting) setResting(calm);
+    return;
+  }
   const rest =
     rig.drifting && now - lastTouchMs > 4000 && fp.mode === 'off' && !landing.showing && !tour.isRunning &&
     openPanelName === null && !inspector.isOpen && !encPanel.isOpen && // something is being read
@@ -1782,6 +1851,23 @@ function step(now: number): void {
   }
 
   uiHidden = document.body.classList.contains('ui-hidden');
+  if (places.away) {
+    // Somewhere else in the solar system. Nothing of the Earth's is on screen, so none of its
+    // machinery runs: no propagation, no screening, no globe. Only the clock, which is shared.
+    sky.update(new Date(clock.time), globe.sunDirection, realSeconds); // keeps the shared star material's pixel size and twinkle current
+    places.update(dt, clock.time, realSeconds);
+    updateRest(now);
+    timeControls.render();
+    updateTimeChip();
+    frameCount++;
+    kit.render();
+    if (wantShot) {
+      wantShot = false;
+      saveShot();
+    }
+    watchFrameRate(now);
+    return;
+  }
   sim.update(clock.time, clock.paused ? 0 : clock.speed); // snapshot bookkeeping + interpolation factor
   cloud.update();
   const date = new Date(clock.time);
@@ -1928,6 +2014,8 @@ const app: App = {
   onSkyView: (run) => void skyHooks.push(run),
   useMyLocation,
 };
+
+app.addSearch((query) => places.search(query));
 
 // One line per module. A module that throws while setting itself up is reported and skipped:
 // an optional extra must never stop the tracker from starting.
