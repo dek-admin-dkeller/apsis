@@ -15,7 +15,7 @@
 
 /* ---------- what does not apply away from the Earth ---------- */
 
-body.away :is(.readouts, .statusbar, .dock-right, #labels, #reticle, #range-tag, #locate-top, #m-sky, #panel-objects) { display: none !important; }
+body.away :is(.readouts, .statusbar, .dock-right, #labels, #reticle, #range-tag, #locate-top, #m-sky, #m-system, #panel-objects) { display: none !important; }
 body.away .rail :is([data-view], #view-sky) { display: none; }
 body.away .rail { bottom: 0; }
 /* Each place has views of its own in the rail's View group: the Earth's, another world's, the solar system's. */
@@ -261,3 +261,17 @@ body.away .search.has-filter input { padding-right: 10px !important; }
 #pc-acts .act-ground { display: none; }
 #pc-acts.is-ground .act-ground { display: flex; }
 #pc-acts.is-ground .act:has([data-setting=orbitPath]), #pc-acts.is-ground .act:has([data-setting=groundTrack]), #pc-acts.is-ground .act:has([data-setting=footprint]) { display: none; }
+
+/* The time bar away from the Earth (the solar system's speeds): wider, and the clock and the
+   transport keep their own width so six speed buttons never ride over the play controls. */
+@media (min-width: 761px) {
+  body.away .timebar { width: min(880px, calc(100vw - var(--rail) - 2 * var(--gap))); }
+  body.away .timebar .tb-row { grid-template-columns: auto auto minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  /* A phone: the six speeds of the solar system take a full row of their own, under the transport. */
+  body.away .timebar.is-open .tb-row, body.away:not(.quiet-ui) .timebar .tb-row { grid-template-areas: 'clock now' 'transport transport' 'speeds speeds'; }
+  body.away .timebar.is-open #speeds, body.away:not(.quiet-ui) .timebar #speeds { justify-self: stretch; display: flex; }
+  body.away .timebar.is-open #speeds button:not(.here-only), body.away:not(.quiet-ui) .timebar #speeds button:not(.here-only) { flex: 1 1 0; min-width: 0; padding: 0 2px; }
+  body.away .timebar.is-open .transport, body.away:not(.quiet-ui) .timebar .transport { justify-self: center; }
+}

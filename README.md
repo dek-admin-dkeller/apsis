@@ -90,6 +90,9 @@ status line sit along the bottom.
 | Notifications | opt-in, from the bell: a browser notification when an alert starts (launch, eclipse, close asteroid, Station overhead), once each |
 | Solar-system speeds | away from the Earth the time bar adds a day, a week, a month and a year a second; back at the Earth it returns to 1000× |
 | Share links | `#launch=<id>&t=…` opens a launch climb at that moment, `#event=solar-2027-02-06` an eclipse at its peak, besides `#sat=`, `#pair=`, `#place=`, `#craft=` |
+| Phones: worlds | away from the Earth a strip of little globes above the tab bar (tap to fly there, again to go in; the moons of the world you are at appear beside it); in the Earth view a round button goes out to the solar system |
+| Phones: sky view | tap a satellite, the Sun, the Moon, a planet or a constellation for a small card; it closes after 8 s or at the next tap |
+| Escape in full screen | Chrome and Edge: the app keeps Escape (hold Esc to leave full screen); on the whole solar system Escape leaves full screen |
 | What's new | the home page and About list the latest additions, newest first |
 | Live and coming up | the bell in the top bar (on a phone, in the menu): spacecraft a Deep Space Network dish is talking to now, a launch in flight or about to lift off, an active meteor shower, then the next launches, asteroid and shower peak. A green dot and count while anything is live; each row goes to it |
 | Filters | while any filter hides part of the catalogue (a type chosen in the search, the type and orbit chips, the height range, the year slider), an amber banner at the top of the globe says how many are shown and why, and **Show all** clears every one of them |

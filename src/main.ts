@@ -65,6 +65,7 @@ import { alertDistance, clockStamp, duration, Inspector } from './ui/inspector.t
 import { LoadingScreen } from './ui/intro.ts';
 import { Landing, updateRows } from './ui/landing.ts';
 import { EclipseShadow } from './render/eclipseShadow.ts';
+import { WorldStrip } from './ui/worldStrip.ts';
 import { WHATS_NEW } from './ui/featureList.ts';
 import type { App, FrameInfo, SearchProvider } from './ui/app.ts';
 import { freshLaunches, type FreshLaunch } from './data/fresh.ts';
@@ -247,6 +248,11 @@ const places = new Places({
   leaving: () => leaveTracker(),
   onAway: (away) => setAway(away),
 });
+// Phones: the strip of worlds above the tab bar away from the Earth (ui/worldStrip.ts), and in
+// the tracker a round button out to the solar system.
+const worldStrip = new WorldStrip({ whereNow: () => places.whereNow(), go: (id) => places.goWorld(id) });
+places.onWhere = () => worldStrip.update();
+$('m-system').addEventListener('click', () => places.goWorld('system'));
 const model = new SatelliteModel(kit);
 const encModels = [new SatelliteModel(kit, false), new SatelliteModel(kit, false)]; // the two objects of a close approach
 const labels = new Labels(kit, sim, cloud);
@@ -262,6 +268,7 @@ const fp = new FirstPersonView(kit, canvas, () => {
   model.enabled = store.settings.model && !encPanel.isOpen;
   if (document.body.classList.contains('sky-immersive')) {
     document.body.classList.remove('sky-immersive'); // the phone's full-screen sky view puts the interface back
+    hideSkyCard();
     for (const run of skyHooks) run(false);
   }
 });
@@ -1295,11 +1302,94 @@ canvas.addEventListener('pointerdown', (event) => {
   pointer.downY = event.clientY;
 });
 canvas.addEventListener('pointerup', (event) => {
-  if (!catalog || places.elsewhere || Math.hypot(event.clientX - pointer.downX, event.clientY - pointer.downY) > 4) return; // it was a drag
-  if (document.body.classList.contains('sky-immersive')) return; // full-screen sky: a tap must not bring a panel up
+  const immersive = document.body.classList.contains('sky-immersive');
+  // A drag, not a tap (a fingertip wanders more than a mouse: more room in the phone's sky view).
+  if (!catalog || places.elsewhere || Math.hypot(event.clientX - pointer.downX, event.clientY - pointer.downY) > (immersive ? 12 : 4)) return;
+  if (immersive) return skyTap(event.clientX, event.clientY); // full-screen sky: a small card, never a panel
   const index = cloud.pick(event.clientX, event.clientY, 12);
   if (index >= 0 && index !== selected?.index) select(catalog.sats[index]);
 });
+
+// ---- the phone's full-screen sky view: tap something to see what it is ------------------------
+//
+// A small card beside what was tapped (a satellite, the Sun, the Moon, a planet, or failing those
+// the constellation there), closed by the next tap or after 8 seconds. No panel opens: the sky
+// keeps the whole screen (the owner asked for exactly this).
+
+const skyCard = document.createElement('div');
+skyCard.className = 'sky-card is-hidden';
+skyCard.setAttribute('role', 'status');
+document.body.append(skyCard);
+let skyCardTimer = 0;
+const SKY_CARD_MS = 8000;
+
+function hideSkyCard(): void {
+  window.clearTimeout(skyCardTimer);
+  skyCard.classList.add('is-hidden');
+}
+
+function skyTap(x: number, y: number): void {
+  const found = skyThingAt(x, y);
+  hideSkyCard();
+  if (!found) return;
+  const line = (className: string, text: string) => Object.assign(document.createElement('span'), { className, textContent: text });
+  skyCard.replaceChildren(line('sc-name', found.name), line('sc-what', found.what), ...(found.more ? [line('sc-more', found.more)] : []));
+  skyCard.classList.remove('is-hidden');
+  // Beside the thing, on whichever side has room; never off the screen.
+  const width = skyCard.offsetWidth, height = skyCard.offsetHeight;
+  const left = x + 18 + width < window.innerWidth - 8 ? x + 18 : Math.max(8, x - 18 - width);
+  const top = Math.min(Math.max(8, y - height / 2), window.innerHeight - height - 8);
+  skyCard.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`;
+  skyCardTimer = window.setTimeout(hideSkyCard, SKY_CARD_MS);
+}
+
+/** What is at a point of the screen in the sky view: the nearest within a fingertip, by kind. */
+function skyThingAt(x: number, y: number): { name: string; what: string; more?: string } | null {
+  if (!catalog) return null;
+  const reach = 26; // pixels: a fingertip
+  // A satellite first: they are what this view is for.
+  const index = cloud.pick(x, y, reach);
+  if (index >= 0) {
+    const sat = catalog.sats[index];
+    const here = { x: 0, y: 0, z: 0 };
+    const cameraEci = kit.eciGroup.worldToLocal(kit.camera.position.clone());
+    let more = '';
+    if (sim.getPosition(index, here)) {
+      const up = Math.hypot(here.x, here.y, here.z) - EARTH_RADIUS_KM;
+      const away = Math.hypot(here.x - cameraEci.x, here.y - cameraEci.y, here.z - cameraEci.z);
+      more = `${fmtKm(up)} up · ${fmtKm(away)} from you`;
+    }
+    return { name: displayName(sat), what: describe(sat).purpose, more };
+  }
+  // The Sun, the Moon, the planets.
+  const cam = kit.camera.position;
+  const onScreen = (direction: THREE.Vector3, distance: number) => toScreen(distance > 0 ? direction.clone().multiplyScalar(distance) : cam.clone().addScaledVector(direction, 2000));
+  const bodies: { name: string; what: string; direction: THREE.Vector3; distance: number }[] = [
+    { name: 'The Sun', what: 'Our star · never look at it directly', direction: globe.sunDirection, distance: 0 },
+    ...sky.bodies.map((body) => ({ name: body.name === 'Moon' ? 'The Moon' : body.name, what: body.name === 'Moon' ? 'About 384,000 km away' : 'Planet', direction: body.direction, distance: body.name === 'Moon' ? MOON_DISTANCE : 0 })),
+  ];
+  let best: { name: string; what: string } | null = null, bestD = reach * 1.6;
+  for (const body of bodies) {
+    const p = onScreen(body.direction, body.distance);
+    const d = p ? Math.hypot(p.x - x, p.y - y) : Infinity;
+    if (d < bestD) {
+      bestD = d;
+      best = { name: body.name, what: body.what };
+    }
+  }
+  if (best) return best;
+  // Otherwise the constellation whose middle is nearest, if the tap is anywhere near one.
+  let figure: string | null = null, figureD = 140;
+  for (const f of sky.constellations) {
+    const p = onScreen(f.direction, 0);
+    const d = p ? Math.hypot(p.x - x, p.y - y) : Infinity;
+    if (d < figureD) {
+      figureD = d;
+      figure = f.name;
+    }
+  }
+  return figure ? { name: figure, what: 'Constellation' } : null;
+}
 
 let hoverIndex = -1; // object the hover card is currently showing
 
@@ -1369,10 +1459,28 @@ function saveShot(): void {
   }, 'image/png');
 }
 
+/**
+ * Full screen keeps Escape for the app (the owner asked: Escape steps out of a world, and must
+ * not also throw the page out of full screen). Browsers always let Escape leave full screen,
+ * except through the Keyboard Lock API (Chrome and Edge): a page in full screen may claim
+ * Escape, and the browser then says "press and hold Esc to exit". So: claimed on entering,
+ * released on leaving, and Escape leaves full screen itself only where there is nothing left to
+ * step out of (the whole solar system). Safari and Firefox have no keyboard lock: there Escape
+ * still leaves full screen as the browser decides.
+ */
+type KeyboardLock = { lock?: (keys?: string[]) => Promise<void>; unlock?: () => void };
+const keyboardLock = (navigator as Navigator & { keyboard?: KeyboardLock }).keyboard;
 function toggleFullscreen(): void {
   if (document.fullscreenElement) void document.exitFullscreen();
-  else void document.documentElement.requestFullscreen?.().catch(() => toast('Full screen is not available here'));
+  else {
+    void document.documentElement.requestFullscreen?.()
+      .then(() => keyboardLock?.lock?.(['Escape']).catch(() => undefined))
+      .catch(() => toast('Full screen is not available here'));
+  }
 }
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement) keyboardLock?.unlock?.();
+});
 $('fullscreen').addEventListener('click', toggleFullscreen);
 
 const keysOverlay = $('keys');
@@ -1786,7 +1894,11 @@ window.addEventListener('keydown', (event) => {
       else if (shareDialog.isOpen) shareDialog.close();
       else if (fp.mode !== 'off') fp.exit();
       else if (document.body.classList.contains('ui-hidden')) document.body.classList.remove('ui-hidden');
-      else if (places.elsewhere) places.back();
+      else if (places.elsewhere) {
+        // Nothing left to step out of (the whole solar system): Escape leaves full screen, as
+        // the browser would have done had the app not kept Escape for itself (toggleFullscreen).
+        if (!places.back() && document.fullscreenElement) void document.exitFullscreen();
+      }
       else if (encPanel.isOpen) closeEncounter();
       else if (selected) select(null);
       else if (openPanelName) openPanel(null);

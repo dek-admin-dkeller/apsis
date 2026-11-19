@@ -560,7 +560,36 @@ export class Places {
    * last name is where the visitor is; each name before it is one step out. On the solar
    * system, a world the camera has gone up to is added in amber as the way in.
    */
+  /** Told whenever where the visitor is (or is heading) changes: a phone's world strip follows it. */
+  onWhere: (() => void) | null = null;
+
+  /** Where the visitor is, for the world strip: the kind of scene, its world, and on the solar system the world the camera is beside. */
+  whereNow(): { spot: Spot; body: BodyId; beside: BodyId | null } {
+    const beside = this.shownSpot === 'map' && this.map.focus?.kind === 'body' ? this.map.focus.body.id : null;
+    return { spot: this.shownSpot, body: this.shownBody, beside };
+  }
+
+  /**
+   * A world chosen from the phone's strip: on the solar system, the camera goes up to it (and a
+   * second choice goes in, as a second tap on its dot does); anywhere else, the journey there.
+   * Choosing the world you are at puts its usual view back.
+   */
+  goWorld(id: BodyId | 'system'): void {
+    if (this.busy) return;
+    if (id === 'system') return this.spot === 'map' ? this.pick(this.map, null) : this.openSystem();
+    const body = BODIES[id];
+    if (this.spot === 'map') {
+      const beside = this.map.focus?.kind === 'body' && this.map.focus.body.id === id;
+      if (beside) return this.open({ kind: 'body', body });
+      if (this.map.keyFor(id) === `body:${id}`) return this.pick(this.map, { kind: 'body', body });
+      return this.goBody(id); // not drawn on the solar system (a small moon): straight there
+    }
+    if ((this.spot === 'place' && this.hereBody === id) || (this.spot === 'tracker' && id === 'earth')) return this.resetView();
+    this.goBody(id);
+  }
+
   private drawPath(): void {
+    this.onWhere?.();
     const segments: { text: string; state: '' | 'is-here' | 'is-next'; run: () => void; glyph?: boolean }[] = [];
     const onMap = this.shownSpot === 'map';
     const next = onMap && this.map.focus?.kind === 'body' ? this.map.focus.body : null;
@@ -760,11 +789,13 @@ export class Places {
   }
 
   /** Escape: stop looking at one thing; from a place, out to the solar system; there, out to all of it. */
-  back(): void {
-    if (this.busy) return;
+  back(): boolean {
+    if (this.busy) return true; // a move is under way: Escape is spent on it
     if (this.spot === 'place' && this.place.focus) this.pick(this.place, null);
     else if (this.spot === 'place') void this.travel({ kind: 'map' });
     else if (this.spot === 'map' && this.map.focus) this.pick(this.map, null);
+    else return false; // the whole solar system: nothing further out
+    return true;
   }
 
   /**
@@ -991,6 +1022,7 @@ export class Places {
     const caption = target?.kind === 'body' && this.spot === 'map';
     this.hud.classList.toggle('is-hidden', !caption);
     this.card.classList.toggle('is-hidden', !target || caption);
+    document.body.classList.toggle('place-card-open', !!target && !caption); // (a phone's world strip steps aside for the card)
     // Keep what is being looked at clear of the words: above a caption or a phone's card, beside a computer's card.
     const shift: [number, number] = !target ? [0, 0] : caption ? [0, 0.09] : this.host.isPhone() ? [0, 0.17] : [0.07, 0];
     this.place.setShift(...shift);

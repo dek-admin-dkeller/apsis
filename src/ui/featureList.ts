@@ -140,7 +140,8 @@ export const FEATURES: FeatureGroup[] = [
     title: 'On a phone',
     summary: 'The same tracker, made for a small screen and for pointing at the sky.',
     items: [
-      { name: 'Hold it up to the sky', text: 'The sky button fills the screen with what is overhead in the direction the phone is pointing.' },
+      { name: 'Hold it up to the sky', text: 'The sky button fills the screen with what is overhead in the direction the phone is pointing. Tap anything for a small card saying what it is.', fresh: true },
+      { name: 'A strip of worlds', text: 'On the solar system and at other worlds, a row of little globes above the tab bar: tap one to fly there, tap again to go in.', fresh: true },
       { name: 'Built around the globe', text: 'Few controls on screen, and panels you can drag out of the way.' },
     ],
   },
@@ -154,6 +155,17 @@ export interface Update {
 }
 
 export const WHATS_NEW: Update[] = [
+  {
+    date: '2026-11-19',
+    title: 'Easier on a phone',
+    items: [
+      'A strip of worlds along the bottom on a phone: tap a planet to fly to it, tap again to go in; its moons appear beside it. A round button in the Earth view goes out to the solar system.',
+      'In the phone’s sky view, tap anything you see — a satellite, the Moon, a planet, a constellation — for a small card saying what it is; it closes itself after 8 seconds.',
+      'Planets and spacecraft are easier to hit with a finger.',
+      'In full screen, Escape steps out of a world without leaving full screen (Chrome and Edge); on the whole solar system it leaves full screen as usual.',
+      'The top bar shows how old the tracking data is (“2 h 57 min old”), and a clock that is paused or moved says so in words.',
+    ],
+  },
   {
     date: '2026-11-19',
     title: 'Eclipses you can see, the Station over you, faster time out there',

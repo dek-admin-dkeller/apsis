@@ -1864,7 +1864,7 @@ export class SpaceView {
   private pick(clientX: number, clientY: number): Item | null {
     const screen = new THREE.Vector3();
     let best: Item | null = null;
-    let bestDistance = this.host.isPhone() ? 26 : 16;
+    let bestDistance = this.host.isPhone() ? 34 : 16; // a fingertip needs more room than a pointer
     for (const item of this.items) {
       if (item.target.kind !== 'craft' || !item.shown || !this.project(item.pos, screen) || this.hidden(item.pos, item)) continue;
       const d = Math.hypot(screen.x - clientX, screen.y - clientY);
@@ -1880,7 +1880,7 @@ export class SpaceView {
     for (const item of this.items) {
       if (!item.mesh || !item.shown) continue;
       // A small body is hard to hit: give it a few pixels of grace.
-      const grace = this.camera.position.distanceTo(item.pos) * (this.host.isPhone() ? 0.03 : 0.014);
+      const grace = this.camera.position.distanceTo(item.pos) * (this.host.isPhone() ? 0.05 : 0.014);
       const hit = ray.ray.intersectSphere(new THREE.Sphere(item.pos, item.radius + grace), screen);
       if (!hit) continue;
       const d = hit.distanceTo(this.camera.position);

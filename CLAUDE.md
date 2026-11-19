@@ -676,8 +676,10 @@ it is used. So:
 - **Rover paths are findable**: visible from ~2.6 Mars radii (not 0.6), always for the rover
   being looked at, and switchable on the rover's own card (`#pc-acts.is-ground`: "Path driven",
   the same `roverPaths` setting as Layers).
-- **Time on the solar system**: away from the Earth the time bar adds a day, a week, a month and
-  a year a second (`.away-only` speed buttons; `speedText()`); back at the Earth anything faster
+- **Time on the solar system**: away from the Earth the time bar swaps 10× and 100× (`.here-only`)
+  for a day, a week, a month and a year a second (`.away-only`; `speedText()`), is wider on a
+  computer and gives the speeds a row of their own on a phone (space.css), and a phone's world
+  strip steps aside while it is open (`body.m-time-open`); back at the Earth anything faster
   than 1000× is brought down to it (`setAway`), with a toast. A long jump renews only the
   space views' PATHS (`SpaceView.refreshLines`), never a full rebuild (that reloaded every map).
 - **The Moon's shadow on the Earth** (`render/eclipseShadow.ts`, `ECLIPSE_GLSL` in `globe.ts`,
@@ -708,6 +710,20 @@ it is used. So:
   "Deploying" — after the Roadster stayed a "probe" on the live site.
 - **Models**: 78 kinds; the latest are qianfan, guowang, dove (Planet), iceye, globalstar,
   capella, and a rebuilt `roadster` (lofted body at true proportions, Starman at the wheel).
+- **Phones** (`ui/worldStrip.ts` + `worldStrip.css`): away from the Earth a strip of worlds above
+  the tab bar (the owner's choice for phones only; on a computer the picture stays the menu):
+  chips made from each world's `_s` map, the world you are at ringed amber and slid to the middle,
+  the one beside the camera ringed blue ("Tap to go in"), its moons inserted after their planet.
+  It follows `Places.onWhere` (called from `drawPath`) and acts through `Places.goWorld`. It steps
+  aside for a panel or a craft's card (`body.place-card-open`) and lifts `#place-hud` above it.
+  In the tracker `#m-system` (round button) goes out to the solar system. Tap targets in the
+  space views are larger on phones (34 px; bodies 5 % grace).
+- **Sky view taps** (`skyTap` in `main.ts`): in `body.sky-immersive` a tap shows `.sky-card` beside
+  what was tapped (a satellite within 26 px, else the Sun / Moon / a planet, else the nearest
+  constellation within 140 px), closed by the next tap or after 8 s; a fingertip may move 12 px.
+- **Escape and full screen**: entering full screen claims Escape with the Keyboard Lock API
+  (Chrome/Edge; "hold Esc to exit"); `Places.back()` returns false on the whole solar system and
+  only then does Escape leave full screen. Safari/Firefox keep the browser's own behaviour.
 - **CI**: actions at checkout@v7, setup-node@v7, configure-pages@v6, upload-pages-artifact@v5
   (it leaves out dotfiles: the site has none), deploy-pages@v5; the smoke test on pushes.
 
