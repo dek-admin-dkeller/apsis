@@ -2,7 +2,7 @@
  * The App interface: what a feature module is allowed to know about the rest of the program.
  *
  * `src/main.ts` creates the scene, the simulation and the core panels, and has grown large.
- * Features added later (radio details, orbit changes, launches, the command bar …) do not
+ * Features added later (radio details, orbit changes, launches, typed commands …) do not
  * reach into it. Each lives in its own file under `src/features/`, exports one function
  * `install(app: App)`, and does everything through this interface: it reads state through the
  * getters, asks for things through the actions, and is told about changes through the `on…`
@@ -98,6 +98,8 @@ export interface App {
   search(query: string, limit?: number): Satellite[];
   /** Offer more things in the search field (bodies, spacecraft beyond Earth orbit …). */
   addSearch(provider: SearchProvider): void;
+  /** Put the cursor in the search field, optionally with `text` already typed in it (the list then shows what it finds). */
+  focusSearch(text?: string): void;
   /** Fly to look straight down at a place from `altitudeKm` up (default 2,500). */
   flyToGround(latDeg: number, lonDeg: number, altitudeKm?: number): void;
   view(which: ViewName): void;

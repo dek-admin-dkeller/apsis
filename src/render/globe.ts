@@ -3,6 +3,14 @@
  * terminator, ocean glint, drifting clouds that cast shadows, terrain relief and an
  * atmosphere rim whose brightness follows the height of each line of sight.
  * Any texture that fails to load is replaced by a procedural fallback in the shader.
+ *
+ * Loading order. The whole set is about 8 MB, most of it the cloud layer. The globe is worth
+ * showing long before all of that has arrived, so the textures come in two steps: first the
+ * ESSENTIAL two (the day map, and the water mask the sun's glint needs), which is when
+ * `essential` resolves and the home page lets the globe show through; then the night lights,
+ * the terrain and the clouds, which are held back until the caller says the catalogue has
+ * downloaded (they would otherwise share the connection with it). The night lights and the
+ * clouds fade in when they arrive instead of appearing between one frame and the next.
  */
 
 import * as THREE from 'three';
@@ -16,6 +24,11 @@ const TEXTURES = {
   uWater: ['earth-water.png', false],
   uClouds: ['clouds.png', false],
 } as const; // [file, isColourData]
+
+/** What the first picture needs. Everything else can arrive while the visitor is already looking. */
+const ESSENTIAL = new Set(['uDay', 'uWater']);
+const REST_WAIT_MS = 4000; // the longest the other textures are held back for the caller
+const FADE_SECONDS = 1.6; // how long a late layer takes to appear
 
 const ATMOSPHERE_SCALE = 1.1; // glow shell radius relative to the Earth
 
@@ -39,6 +52,8 @@ const earthFragment = /* glsl */ `
   uniform vec3 uSunDir;      // unit vector towards the sun (world space)
   uniform float uCloudShift; // slow eastward cloud drift
   uniform float uCloudsOn;   // display setting
+  uniform float uCloudFade;  // 0 while the cloud texture is still on its way, then up to 1
+  uniform float uNightFade;  // the same for the city lights
   uniform float uRelief;     // terrain relief strength (stronger when the camera is close)
   uniform float uDetail;     // 0 in the whole-Earth view → 1 in close-ups: adds fine procedural detail
   varying vec2 vUv;
@@ -94,7 +109,7 @@ const earthFragment = /* glsl */ `
     // ---- Surface colour + land/water mask. The procedural continents are only
     //      evaluated when a texture is missing (the branches test uniforms, so they are free).
     float land = 0.0;
-    if (uHasDay < 0.5 || uHasWater < 0.5 || uHasNight < 0.5) land = smoothstep(0.50, 0.54, fbm(unit * 2.2 + 3.0));
+    if (uHasDay < 0.5 || uHasWater < 0.5 || (uHasNight < 0.5 && uNightFade > 0.0)) land = smoothstep(0.50, 0.54, fbm(unit * 2.2 + 3.0));
     vec3 dayColor;
     if (uHasDay > 0.5) {
       dayColor = texture2D(uDay, vUv).rgb;
@@ -153,13 +168,16 @@ const earthFragment = /* glsl */ `
     if (uHasClouds > 0.5) {
       cloud = texture2D(uClouds, cloudUv + viewTangent * CLOUD_HEIGHT * tangentToUv).a;
       cloudSunward = texture2D(uClouds, shadowUv, 1.5).a; // +1.5 mip levels = a soft-edged shadow
-    } else {
+    } else if (uCloudFade > 0.0) { // the texture failed: made-up clouds (not while it is merely still loading)
       cloud = smoothstep(0.55, 0.75, fbm(unit * 4.0 + vec3(uCloudShift * 40.0, 0.0, 0.0))) * 0.7;
       cloudSunward = cloud * 0.6;
+    } else {
+      cloud = 0.0;
+      cloudSunward = 0.0;
     }
     cloud = clamp(cloud + detail * 1.4 * cloud * (1.0 - cloud), 0.0, 1.0); // close-up: ragged, finer cloud edges
-    cloud *= uCloudsOn;
-    cloudSunward *= uCloudsOn;
+    cloud *= uCloudsOn * uCloudFade;
+    cloudSunward *= uCloudsOn * uCloudFade;
     float groundLight = 1.0 - 0.45 * cloudSunward;
 
     // ---- Day side: sunlit surface.
@@ -188,10 +206,12 @@ const earthFragment = /* glsl */ `
       vec3 nightTex = texture2D(uNight, vUv).rgb;
       float brightness = max(nightTex.r, max(nightTex.g, nightTex.b));
       lights = nightTex * mix(vec3(1.36, 0.94, 0.54), vec3(1.16, 1.08, 0.92), smoothstep(0.25, 0.90, brightness)) * 1.55;
-    } else {
+    } else if (uNightFade > 0.0) {
       lights = vec3(1.0, 0.75, 0.4) * land * step(0.62, noise(unit * 90.0)) * 0.75;
+    } else {
+      lights = vec3(0.0);
     }
-    float lightsOn = 1.0 - smoothstep(-0.14, 0.03, sun);
+    float lightsOn = (1.0 - smoothstep(-0.14, 0.03, sun)) * uNightFade;
     // Faint moonlit tone, so a close-up over an unlit ocean is dim rather than a black screen.
     vec3 night = dayColor * vec3(0.030, 0.038, 0.060) + vec3(0.0022, 0.0030, 0.0055);
     night = mix(night, vec3(0.034, 0.042, 0.066), cloud * 0.6);
@@ -264,38 +284,51 @@ export interface Globe {
   readonly earth: THREE.Object3D;
 }
 
-export function createGlobe(scene: THREE.Scene, onProgress: () => void): { globe: Globe; ready: Promise<void> } {
+/**
+ * @param holdRest the textures beyond the essential two wait for this (at most a few seconds):
+ *                 pass the promise of the catalogue's download so they do not compete with it.
+ * @returns `essential` resolves when there is a globe worth showing, `ready` when every texture is in.
+ */
+export function createGlobe(scene: THREE.Scene, onProgress: () => void, holdRest: Promise<unknown> = Promise.resolve()): { globe: Globe; ready: Promise<void>; essential: Promise<void> } {
   const uniforms: Record<string, THREE.IUniform> = {
     uSunDir: { value: new THREE.Vector3(1, 0, 0) },
     uCloudShift: { value: 0 },
     uFade: { value: 1 },
     uCloudsOn: { value: 1 },
+    uCloudFade: { value: 0 },
+    uNightFade: { value: 0 },
     uRelief: { value: 2.4 },
     uDetail: { value: 0 },
   };
   const loader = new THREE.TextureLoader();
-  const loads: Promise<void>[] = [];
-  for (const [name, [file, isColour]] of Object.entries(TEXTURES)) {
-    const flag = name.replace('u', 'uHas');
+  const settled = new Set<string>(); // textures that have arrived or failed: either way, no longer awaited
+  const names = Object.keys(TEXTURES) as (keyof typeof TEXTURES)[];
+  for (const name of names) {
     uniforms[name] = { value: null };
-    uniforms[flag] = { value: 0 };
-    loads.push(
-      loader.loadAsync(`./textures/${file}`).then(
-        (texture) => {
-          texture.colorSpace = isColour ? THREE.SRGBColorSpace : THREE.NoColorSpace;
-          texture.wrapS = THREE.RepeatWrapping;
-          texture.anisotropy = 16; // three.js clamps this to what the GPU supports
-          texture.generateMipmaps = true;
-          texture.minFilter = THREE.LinearMipmapLinearFilter;
-          texture.magFilter = THREE.LinearFilter;
-          uniforms[name].value = texture;
-          uniforms[flag].value = 1;
-          onProgress();
-        },
-        () => onProgress(), // missing texture → keep the procedural fallback, no error
-      ),
-    );
+    uniforms[name.replace('u', 'uHas')] = { value: 0 };
   }
+  const load = (name: keyof typeof TEXTURES): Promise<void> => {
+    const [file, isColour] = TEXTURES[name];
+    return loader.loadAsync(`./textures/${file}`).then(
+      (texture) => {
+        texture.colorSpace = isColour ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.anisotropy = 16; // three.js clamps this to what the GPU supports
+        texture.generateMipmaps = true;
+        texture.minFilter = THREE.LinearMipmapLinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+        uniforms[name].value = texture;
+        uniforms[name.replace('u', 'uHas')].value = 1;
+      },
+      () => undefined, // missing texture → keep the procedural fallback, no error
+    ).then(() => {
+      settled.add(name);
+      onProgress();
+    });
+  };
+  const essential = Promise.all(names.filter((name) => ESSENTIAL.has(name)).map(load)).then(() => undefined);
+  const held = Promise.race([holdRest.catch(() => undefined), new Promise((resolve) => setTimeout(resolve, REST_WAIT_MS))]);
+  const ready = Promise.all([essential, held]).then(() => Promise.all(names.filter((name) => !ESSENTIAL.has(name)).map(load))).then(() => undefined);
 
   const earth = new THREE.Mesh(
     // 320 × 160 segments: the limb stays round (facets < half a pixel) from 300 km up.
@@ -350,10 +383,13 @@ export function createGlobe(scene: THREE.Scene, onProgress: () => void): { globe
       // almost nothing as the camera descends. Accumulated, so the rate can change smoothly.
       const dt = lastSeconds < 0 ? 0 : THREE.MathUtils.clamp(realSeconds - lastSeconds, 0, 0.25);
       lastSeconds = realSeconds;
+      // Layers that arrive after the globe is on show come up gently.
+      if (settled.has('uClouds')) uniforms.uCloudFade.value = Math.min(1, uniforms.uCloudFade.value + dt / FADE_SECONDS);
+      if (settled.has('uNight')) uniforms.uNightFade.value = Math.min(1, uniforms.uNightFade.value + dt / FADE_SECONDS);
       const drift = 0.0006 * (0.03 + 0.97 * THREE.MathUtils.smoothstep(cameraDistance, 9, 30));
       cloudShift = (cloudShift + dt * drift) % 1;
       uniforms.uCloudShift.value = cloudShift;
     },
   };
-  return { globe, ready: Promise.all(loads).then(() => undefined) };
+  return { globe, ready, essential };
 }

@@ -13,6 +13,12 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
     <title>Apsis — orbital tracking console</title>
+    <!-- A head start for the two pictures the globe waits for (the Earth's map and its water mask): they begin
+         downloading with the page instead of after the script has loaded and run. The script then asks for the
+         same addresses and is handed these; `crossorigin` is what makes them the same request. (The catalogue is
+         deliberately not here: measured, it took the connection from the globe and showed it a quarter-second later.) -->
+    <link rel="preload" as="image" href="./textures/earth-blue-marble.jpg" crossorigin />
+    <link rel="preload" as="image" href="./textures/earth-water.png" crossorigin />
     <!-- The welcome page is hidden until its stylesheet arrives, and skipped altogether (before the
          first paint) for share links and when the setting is off. See src/ui/landing.ts. -->
     <style>#landing { visibility: hidden; }</style>
@@ -118,9 +124,11 @@
         <section class="ld-section" id="ld-craft">
           <div class="ld-head">
             <h2>Twenty-one kinds of spacecraft</h2>
-            <p class="ld-intro">Every object is drawn as one of these models. They are built in code from reference photos, so nothing has to be downloaded to show them.</p>
+            <p class="ld-intro">Every object is drawn as a model like these. They are built in code from reference photos, so nothing has to be downloaded to show them.</p>
           </div>
           <div class="ld-plate" id="ld-plate"></div>
+          <!-- Presses #gallery-open, the catalogue of every model; hidden while that button is not on the page. -->
+          <button class="ld-text-button" id="landing-models" hidden>See all models</button>
         </section>
 
         <!-- The list itself is drawn by src/ui/landing.ts from src/ui/featureList.ts: edit it there. -->
@@ -208,9 +216,12 @@
         </div>
         <div class="search">
           <svg class="search-icon" viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.8" /><path d="M13 13l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg>
-          <input id="search" type="search" placeholder="Find an object by name or NORAD ID" autocomplete="off" spellcheck="false" aria-label="Search objects" />
+          <input id="search" type="search" placeholder="Search objects, types, places" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go"
+            role="combobox" aria-expanded="false" aria-controls="suggestions" aria-autocomplete="list" aria-label="Search: an object, a type such as telescope, a place, a time or an action" />
           <kbd class="search-key">/</kbd>
-          <ul id="suggestions" role="listbox"></ul>
+          <!-- Shown while a type chosen in the search is hiding everything else; pressing it shows everything again. -->
+          <button id="search-filter" class="search-filter is-hidden" type="button"><span></span><i aria-hidden="true">×</i></button>
+          <ul id="suggestions" role="listbox" aria-label="Search results"></ul>
         </div>
         <!-- Where the visitor is, while away from the tracker. -->
         <p id="place-name"></p>
@@ -293,9 +304,6 @@
         </button>
         <button role="menuitem" id="m-time-open">
           <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5" /><path d="M10 5.5V10l3 2" /></svg><span>Time and speed</span>
-        </button>
-        <button role="menuitem" data-command-open>
-          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 6.5L7.5 10 4 13.5M10 13.5h6" /></svg><span>Command bar</span>
         </button>
         <button role="menuitem" data-proxy="#locate-top">
           <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="5.5" /><circle cx="10" cy="10" r="1.6" /><path d="M10 1.5v3M10 15.5v3M1.5 10h3M15.5 10h3" /></svg><span>My location</span>
@@ -676,6 +684,8 @@
             <div class="insp-title">
               <h2 id="insp-name"></h2>
               <p id="insp-sub"></p>
+              <!-- Always there: the object's article, or Wikipedia's search for its name when none is known. -->
+              <a id="insp-wiki" class="insp-wiki" target="_blank" rel="noopener noreferrer">Wikipedia</a>
             </div>
             <img id="insp-oplogo" class="op-logo is-hidden" alt="" referrerpolicy="no-referrer" />
             <button id="insp-star" class="icon-btn star" aria-pressed="false" aria-label="Add to the watchlist" title="Add to the watchlist">
@@ -1116,8 +1126,7 @@
           <div><dt>Scroll</dt><dd>Zoom</dd></div>
           <div><dt>Right-drag</dt><dd>Pan</dd></div>
           <div><dt>Click a dot</dt><dd>Inspect it and lock the camera to it</dd></div>
-          <div><dt><kbd>/</kbd></dt><dd>Search</dd></div>
-          <div><dt><kbd>Ctrl</kbd> <kbd>K</kbd></dt><dd>Command bar: type an object, a place, a time or an action</dd></div>
+          <div><dt><kbd>/</kbd> or <kbd>Ctrl</kbd> <kbd>K</kbd></dt><dd>Search: an object, a type, a place, a time or an action</dd></div>
           <div><dt><kbd>Esc</kbd></dt><dd>Close or deselect</dd></div>
           <div><dt><kbd>Space</kbd></dt><dd>Pause or play</dd></div>
           <div><dt><kbd>R</kbd></dt><dd>Run time backwards</dd></div>

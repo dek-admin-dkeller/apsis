@@ -36,7 +36,7 @@ npm run fetch-data   # textures + CelesTrak elements + SATCAT facts into public/
 npm run fetch-radio  # SatNOGS radio records into public/data/radio.json (6 h guard; also run by CI)
 npm run shots        # retake the home page's product pictures (needs Chrome and the dev server running)
 npm run build-borders  # regenerate public/data/borders.bin from the world-atlas package
-npm run check        # the feature checks (orbit changes, visible passes, report, decay, command bar); exits 1 on a failure
+npm run check        # the feature checks (orbit changes, visible passes, report, decay, search); exits 1 on a failure
 ```
 
 Node ≥ 22.18 (the bench imports `.ts` files directly; `erasableSyntaxOnly` keeps that legal).
@@ -131,33 +131,35 @@ worker/lookahead.worker.ts: started on demand for the "Coming hours" scan (hashi
 ```
 src/main.ts                 creates every module, per-frame loop, keyboard, share links, home/reset
 src/data/                   catalog, categorize, describe (operator/purpose/model kind from the name), ephemeris
-                            (orbit series, look angles, passes, closest approach), satcat, wiki (name → article),
-                            spacecraft (a sentence about each model kind, for the catalogue),
+                            (orbit series, look angles, passes, closest approach), satcat, wiki (name → article, link),
+                            names (displayName: "Hubble Space Telescope (HST)"), spacecraft (a sentence about each model kind, for the catalogue),
                             regions ("over the South Pacific"), crew (people in space), types; and for the feature
                             modules: radio + doppler (SatNOGS records, Doppler shift), changes (compare two downloads),
                             decay + spaceWeather (time left, NOAA flux and Kp), launches (Launch Library 2), visibility
-                            (bright passes), approachData (report numbers), places (cities for the command bar)
+                            (bright passes), approachData (report numbers), places (cities the search can fly to)
 src/hashing/                SpatialHash, conjunction, lookahead, benchmark, groups (union–find)
 src/worker/                 sim.worker (+ SimClient, protocol, propagate), lookahead.worker, tonight.worker (visible passes)
 src/render/                 scene (renderer, bloom, quality presets), globe (Earth shader), tiles (close-up ground:
                             NASA GIBS map tiles streamed in below ~6,000 km), geoOverlay (borders, grid, terminator), sky (Milky Way, stars, constellations, planets, Sun, Moon), aurora, satellites
                             (the point cloud, colour modes, highlighting, picking), satModels + modelParts + observatoryModels +
                             deepModels + planetaryModels (49 procedural models: see "3D models"; satModels also holds the
-                            previews, thumbnails), cameraRig (fly-to, object focus, Earth drift), firstPerson (ride-along,
+                            previews, thumbnails), prewarm (models built in idle slices from the home page), cameraRig (fly-to, object focus, Earth drift), firstPerson (ride-along,
                             sky view, phone motion), orbitLine, groundTrack, encounterViz (close-approach drawing),
                             conjunctionMarkers, gridViz, constellation (orbits + coverage map), siteMarker, padMarkers
 src/features/               optional modules installed through the App interface (see "Feature modules"): radio, changes,
-                            weather, launches, tonight (+ tonightWords), report (+ reportPage), growth, command (+ commandParse)
+                            weather, launches, tonight (+ tonightWords), report (+ reportPage), growth, commands (+ commandParse)
 src/ui/                     app (the App interface), featureList (every feature, drawn on the home page), objectTabs (the
                             Objects panel's three tabs), inspector (+ charts), monitor (live pairs), ahead (prediction), encounterPanel, howto
-                            (walkthrough), hashTrace, benchmarkModal, filters, search, settings, timeControls, labels,
+                            (walkthrough), hashTrace, benchmarkModal, filters, search (+ searchMatch, searchIndex,
+                            searchObjects: see "The search field"), settings, timeControls, labels,
                             watchlist, feed (launches, trains, lowest), designer, constellations, contacts, crew,
                             gallery (the spacecraft catalogue), share (QR), tour, cinema (autopilot + recording), sheet (phone sheets), landing (welcome
                             page), launch + intro (loading screen), dom (DOM, number, unit and clock helpers)
 index.html                  all static markup; ids are the contract between HTML and the ui modules
 scripts/                    fetch-data.mjs, fetch-radio.mjs, diff-elements.mjs (writes changes.json), carry-over.mjs (push
                             builds keep the published data), build-borders.mjs, bench.mjs, shots.mjs, and the checks behind
-                            `npm run check`: check-changes, check-visibility, check-report, decay-check, test-command, check-groups
+                            `npm run check`: check-changes, check-visibility, check-report, decay-check, test-command (the
+                            search: grammar, matching, keyword index), check-groups
 public/                     data/ (satellites.json, satcat.json, radio.json, borders.bin; changes.json exists only in the
                             published site), shots/, textures/, icons/, manifest.webmanifest
 .github/workflows/deploy.yml  build + deploy to Pages; every 8 h it refreshes CelesTrak and SatNOGS data first (not committed
@@ -169,14 +171,32 @@ public/                     data/ (satellites.json, satcat.json, radio.json, bor
 Home page first (`#landing`, `src/ui/landing.ts`, `landing.css`): static markup painted before
 any script, with the tracker loading behind it. It is built to SHOW the tracker, not describe
 it (the owner found a text-only page bland):
-- **Opening screen:** once the tracker has loaded, `boot()` calls `loading.skip()` and
-  `landing.goLive()`; the page's backdrop fades (`is-live`) and the LIVE globe shows through,
-  held closer than the home view and moved beside the headline by `updateViewShift()`
-  (`heroShift`). Until then, and without WebGL, the headline stands alone on a plain dark
-  backdrop: **nothing animates on the opening screen while the tracker loads** (an orbit
-  drawing used to; it stuttered during loading and the owner had it removed). While the page is
-  up `body.home-open` hides the tracker's controls, shortcuts are off, and the globe is drawn
-  every frame only while the opening screen is in view.
+- **Opening screen:** the LIVE globe shows through it as early as possible. `boot()` calls
+  `landing.goLive()` (the page's backdrop fades, `is-live`) as soon as the Earth's day map and
+  water mask have arrived (`globeReady`, about 2 MB), not when everything has: the catalogue,
+  the first positions and the heavy textures (clouds, night lights, terrain) follow behind the
+  page, the objects appearing when they are ready and the clouds and lights fading in
+  (`render/globe.ts`, "Loading order"). `landing.ready()` then writes the status line and
+  allows the plate to be drawn. The globe is held closer than the home view and moved beside
+  the headline by `updateViewShift()` (`heroShift`). Until there is a globe, and without WebGL,
+  the headline stands alone on a plain dark backdrop: **nothing but the live globe animates on
+  the opening screen** (an orbit drawing used to; it stuttered during loading and the owner had
+  it removed. The globe only drifts slowly, and `boot()` yields a frame between its heavy
+  steps). The owner asked for this order ("the globe as fast as possible, then load in the
+  background"); measured on a throttled connection it roughly halves the wait for the picture.
+  While the page is up `body.home-open` hides the tracker's controls, shortcuts are off, and
+  the globe is drawn every frame only while the opening screen is in view.
+- **Going in early:** the loading screen (`#loading`, the rocket) is set aside
+  (`loading.setAside`, `display: none`) while the globe shows through the page, but its
+  progress is kept up to date. If the visitor presses "Open the tracker" before everything is
+  ready it comes back with that real progress, lifts off when loading finishes, and the
+  tracker opens as it does from a share link. Opened straight into the tracker nothing has
+  changed: the loading screen stays until every texture and the first positions are in.
+- **No loading screen to work behind:** from the home page the 3D models and the tile shader
+  are made ready by `prewarmInIdle()` (`render/prewarm.ts`): one model per idle moment, and
+  only while `landing.quiet` (not touched, not just scrolled). `index.html` preloads the day
+  map and the water mask so they start downloading with the page (not the catalogue: that
+  was measured, and it delayed the globe).
 - **The bar at the top is not inside the element that scrolls.** `#landing` is a fixed flex
   column: `.ld-top`, then `#landing-scroll` (`.ld-scroll`, `overscroll-behavior: none`). With
   the bar `position: sticky` inside the scroller, the elastic bounce past the top of the page
@@ -185,13 +205,22 @@ it (the owner found a text-only page bland):
 - **Showcase:** real screens in `public/shots/*.webp`, listed in `SHOTS` (`featureList.ts`).
   Retake them with `npm run shots` (`scripts/shots.mjs`: headless Chrome driven over the
   DevTools protocol against the running dev server) whenever the interface changes visibly.
+  The tabs advance by themselves every 5 s like a slideshow. The timer IS the thin progress
+  line on the active tab (a CSS animation, `ld-tab-progress`; its `animationend` moves on), so
+  pausing is one class: it runs only while the picture is on screen and the page visible,
+  pauses under the pointer, a finger or keyboard focus, leaves a screen the visitor chose
+  alone for 20 s, and never runs with "reduce motion". It must not change the page's length:
+  on a wide screen the figure's height is held while the phone picture shows; on a narrow one
+  the slideshow passes over the phone picture (its tab still shows it).
 - **How it works:** `src/ui/hashDemo.ts`, a 2D canvas that files dots in the real
   `SpatialHash` and draws either every pair or only the neighbours the table offers.
-- **Spacecraft plate:** `modelThumbnail()` for every `ModelKind`, drawn in idle moments once
-  the tracker is live and the plate is near the screen.
+- **Spacecraft plate:** `modelThumbnail()` for six kinds (`PLATE` in `landing.ts`; the owner
+  asked for "a couple", not all of them), drawn in idle moments once the tracker is ready and
+  the plate is near the screen. "See all models" (`#landing-models`) presses `#gallery-open`,
+  the button of the catalogue of models, and is hidden while that button is not on the page.
 - **Index:** `FEATURES` (`featureList.ts`) as rows of names with one line of text each.
 - **The plate never changes the page's length.** `layPlate()` makes a square and a caption
-  for every kind at construction; the pictures only fade into place. They are drawn one at a
+  for each kind shown at construction; the pictures only fade into place. They are drawn one at a
   time and only while the page is neither being touched nor has just scrolled (each one holds
   the main thread for a moment). Figures used to be appended as they were drawn, and on a
   phone the page grew and hitched under the finger.
@@ -226,12 +255,12 @@ sections ("features get lost") and then tabs holding lists of collapsed sections
 of description each ("just a list, a lot of text, an AI feel"). Do not go back to prose lists.
 - Every section is still one `<details class="sec">` in `index.html`, filled by the same
   module as before. `data-tab` says which tab, `data-section` the name code opens it by
-  (`app.openSection(name)`, used by the command bar), `data-tile` its tile's label and
+  (`app.openSection(name)`, used by the search field's actions), `data-tile` its tile's label and
   `data-hint` the tile's tooltip. "Open" still means the `<details>` is open, so modules that
   listen for `toggle` did not change. Sections in one tab share a `name`: one open at a time.
 - A module puts a figure on its tile with `sectionNote(element, text)` (`dom.ts`): it keeps a
   `.sum-note` in the section's `<summary>`, and the tile copies whatever is there.
-- Tiles that are not sections (spacecraft catalogue, contact timeline, benchmark, walkthrough, tour, command bar)
+- Tiles that are not sections (spacecraft catalogue, contact timeline, benchmark, walkthrough, tour)
   are in `SHORTCUTS` in `objectTabs.ts`; each presses a button that already exists.
 - A new feature gets a section in the right tab plus an icon in `ICONS`. Never a fourth tab.
 
@@ -278,7 +307,8 @@ or key removes it at once. Never while a panel, a menu, an overlay, the command 
 controls or the tour is open.
 
 Phone menu (`#m-views`, `mobile.css` section 12): the four views side by side as icons, then
-five actions as an icon list. It was nine equal lines of text.
+four actions as an icon list. It was nine equal lines of text. (There is no "search" or
+"command" entry: the search pill is always on screen.)
 
 "Visible tonight" on a phone is NOT in the Objects panel (its tile is hidden at phone width).
 It belongs to the full-screen sky view: `features/tonight.ts` adds a small faded eye button
@@ -310,7 +340,7 @@ tracker. Each module draws inside an empty element reserved for it in `index.htm
 | `tonight.ts` | `#tonight-body` (moved into its own sheet in the phone sky view) | Bright passes in the next 24 h from the visitor's own position, computed in `worker/tonight.worker.ts` only when asked |
 | `report.ts` | `#enc-export` | Close-approach report (new tab, or a saved file if the tab is blocked) and CSV |
 | `growth.ts` | `#growth-body` | Year slider; registers one filter with `app.setFilter('growth', …)`; cleared by Home (`app.onHome`) |
-| `command.ts` | its own overlay | Ctrl/Cmd+K; anything with `data-command-open` opens it; `commandParse.ts` holds the grammar |
+| `commands.ts` | nothing of its own | Places, times, clock speeds and actions for the search field: one source registered with `app.addSearch`; `commandParse.ts` holds the grammar of times and speeds |
 
 To add a feature: write the module, reserve an element if it needs one (in the Objects panel:
 a `<details class="sec" data-tab data-section>` in the right tab), add one import and one name
@@ -318,9 +348,39 @@ to the installer list in `main.ts`, extend `App` only if the module needs someth
 add its entry to `featureList.ts`.
 
 **A feature module must ask `app` about the program's state, never the page.** The command bar
-once decided whether it could open by testing `document.getElementById('landing')`; when the
-home page stopped being removed from the document, the bar silently never opened again. It
-now asks `app.ready()`. If a module needs to know something `App` cannot tell it, add a getter.
+(since folded into the search field) once decided whether it could open by testing
+`document.getElementById('landing')`; when the home page stopped being removed from the
+document, the bar silently never opened again. The search field's shortcut asks `app.ready()`.
+If a module needs to know something `App` cannot tell it, add a getter.
+
+## The search field (`src/ui/search.ts`)
+
+There is ONE place to type. A second one, the command bar, was removed at the owner's request
+after a visitor could not find a telescope in either; do not add another. The field asks every
+source for what was typed and shows one list under quiet headings, each row a `SearchHit`
+(`ui/app.ts`: title, note, group, score 0…1, run). Headings are ordered by their best row, so
+Enter always runs the best match overall.
+
+| Source | Heading | Where |
+| --- | --- | --- |
+| Catalogue objects by name, nickname, number | Objects | `ui/searchObjects.ts`: `byNorad`, the prefix index (the shortest candidate list of the typed words), the nicknames; only if those find nothing, a `Map<word, objects>` of the names' vocabulary is scanned for misspellings |
+| What objects ARE: "telescope", "spacex", "chinese weather" | Types | `ui/searchIndex.ts`: an inverted index, `Map<description, Topic>` and `Map<keyword, object indices>`, built once per catalogue (and again when the owners in `satcat.json` arrive) from `describe()`, the category, the orbit class and the owner. Several words intersect their sorted lists |
+| Places, times, speeds, actions | Places, Time, Actions | `features/commands.ts`, through `app.addSearch` |
+| Anything else | its own `group` | any module: `app.addSearch((query) => SearchHit[])` |
+
+- `matchScore(query, ...texts)` in `ui/searchMatch.ts` is the one scorer (the scale is in its
+  header). 0.6 is the line between "what was typed is in the name" and "probably meant"
+  (a misspelling): when the list has a proper match, everything under 0.6 is left out.
+- Choosing a type registers `app.setFilter('search', …)` and shows a chip in the field
+  (`#search-filter`); the chip, Home, or a new catalogue clears it.
+- `displayName(sat)` (`data/names.ts`) is what a headline shows: the suggestions, the
+  inspector's title, the hover card. Lists, name tags and the simulation keep `sat.name`.
+- `app.focusSearch(text?)` puts the cursor in the field (with text already typed, if given).
+- With nothing typed the field lists `EXAMPLES`, one of each kind; choosing one types it.
+- On a phone a row is two lines and the round buttons step aside while the list is open
+  (`mobile.css` section 14).
+- `scripts/test-command.mjs` checks the grammar, the scorer, the index and the finder against
+  the real catalogue. "james webber telescope" must keep finding "James Webb Space Telescope".
 
 ## Browser storage keys
 
@@ -331,8 +391,8 @@ graphics context).
 
 ## Outside services (all optional at run time; the app works offline without them)
 
-CelesTrak (manual refresh; scheduled in CI), Wikipedia REST summary (photos/descriptions,
-cached per article), NOAA SWPC (aurora grid, Kp, solar flux), a public people-in-space list
+CelesTrak (manual refresh; scheduled in CI), Wikipedia (REST summary for photos and descriptions,
+and the query API when an object's own name is tried as a title; cached per article), NOAA SWPC (aurora grid, Kp, solar flux), a public people-in-space list
 (`src/data/crew.ts`), NASA GIBS map tiles (`src/render/tiles.ts`, only while zoomed in and
 only with the `sharpGround` setting on), Launch Library 2 from The Space Devs (only when the
 launches section is opened; about 15 requests an hour are allowed, the answer is kept for an
@@ -478,6 +538,12 @@ an in-app yes plus the browser's own prompt, and stays in `localStorage`.
 - `modelThumbnail(kind)` (in `satModels.ts`) renders a model once per kind: it tries eight
   headings and two diagonal leans with an orthographic camera cropped to the model's real
   outline and keeps the pose that covers most of the square with the most light and colour.
+- The inspector always has a Wikipedia link under the name (`#insp-wiki`): the article from
+  `articleFor` (`data/wiki.ts`), else the object's own name tried once as a title
+  (`wikiGuess`, through Wikipedia's query API so that a missing page is not an error in the
+  console; accepted only if the article reads like one about something in space), else
+  "Search Wikipedia". On a phone the sheet's tabs pin under the name at `--insp-head`, which
+  `inspector.ts` keeps equal to the name block's real height.
 - `ui/thumb.ts` shows a Wikipedia photo when the article's lead image is a photograph, else
   that render. A lead image is treated as a logo (never used as the photo) when more than
   12 % of its pixels are transparent, or, if its pixels cannot be read, when it is an `.svg`.
@@ -503,7 +569,8 @@ an in-app yes plus the browser's own prompt, and stays in `localStorage`.
 Things that have never been verified on real hardware: the phone-motion sky view
 (`firstPerson.ts`), geolocation end to end, Safari/iOS specifics, video recording outside
 Chrome, the report's new-tab route (the test browser blocks new tabs, so only the saved-file
-fallback has been seen working), and the home page's bar under a real elastic overscroll.
+fallback has been seen working), the home page's bar under a real elastic overscroll, and the
+search list above a real on-screen keyboard (it is sized from `visualViewport`).
 
 ## Deploying
 

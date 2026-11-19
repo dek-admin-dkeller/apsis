@@ -195,12 +195,28 @@ body.ui-hidden #hud > *, body.ui-hidden .dock > * { pointer-events: none; }
   display: none;
 }
 #suggestions.is-open { display: block; }
+/* One list for everything the field can find: wider than the field, and it scrolls rather than leaving the window. */
+#suggestions { right: auto; width: max(100%, 440px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 #suggestions li { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 5px; cursor: pointer; white-space: nowrap; }
 #suggestions li .dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 #suggestions li .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-#suggestions li.is-active, #suggestions li:hover { background: rgba(127, 227, 255, 0.12); }
-#suggestions .empty { color: var(--muted); cursor: default; }
-#suggestions .empty:hover { background: none; }
+#suggestions li .note { flex: 0 1 auto; min-width: 0; max-width: 52%; overflow: hidden; text-overflow: ellipsis; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+#suggestions li.is-active { background: rgba(127, 227, 255, 0.12); }
+#suggestions .sug-icon { flex: none; display: grid; place-items: center; width: 30px; height: 30px; color: var(--muted); }
+#suggestions .sug-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+#suggestions .sug-head { padding: 9px 8px 3px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); cursor: default; }
+#suggestions .sug-head:first-child { padding-top: 5px; }
+#suggestions .empty { color: var(--muted); cursor: default; white-space: normal; line-height: 1.45; padding: 8px; }
+/* Nothing typed yet: what can be typed, written as it would be typed. */
+#suggestions.is-examples li .name { font-family: var(--font-mono); font-size: 12px; }
+#suggestions.is-examples .sug-icon { height: 24px; }
+/* A type chosen in the search is hiding everything else: the chip says which, and takes the filter off. */
+.search-filter { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 6px; max-width: 58%; height: 22px; padding: 0 7px 0 9px; border: 1px solid rgba(255, 180, 84, 0.45); border-radius: 11px; background: rgba(255, 180, 84, 0.13); color: var(--amber); font-size: 11.5px; font-weight: 500; }
+.search-filter span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-filter i { flex: none; font-style: normal; font-size: 14px; line-height: 1; opacity: 0.8; }
+.search-filter:hover { background: rgba(255, 180, 84, 0.22); }
+.search-filter:hover i { opacity: 1; }
+.search.has-filter .search-key { display: none; }
 
 .readouts { flex: none; display: flex; align-self: stretch; margin: 0 0 0 auto; white-space: nowrap; }
 .readouts > div { display: flex; flex-direction: column; justify-content: center; padding: 0 13px; border-left: 1px solid var(--line); }
@@ -866,11 +882,15 @@ canvas.chart.square { height: auto; aspect-ratio: 1; max-width: 240px; margin: 0
 .insp-head { flex: none; display: flex; align-items: flex-start; gap: 9px; padding: 10px 8px 9px 12px; }
 .insp-head .dot { flex: none; width: 9px; height: 9px; margin-top: 6px; border-radius: 50%; background: currentColor; }
 .insp-title { flex: 1; min-width: 0; }
-.insp-title h2 { font-size: 16px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Up to two lines: "Fermi Gamma-ray Space Telescope (FGRST)" does not fit on one. */
+.insp-title h2 { font-size: 16px; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
 #insp-sub { display: flex; margin-top: 2px; font: 11px/1.4 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; overflow: hidden; }
 #insp-sub span { flex: none; }
 #insp-sub span:last-child { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 #insp-sub span + span { margin-left: 8px; padding-left: 8px; border-left: 1px solid var(--line-strong); }
+.insp-wiki { display: inline-block; margin-top: 3px; font-size: 11.5px; line-height: 1.3; color: var(--cyan); text-decoration: none; opacity: 0.85; }
+.insp-wiki::after { content: ' ↗'; font-size: 10px; }
+.insp-wiki:hover { opacity: 1; text-decoration: underline; }
 
 .insp-hero { flex: none; position: relative; height: 150px; background: #04080f; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); overflow: hidden; }
 #insp-model { display: block; width: 100%; height: 100%; }
@@ -1247,6 +1267,8 @@ label.act:has(input:focus-visible) { outline: 2px solid var(--cyan); outline-off
   transition: opacity 1s ease;
 }
 #loading.is-done { opacity: 0; pointer-events: none; }
+/* Set aside while the home page shows the live globe through itself (intro.ts): gone entirely, so the launch scene costs nothing. */
+#loading.is-aside { display: none; }
 
 .loading-inner { position: absolute; left: max(8vw, 28px); top: 50%; width: min(380px, 78vw); transform: translateY(-50%); }
 .wordmark { display: flex; align-items: center; gap: 14px; margin-bottom: 26px; }

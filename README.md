@@ -31,7 +31,7 @@ Other commands:
 ```bash
 npm run bench        # brute force vs spatial hash in Node — prints a table for the report
 npm run build        # type-check + production build into dist/
-npm run check        # the feature checks: orbit changes, visible passes, the report, decay, the command bar
+npm run check        # the feature checks: orbit changes, visible passes, the report, decay, the search
 npm run fetch-radio  # refresh the SatNOGS radio records in public/data/radio.json (at most every 6 hours)
 npm run shots        # retake the home page's screenshots (needs Chrome and `npm run dev` running)
 ```
@@ -51,10 +51,10 @@ status line sit along the bottom.
 | --- | --- |
 | Look around | drag = rotate, scroll = zoom, right-drag = pan. Drag and zoom slow down as you get close to the surface |
 | Home | the logo (or `0`) closes everything and returns to the whole Earth at the present time |
-| Inspect an object | click a dot, or search by name / NORAD ID (press `/`; suggestions show a photo or a 3D-model thumbnail). The camera flies to the object and locks on: dragging now turns the view around **it**, not the Earth (`T` unlocks) |
-| Inspector tabs | **Live** telemetry, ground-track map, altitude chart · **Orbit** shape to scale, orbital elements, speed and sunlight charts · **Passes** over your ground station with a sky chart · **Record** owner, launch, size, a Wikipedia summary and the raw element record |
-| Objects panel (`O`) | three tabs. **Browse** is a page of controls: watchlist, notable objects, filters by type, orbit regime and altitude band, colour by type, orbit, altitude, owner, launch year, tilt or data age, labels, marker size. **Activity** and **Tools** are grids of tiles, one per feature (an icon, a name and a live figure where there is one): visible tonight, launches, orbit changes, newest, trains, lowest orbits; constellations, growth by year, the designer, the contact timeline, the benchmark, the walkthrough, the tour, the command bar. A tile opens its feature in place of the grid; the feature's title is the way back |
-| Command bar (`Ctrl` `K`, `Cmd` `K` on a Mac) | type an object ("iss", "hubble"), a place ("tokyo"), a time ("tomorrow 9 pm", "+90m", "now"), a speed ("100x", "pause") or an action ("monitor on", "launches", "sky view", "miles"). Each row says what it will do before you choose it. On a phone: menu → **Type a command** |
+| Inspect an object | click a dot, or find it in the search field. The camera flies to the object and locks on: dragging now turns the view around **it**, not the Earth (`T` unlocks). Where the catalogue files an object under a code, its title is the name people know, with the code after it: "Hubble Space Telescope (HST)" |
+| Inspector tabs | **Live** telemetry, ground-track map, altitude chart · **Orbit** shape to scale, orbital elements, speed and sunlight charts · **Passes** over your ground station with a sky chart · **Record** owner, launch, size, a Wikipedia summary and the raw element record. Under the name there is always a link to Wikipedia: the object's article when one is known or found, otherwise Wikipedia's search for its name |
+| Objects panel (`O`) | three tabs. **Browse** is a page of controls: watchlist, notable objects, filters by type, orbit regime and altitude band, colour by type, orbit, altitude, owner, launch year, tilt or data age, labels, marker size. **Activity** and **Tools** are grids of tiles, one per feature (an icon, a name and a live figure where there is one): visible tonight, launches, orbit changes, newest, trains, lowest orbits; constellations, growth by year, the designer, the contact timeline, the benchmark, the walkthrough, the tour. A tile opens its feature in place of the grid; the feature's title is the way back |
+| Search (`/`, or `Ctrl` `K` / `Cmd` `K`) | one field for everything. Type an object's name, nickname or catalogue number ("iss", "hubble", "25544"), a type ("telescope", "weather", "spacex", "chinese radar"), a place ("tokyo"), a time ("tomorrow 9 pm", "+90m", "now"), a speed ("100x", "pause") or an action ("monitor on", "launches", "sky view", "miles"). The answers come as one list under headings (Objects, Types, Places, Time, Actions), each row saying what it is or what it will do; Enter takes the first. Case, punctuation and spacing do not matter and small misspellings are forgiven ("hubbel"). Choosing a type shows only those objects on the globe; the chip that appears in the field (or Home) shows everything again. With nothing typed, the field lists one example of each kind |
 | Visible tonight | the bright passes you could see with your own eyes in the next 24 hours from where you are (the satellite in sunlight, your sky dark), brightest first, with where to look. Pressing the button asks for your location if the ground station is still the built-in example. On a computer: Objects → Activity → Tonight. On a phone it lives in the sky view: the small faded eye beside the cross opens the list over the sky, and tapping a pass moves the clock to just before it |
 | Upcoming launches | Objects → Activity: what is due to go up next, who is launching it and from where, with a countdown; the pads are marked on the globe and a click flies to one |
 | Orbit changes | Objects → Activity: what differs between the two most recent downloads of the catalogue: orbits raised, lowered or tilted by more than drag and noise explain (possible manoeuvres), new objects, objects that are gone |
@@ -88,9 +88,9 @@ status line sit along the bottom.
 | Hover | pointing at an object shows a small card: picture, what it is, who runs it, height and speed |
 | Views | `1` `2` `3`, `5` (Earth with the Moon beyond it), or the buttons at the foot of the tool rail. Left alone, a whole-Earth view drifts slowly around the planet (Settings → Camera to switch off), and the bars around the picture dim a little until the pointer moves again |
 | Settings (`,`) | one line per setting, in five groups: **Units** (kilometres or miles, UTC or local time), **Display** (rendering quality, frosted panels, hover card, quiet time bar, home page on arrival), **Camera** (drift around the Earth, circle a selected object), **Ground station** (name, coordinates, use my location), **Data** (download current elements). Reset is at the foot |
-| Home page | the first thing a visitor sees, while the tracker loads behind it: what Apsis is, everything it can do, how the search works, and **Open the tracker**. **About** in the tracker's top bar (the round **i** on a phone) brings it back. Skipped on arrival for share links and when switched off in Settings |
+| Home page | the first thing a visitor sees, while the tracker loads behind it: the live globe as soon as its map has arrived (the objects, then the clouds and city lights, follow), real screens that change by themselves like a slideshow, how the search works, six of the 3D models, everything it can do, and **Open the tracker**. Going in before the tracker is ready shows the loading screen until it is. **About** in the tracker's top bar (the round **i** on a phone) brings it back. Skipped on arrival for share links and when switched off in Settings |
 | How it works | summarised on the home page, with a link to the full walkthrough: the screening algorithm with a live trace, live hash-table statistics, the look-ahead method and the benchmark. Also reachable from the monitor panel |
-| Phones | below 760 px the layout is built around the globe: a search field, two round buttons (sky view, and a menu: the four views as a row of icons, then autopilot, time and speed, the command bar, location and share), a short four-tool tab bar, and sheets that rest on the tab bar and can be dragged to any height or tucked away. There is no time bar on a phone; a small chip appears only while time is not running live. Left alone, once the globe starts its slow turn the controls dim until they are barely there and come back at the next touch. It can be added to the home screen and then runs full screen like an app |
+| Phones | below 760 px the layout is built around the globe: a search field, two round buttons (sky view, and a menu: the four views as a row of icons, then autopilot, time and speed, location and share), a short four-tool tab bar, and sheets that rest on the tab bar and can be dragged to any height or tucked away. There is no time bar on a phone; a small chip appears only while time is not running live. Left alone, once the globe starts its slow turn the controls dim until they are barely there and come back at the next touch. It can be added to the home screen and then runs full screen like an app |
 | Other keys | `P` save a picture, `F` full screen, `H` hide the interface, `?` all controls, `Esc` close / deselect |
 
 ## How the spatial hash works
@@ -213,13 +213,14 @@ src/
     spacecraft.ts        one sentence about each kind of model, and the catalogue's groups
     ephemeris.ts         orbit maths for one or two objects: sampled orbit, look angles, passes, closest approach
     satcat.ts            catalogue facts (owner, launch, size) in a Map keyed by NORAD id
-    wiki.ts              name → Wikipedia article; fetches the summary and lead photo on demand
+    wiki.ts              name → Wikipedia article (a table, then the name itself); summary, lead photo and link on demand
     regions.ts           rough place name under a latitude / longitude
     radio.ts             SatNOGS records (transmitters, last heard) in a Map keyed by NORAD id
     doppler.ts           range rate and Doppler shift of a transmitter as heard at the ground station
     changes.ts           compares two downloads: raised, lowered, tilted, new, gone
     decay.ts             rough time left in orbit for the lowest objects        spaceWeather.ts   NOAA solar flux and Kp
-    launches.ts          upcoming launches (Launch Library 2), cached           places.ts   cities for the command bar
+    launches.ts          upcoming launches (Launch Library 2), cached           places.ts   cities the search can fly to
+    names.ts             readable names for objects filed under a code: "Hubble Space Telescope (HST)"
     visibility.ts        which passes are bright enough to see, and when        approachData.ts   numbers for the report
     types.ts
   worker/
@@ -240,6 +241,7 @@ src/
     observatoryModels.ts  Webb, Euclid, TESS, Chandra, XMM-Newton, SOHO, the solar-wind monitors, STEREO
     deepModels.ts        Voyager, Pioneer, New Horizons, Juno, Lucy, Psyche, BepiColombo, Parker Solar Probe …
     planetaryModels.ts   a lunar orbiter, a Mars orbiter, a rover, a lander, and an asteroid
+    prewarm.ts           builds the models in idle moments when there is no loading screen to work behind
     cameraRig.ts         fly-to, object-centred focus camera, view presets
     firstPerson.ts       ride-along and sky-view cameras        siteMarker.ts   the ground-station dot
     constellation.ts     all orbits of a group + ground coverage map   aurora.ts   live aurora oval
@@ -248,7 +250,7 @@ src/
     radio.ts             last heard, transmitters, Doppler            changes.ts   orbit changes and data age
     weather.ts           space weather and time-left estimates        launches.ts  upcoming launches and pads
     tonight.ts           passes visible tonight (+ tonightWords.ts)   report.ts    close-approach report and CSV (+ reportPage.ts)
-    growth.ts            growth by year                               command.ts   the command bar (+ commandParse.ts)
+    growth.ts            growth by year                               commands.ts  places, times and actions for the search field (+ commandParse.ts)
   ui/
     inspector.ts         the selected object's four tabs          charts.ts   hand-drawn canvas charts
     monitor.ts           close-approach list (right now)          encounterPanel.ts   one pair in detail
@@ -265,7 +267,11 @@ src/
     gallery.ts           the spacecraft catalogue: every model on one page, and one at a time, large
     launch.ts            the loading screen's launch scene         intro.ts   loading progress and hand-over
     howto.ts             the walkthrough page                     hashTrace.ts   one object through the hash
-    filters.ts  search.ts  settings.ts  timeControls.ts  labels.ts  benchmarkModal.ts  intro.ts
+    search.ts            the one search field: objects, types, places, times and actions in one list
+    searchMatch.ts       forgiving text matching (case, spacing, misspellings): matchScore
+    searchIndex.ts       the keyword hash table behind "telescope": Map<keyword, objects>
+    searchObjects.ts     objects by name: hash lookups first, a typo-tolerant vocabulary scan second
+    filters.ts  settings.ts  timeControls.ts  labels.ts  benchmarkModal.ts  intro.ts
   mobile.css             phone layout: bottom tab bar and bottom sheets
   main.ts                wires everything together; the per-frame loop
 scripts/
@@ -288,6 +294,12 @@ reporting the same pass twice, a `Map<typed name, catalogue name>` so that "hubb
 the object filed as HST, a `Map<noradId, radio record>` for the radio details, the
 two `Map<noradId, record>` tables that the orbit-change comparison joins, and the
 `Map<object, parent>` behind the union–find that groups a station's parts (`groups.ts`).
+The search field adds an inverted index (`src/ui/searchIndex.ts`): a `Map<description, topic>`
+files every object under what it is (kind, purpose, operator, owner, orbit) in one pass, and a
+`Map<keyword, object indices>` built from it answers "telescope" with one lookup and
+"chinese weather" by intersecting two sorted lists; `searchObjects.ts` keeps a
+`Map<word, objects>` of every word in the names for finding misspellings, and `data/names.ts`
+a `Map<catalogue name, full name>` for "Hubble Space Telescope (HST)".
 
 ## Data and its limits
 
@@ -347,7 +359,10 @@ two `Map<noradId, record>` tables that the orbit-change comparison joins, and th
 - **Photos and descriptions** come from Wikipedia, fetched when an object is selected. An
   object is matched to the article for its programme (a Starlink satellite shows the
   Starlink article's picture), so the photo shows that kind of spacecraft, not necessarily
-  that exact one. This needs a network connection; offline, the 3D model is shown instead.
+  that exact one. An object no programme in the table claims has its own name tried once as
+  an article title; an article is only accepted if it reads like one about something in
+  space. This needs a network connection; offline, the 3D model is shown instead, and the
+  link under the name still goes to the article or to Wikipedia's search.
 - **Operator, purpose and 3D model are inferred from the object's name** against a table
   of well-known programmes. The models are one representative shape per kind of object,
   not replicas of individual spacecraft, and are drawn far larger than life so they are

@@ -25,7 +25,7 @@ export interface Catalog {
   byOrbit: Map<OrbitClass, Set<number>>;
 }
 
-const PREFIX_LEN = 4; // longest prefix stored in the autocomplete index
+export const PREFIX_LEN = 4; // longest prefix stored in the autocomplete index
 const LIVE_GROUPS = ['active', 'cosmos-2251-debris', 'iridium-33-debris', 'fengyun-1c-debris', 'cosmos-1408-debris'];
 
 /** The bundled snapshot written by `npm run fetch-data`. Works offline. */
@@ -117,14 +117,29 @@ export function buildCatalog(snapshot: Snapshot, live = false): Catalog {
 /**
  * What people type for objects the catalogue files under another name: the telescope everyone
  * calls Hubble is listed as "HST". One more small hash table, Map<what is typed, catalogue name>.
+ * (The names shown as headlines, "Hubble Space Telescope (HST)", are in data/names.ts, which
+ * also reads this table the other way round.)
  */
-const COMMON_NAMES = new Map<string, string>([
+export const COMMON_NAMES = new Map<string, string>([
   ['HUBBLE', 'HST'],
   ['HUBBLE SPACE TELESCOPE', 'HST'],
-  ['TIANGONG', 'CSS (TIANHE)'],
-  ['CHINESE SPACE STATION', 'CSS (TIANHE)'],
+  ['CHANDRA', 'CXO'],
+  ['CHANDRA X-RAY OBSERVATORY', 'CXO'],
+  ['FERMI', 'FGRST (GLAST)'],
+  ['FERMI GAMMA-RAY SPACE TELESCOPE', 'FGRST (GLAST)'],
+  ['ISS', 'ISS (ZARYA)'],
   ['SPACE STATION', 'ISS (ZARYA)'],
   ['INTERNATIONAL SPACE STATION', 'ISS (ZARYA)'],
+  ['TIANGONG', 'CSS (TIANHE)'],
+  ['CHINESE SPACE STATION', 'CSS (TIANHE)'],
+  ['SOLAR DYNAMICS OBSERVATORY', 'SDO'],
+  ['XMM', 'XMM-NEWTON'],
+  ['NEWTON', 'XMM-NEWTON'],
+  ['INSIGHT', 'HXMT (HUIYAN)'],
+  ['HINODE', 'HINODE (SOLAR-B)'],
+  ['SPHEREX', 'SPHEREX (MIDEX 9)'],
+  ['SOLAR SAIL', 'ACS3'],
+  ['SUOMI', 'SUOMI NPP'],
 ]);
 
 /**

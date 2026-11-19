@@ -103,7 +103,7 @@
   #search { height: 34px; padding: 0 8px 0 30px; font-size: 16px; } /* 16 px stops iOS zooming in on focus */
   /* Suggestions span the screen under the bar instead of hanging off the narrow field.
      (Fixed inside the top bar, which is its containing block and is itself full width.) */
-  #suggestions { position: fixed; top: calc(var(--top) + 4px); left: 8px; right: 8px; max-height: 50vh; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+  #suggestions { position: fixed; top: calc(var(--top) + 4px); left: 8px; right: 8px; width: auto; max-height: 50vh; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
   .top-actions { gap: 2px; }
   .top-actions .tool { width: 34px; height: 34px; }
   /* "How it works" keeps its name for screen readers but shows as a compact "?" */
@@ -435,8 +435,14 @@
     -webkit-backdrop-filter: var(--m-blur);
     box-shadow: var(--m-shadow);
   }
-  #suggestions li { min-height: 50px; padding: 6px 10px; border-radius: 14px; gap: 12px; font-size: 14.5px; }
-  #suggestions li .thumb { width: 38px; height: 38px; border-radius: 10px; }
+  #suggestions li { min-height: 46px; padding: 5px 10px; border-radius: 14px; gap: 12px; font-size: 14.5px; }
+  #suggestions li .thumb, #suggestions .sug-icon { width: 36px; height: 36px; border-radius: 10px; }
+  #suggestions .sug-icon svg { width: 18px; height: 18px; }
+  #suggestions li .note { font-size: 12px; max-width: 44%; }
+  #suggestions li.sug-head { min-height: 0; padding: 10px 12px 2px; font-size: 11px; }
+  #suggestions li.empty { min-height: 0; padding: 12px; }
+  #suggestions.is-examples .sug-icon { height: 30px; }
+  .search-filter { right: 6px; height: 28px; border-radius: 14px; max-width: 54%; font-size: 12.5px; }
 
   /* ---------- view chips under the search field ---------- */
 
@@ -791,7 +797,7 @@
   /* The tabs pin themselves under the name once the photo has scrolled away. */
   #inspector > .tabs {
     position: sticky;
-    top: 56px;
+    top: calc(var(--insp-head, 56px) - 1px); /* the name's real height (inspector.ts): it can be two lines, and has a link under it */
     z-index: 4;
     flex: none;
     background: var(--m-solid);
@@ -936,4 +942,20 @@
   #panel-settings .row-toggle { min-height: 46px; }
   .set-reset { min-height: 40px; font-size: 13.5px; }
   .d-only { display: none; } /* settings for things a phone does not have: the hover card, the time bar */
+}
+
+/* ============================================================== 14. the search list on a phone
+ * One field finds everything now, so its list carries more: headings, and a note on every row.
+ * A name and a note do not fit side by side at this width, so a row is two lines (the name,
+ * then its note). The list is solid enough to read over the globe, and the round buttons step
+ * aside while it is open: they sat on top of its right-hand edge.
+ */
+@media (max-width: 760px) {
+  #suggestions { background: var(--m-solid); }
+  #suggestions li[data-row] { display: grid; grid-template-columns: 36px minmax(0, 1fr); column-gap: 12px; row-gap: 1px; align-items: center; min-height: 52px; }
+  #suggestions li[data-row] > :first-child { grid-row: 1 / span 2; }
+  #suggestions li[data-row] .name { align-self: end; }
+  #suggestions li[data-row] .name:last-child { grid-row: 1 / span 2; align-self: center; }
+  #suggestions li[data-row] .note { grid-column: 2; align-self: start; max-width: none; font-size: 12px; line-height: 1.25; }
+  .topbar:has(#suggestions.is-open) ~ #m-stack { opacity: 0; pointer-events: none; }
 }

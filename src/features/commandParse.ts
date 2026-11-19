@@ -1,7 +1,8 @@
 /**
- * The command bar's grammar: turning typed text into a moment, a clock speed, or a match score.
+ * The grammar of what can be typed in the search field besides a name: a moment, a clock
+ * speed, and which way a switch is being thrown ("turn … on", "hide …").
  *
- * Kept apart from command.ts and free of anything from the browser, so that it can be tested
+ * Kept apart from commands.ts and free of anything from the browser, so that it can be tested
  * from Node (`node scripts/test-command.mjs`). The grammar is small on purpose: a phrase
  * either fits one of the shapes below exactly or it is not a time at all. A clever guess that
  * turns out wrong would move the clock somewhere the visitor never asked for.
@@ -15,20 +16,12 @@
  * Clock times and dates are read on the visitor's chosen clock (UTC or local); adding "utc"
  * at the end forces UTC. The caller supplies that clock as a function, so nothing here knows
  * about time zones beyond "the wall clock is this many milliseconds ahead of UTC right then".
+ *
+ * (How well a typed phrase fits a name is a separate question, answered in src/ui/searchMatch.ts,
+ * which also takes a leading "go to" or "show" off a phrase.)
  */
 
 // ---------------------------------------------------------------- shared text helpers
-
-/** Lower case, no accents, punctuation as spaces: "São Paulo" → "sao paulo", "Day / night" → "day night". */
-export function normalize(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '') // the accents NFD has just split off
-    .replace(/['’.]/g, '') // "d.c." → "dc", "xi'an" → "xian"
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
-}
 
 /** Light clean-up for times and speeds, where + - : . still mean something. */
 function tidy(text: string): string {
@@ -42,20 +35,22 @@ function tidy(text: string): string {
     .trim();
 }
 
-/**
- * How well `query` fits `phrase` (both already normalised), 0 = not at all. Simple and
- * predictable: the same text, then a beginning, then whole-word beginnings, then anything
- * found inside.
- */
-export function matchScore(query: string, phrase: string): number {
-  if (!query) return 0;
-  if (query === phrase) return 100;
-  if (phrase.startsWith(query)) return phrase[query.length] === ' ' ? 85 : 80;
-  const typed = query.split(' '), words = phrase.split(' ');
-  // every typed word starts some word of the phrase: "col alt" fits "colour by altitude"
-  if (typed.every((t) => words.some((w) => w.startsWith(t)))) return words[0].startsWith(typed[0]) ? 60 : 50;
-  if (query.length >= 4 && phrase.includes(query)) return 25; // loose: found inside a word ("now" inside "known" would be noise)
-  return 0;
+// ---------------------------------------------------------------- the words around a command
+
+/** "turn the monitor on", "hide clouds", "stop autopilot" → what is being switched, and which way. */
+export function splitState(phrase: string): { rest: string; state: boolean | undefined } {
+  const words = phrase.split(' ');
+  if (['turn', 'switch', 'set', 'toggle'].includes(words[0])) words.shift();
+  let state: boolean | undefined;
+  if (['on', 'enable', 'show', 'start'].includes(words[0])) {
+    state = true;
+    words.shift();
+  } else if (['off', 'disable', 'hide', 'stop', 'leave', 'exit', 'no'].includes(words[0])) {
+    state = false;
+    words.shift();
+  } else if (words.at(-1) === 'on' || words.at(-1) === 'off') state = words.pop() === 'on';
+  if (words[0] === 'the') words.shift();
+  return { rest: words.join(' '), state: words.length > 0 ? state : undefined };
 }
 
 // ---------------------------------------------------------------- times
@@ -240,7 +235,7 @@ export function parseTime(text: string, ctx: TimeContext): ParsedTime | null {
 
 // ---------------------------------------------------------------- clock speed
 
-/** The fastest the bar will set: the top of the time bar's own range, beyond which motion between snapshots stops looking right. */
+/** The fastest a typed speed will set: the top of the time bar's own range, beyond which motion between snapshots stops looking right. */
 export const MAX_SPEED = 1000;
 const MIN_SPEED = 0.01;
 

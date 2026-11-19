@@ -19,6 +19,7 @@ import { mountLaunch } from './ui/launch.ts';
 import { eciToGeodetic, gstime, type SatRec } from 'satellite.js';
 import { buildCatalog, loadLive, loadSnapshot, searchCatalog, type Catalog } from './data/catalog.ts';
 import { describe, type ModelKind } from './data/describe.ts';
+import { displayName } from './data/names.ts';
 import { makeSatrec, rangeKm, stateAt, wrapLon, type Observer, type Vec3 } from './data/ephemeris.ts';
 import { loadRegions } from './data/regions.ts';
 import { loadFacts, type CatalogFacts } from './data/satcat.ts';
@@ -34,12 +35,14 @@ import { createGlobe } from './render/globe.ts';
 import { GridViz } from './render/gridViz.ts';
 import { GroundTrack } from './render/groundTrack.ts';
 import { OrbitLine } from './render/orbitLine.ts';
+import { prewarmInIdle } from './render/prewarm.ts';
 import { prewarmModels, SatelliteModel } from './render/satModels.ts';
 import { behindEarth, legendFor, SatelliteCloud } from './render/satellites.ts';
 import { createScene, EARTH_RADIUS, EARTH_RADIUS_KM, KM } from './render/scene.ts';
 import { SiteMarker } from './render/siteMarker.ts';
 import { createSky } from './render/sky.ts';
 import { Places } from './ui/places.ts';
+import { matchScore } from './ui/searchMatch.ts';
 import type { Pose } from './render/space/spaceView.ts';
 import { EarthTiles } from './render/tiles.ts';
 import { TOGETHER_KM_S } from './hashing/conjunction.ts';
@@ -62,7 +65,7 @@ import { LoadingScreen } from './ui/intro.ts';
 import { Landing } from './ui/landing.ts';
 import type { App, FrameInfo, SearchProvider } from './ui/app.ts';
 import { installChanges } from './features/changes.ts';
-import { installCommand } from './features/command.ts';
+import { installCommands } from './features/commands.ts';
 import { installGrowth } from './features/growth.ts';
 import { installLaunches } from './features/launches.ts';
 import { installRadio } from './features/radio.ts';
@@ -71,7 +74,7 @@ import { installTonight } from './features/tonight.ts';
 import { installWeather } from './features/weather.ts';
 import { Labels } from './ui/labels.ts';
 import { DOCKED_KM, Monitor } from './ui/monitor.ts';
-import { initSearch } from './ui/search.ts';
+import { Search } from './ui/search.ts';
 import { DEFAULT_SITE, SettingsStore, type Settings } from './ui/settings.ts';
 import { ShareDialog } from './ui/share.ts';
 import { Sheets } from './ui/sheet.ts';
@@ -193,8 +196,14 @@ const sim = new SimClient();
 const loading = new LoadingScreen();
 const landing = new Landing(); // the welcome page in front of everything (skipped for share links)
 let texturesDone = 0;
-const { globe, ready: texturesReady } = createGlobe(kit.scene, () =>
-  loading.progress(0.4 + 0.1 * ++texturesDone, 'Loading Earth textures'),
+// The heavier Earth textures wait until the catalogue has downloaded (boot() calls snapshotIn), so
+// the two never share the connection: see "Loading order" in render/globe.ts.
+let snapshotIn: () => void = () => undefined;
+const snapshotArrived = new Promise<void>((resolve) => (snapshotIn = resolve));
+const { globe, ready: texturesReady, essential: globeReady } = createGlobe(
+  kit.scene,
+  () => loading.progress(0.4 + 0.1 * ++texturesDone, 'Loading Earth textures'),
+  snapshotArrived,
 );
 const sky = createSky(kit);
 const overlay = new GeoOverlay(globe.earth, kit.scene);
@@ -217,7 +226,7 @@ const places = new Places({
   time: () => clock.time,
   isPhone: () => isPhone(),
   drift: () => store.settings.earthDrift,
-  match: roughMatch,
+  match: matchScore,
   jumpTo: (timeMs) => jumpTo(timeMs),
   toast: (text) => toast(text),
   trackerView: () => ({ scene: kit.scene, camera: kit.camera, target: kit.controls.target }),
@@ -332,7 +341,6 @@ const timeControls = new TimeControls(
   (t) => jumpTo(t),
   () => jumpToNow(),
 );
-initSearch(() => catalog, (sat) => select(sat));
 
 // ---- settings (layers, appearance, quality, ground station) -------------------------------
 
@@ -597,7 +605,7 @@ for (const button of document.querySelectorAll<HTMLElement>('[data-proxy]')) {
     document.querySelector<HTMLElement>(button.dataset.proxy!)?.click();
   });
 }
-// Whatever a menu item does (some belong to feature modules, such as "Type a command"), choosing it puts the menu away.
+// Whatever a menu item does, choosing it puts the menu away.
 viewsMenu.addEventListener('click', (event) => {
   if ((event.target as HTMLElement).closest('button')) setViewsMenu(false);
 });
@@ -1256,7 +1264,7 @@ function updateHover(): void {
     const line = (className: string, text: string) => Object.assign(document.createElement('span'), { className, textContent: text });
     const text = document.createElement('div');
     text.className = 'tip-text';
-    text.append(line('tip-name', sat.name), line('tip-what', profile.purpose), line('tip-live', ''));
+    text.append(line('tip-name', displayName(sat)), line('tip-what', profile.purpose), line('tip-live', ''));
     if (profile.operator) text.append(line('tip-op', profile.operator));
     tooltip.replaceChildren(thumbnail(sat), text);
   }
@@ -1554,18 +1562,6 @@ function setAway(away: boolean): void {
   setResting(false);
 }
 
-/** A rough name match, 0…1: exact, starts with, contains. */
-function roughMatch(query: string, ...texts: string[]): number {
-  const q = query.trim().toLowerCase();
-  if (q.length < 2) return 0;
-  let best = 0;
-  for (const text of texts) {
-    const t = text.toLowerCase();
-    best = Math.max(best, t === q ? 1 : t.startsWith(q) ? 0.8 : t.includes(q) ? 0.5 : 0);
-  }
-  return best;
-}
-
 /** Put the tracker's camera exactly where another scene's camera is, relative to the Earth (see heldPose). */
 function holdCamera(pose: Pose): void {
   const camera = kit.camera;
@@ -1637,7 +1633,7 @@ window.addEventListener('keydown', (event) => {
     case 'h': document.body.classList.toggle('ui-hidden'); break;
     case '/':
       event.preventDefault();
-      $('search').focus();
+      search.focus();
       break;
     case ' ':
       event.preventDefault();
@@ -2038,6 +2034,7 @@ const app: App = {
   select: (sat) => select(sat),
   search: (query, limit) => (catalog ? searchCatalog(catalog, query, limit) : []),
   addSearch: (provider) => void searchProviders.push(provider),
+  focusSearch: (text) => search.focus(text),
   flyToGround: (latDeg, lonDeg, altitudeKm = 2500) => {
     if (fp.mode !== 'off') fp.exit();
     closeEncounter(true);
@@ -2103,10 +2100,12 @@ const app: App = {
 };
 
 app.addSearch((query) => places.search(query));
+// The search field asks the catalogue, the keyword index and every source in `searchProviders`.
+const search = new Search(app, searchProviders);
 
 // One line per module. A module that throws while setting itself up is reported and skipped:
 // an optional extra must never stop the tracker from starting.
-for (const install of [installRadio, installChanges, installWeather, installLaunches, installTonight, installReport, installGrowth, installCommand]) {
+for (const install of [installRadio, installChanges, installWeather, installLaunches, installTonight, installReport, installGrowth, installCommands]) {
   try {
     install(app);
   } catch (error) {
@@ -2116,7 +2115,29 @@ for (const install of [installRadio, installChanges, installWeather, installLaun
 
 // ---------------------------------------------------------------- start
 
+/** Let the page draw a frame before the next piece of work, so that loading never holds the picture for long. */
+const nextFrame = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()));
+/** How far the camera stands from the Earth while the globe is the home page's picture: closer than the whole-Earth view. */
+const heroDistance = (): number => (window.innerWidth <= 860 ? 25 : 17.5);
+
+/**
+ * Start-up. What it waits for, in the order things arrive on an ordinary connection:
+ *
+ *   the day map and the water mask (~2 MB)      → there is a globe to draw (`globeReady`)
+ *   the catalogue (~1.2 MB compressed), SGP4    → the objects are on it
+ *   night lights, terrain, clouds (~6 MB)       → fade in whenever they arrive (render/globe.ts)
+ *
+ * From the home page the globe becomes that page's picture at the FIRST of these, not the
+ * last: the loading screen is set aside, the page's backdrop fades, and everything else
+ * arrives behind the page while the visitor reads it. If they go in before the objects are
+ * ready, the loading screen (the rocket) comes back with its real progress until they are.
+ * Opened straight into the tracker (a share link, or the home page switched off) nothing has
+ * changed: the loading screen stays up until every texture and the first positions are in.
+ *
+ * The `apsis:` marks are for measuring a start-up: performance.getEntriesByType('mark').
+ */
 async function boot(): Promise<void> {
+  performance.mark('apsis:boot');
   requestAnimationFrame(frame);
   loadRegions();
   void loadFacts().then((loaded) => {
@@ -2124,33 +2145,55 @@ async function boot(): Promise<void> {
     updateDataNote();
     for (const run of factsHooks) run(loaded);
   });
+
+  const fromHomePage = landing.showing;
+  let loaded = false;
+  if (fromHomePage) {
+    void globeReady.then(() => {
+      performance.mark('apsis:globe');
+      if (loaded || !landing.showing) return; // everything beat the globe, or the visitor has already gone in
+      loading.setAside(true);
+      kit.camera.position.copy(homeView()).setLength(heroDistance());
+      landing.goLive();
+    });
+    // Gone in early: the loading screen takes over until the rest is ready.
+    void landing.entered.then(() => {
+      if (!loaded) loading.setAside(false);
+    });
+  }
+
   try {
     loading.progress(0.1, 'Reading orbital elements');
-    baseSnapshot = await loadSnapshot();
+    baseSnapshot = await loadSnapshot().finally(snapshotIn); // (the heavier textures were waiting for this download)
+    performance.mark('apsis:snapshot');
+    await nextFrame();
     const first = buildCatalog(baseSnapshot);
     loading.countTo(first.sats.length);
     loading.progress(0.4, 'Propagating orbits with SGP4');
+    await nextFrame();
     const positionsReady = new Promise<void>((resolve) => (firstSnapshot = resolve));
     applyCatalog(first);
-    await Promise.all([texturesReady, positionsReady]);
-    // Build the 3D models and compile their shaders now, behind the loading screen, so the
-    // first click on a satellite (and every autopilot scene change) does not stutter.
-    prewarmModels(kit.renderer, kit.scene, kit.camera);
-    tiles.prewarm(kit.renderer, kit.scene, kit.camera);
-    // Everything is ready. If the welcome page is still up, wait there until the visitor comes in.
-    landing.status(`${fmtInt(first.sats.length)} objects loaded and moving`);
-    landing.setCount(first.sats.length);
+    await Promise.all([fromHomePage ? globeReady : texturesReady, positionsReady]);
+    loaded = true;
+    performance.mark('apsis:loaded');
+    landing.ready(first.sats.length);
     const home = homeView();
-    // If the visitor is still on the home page, the tracker becomes that page's picture: the
-    // loading screen is put away quietly and the globe, held a little closer than the normal
-    // whole-Earth view, shows through the top of the page until they come in.
-    const fromHomePage = landing.showing;
-    if (fromHomePage) {
+    // Still on the home page: the tracker is that page's picture, the globe held a little
+    // closer than the normal whole-Earth view, until the visitor comes in.
+    const waited = landing.showing;
+    if (waited) {
       loading.skip();
-      kit.camera.position.copy(home).setLength(window.innerWidth <= 860 ? 25 : 17.5);
+      if (!landing.isLive) kit.camera.position.copy(home).setLength(heroDistance());
       landing.goLive();
+      // No loading screen to work behind: the 3D models and the close-up ground are made
+      // ready in quiet moments instead, so that scrolling the page stays smooth.
+      prewarmInIdle(kit.renderer, kit.scene, kit.camera, tiles, () => landing.quiet);
       await landing.entered;
     } else {
+      // Build the 3D models and compile their shaders now, behind the loading screen, so the
+      // first click on a satellite (and every autopilot scene change) does not stutter.
+      prewarmModels(kit.renderer, kit.scene, kit.camera);
+      tiles.prewarm(kit.renderer, kit.scene, kit.camera);
       await loading.finish();
       landing.goLive(); // so "About" later shows the globe behind the page too
     }
@@ -2163,7 +2206,7 @@ async function boot(): Promise<void> {
     }, 20000);
     $('hud').classList.remove('hud-hidden');
     refreshLocationIfAllowed();
-    if (!fromHomePage) kit.camera.position.copy(home);
+    if (!waited) kit.camera.position.copy(home);
     if (applyLink()) {
       // Opened from a share link: go straight to what it describes.
       setTimeout(() => (watchdogArmed = true), 4000);
@@ -2171,7 +2214,7 @@ async function boot(): Promise<void> {
       // Intro, then the tour for first-time visitors. Straight from the loading screen it is a
       // swoop in from deep space; from the home page the globe is already on screen, so the
       // camera simply eases back from there to the whole-Earth view.
-      if (fromHomePage) {
+      if (waited) {
         rig.flyToView(kit.camera.position.clone().normalize().multiplyScalar(home.length()), ORIGIN.clone(), 2.8);
       } else {
         kit.camera.position.applyAxisAngle(UP, -1.1).setLength(390);

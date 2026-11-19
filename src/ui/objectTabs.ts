@@ -40,7 +40,6 @@ const ICONS: Record<string, string> = {
   benchmark: '<circle cx="10" cy="11.2" r="6"/><path d="M10 11.2V7.6M8 2.8h4M10 2.8v2.4"/>',
   howto: '<rect x="3" y="3" width="14" height="14" rx="1.5"/><path d="M3 10h14M10 3v14"/><circle cx="6.5" cy="6.5" r="0.9"/><circle cx="13.6" cy="13.3" r="0.9"/>',
   tour: '<circle cx="10" cy="10" r="7"/><path d="M12.8 7.2l-1.6 4-4 1.6 1.6-4z"/>',
-  command: '<path d="M4 6.5L7.5 10 4 13.5M10 13.5h6"/>',
   spacecraft: '<g transform="rotate(-32 10 10)"><rect x="7.6" y="7.4" width="4.8" height="5.2" rx="0.9"/><rect x="1.6" y="8.1" width="4.2" height="3.8" rx="0.5"/><rect x="14.2" y="8.1" width="4.2" height="3.8" rx="0.5"/><path d="M5.8 10h1.8M12.4 10h1.8M10 7.4V5.6M8.2 4.6a1.8 1.8 0 0 0 3.6 0"/></g>',
 };
 
@@ -51,7 +50,6 @@ const SHORTCUTS: { tab: ObjectTab; icon: string; label: string; hint: string; pr
   { tab: 'tools', icon: 'benchmark', label: 'Benchmark', hint: 'Time the hash grid against checking every pair', press: '#bench-open' },
   { tab: 'tools', icon: 'howto', label: 'How it works', hint: 'The walkthrough of the hashing', press: '#conj-how' },
   { tab: 'tools', icon: 'tour', label: 'Take the tour', hint: 'A short guided look around', press: '#tour-start' },
-  { tab: 'tools', icon: 'command', label: 'Command bar', hint: 'Type an object, a place, a time or an action', press: '[data-command-open]' },
 ];
 
 interface Tile {

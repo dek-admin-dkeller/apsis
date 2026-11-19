@@ -2,12 +2,16 @@
  * The home page: what a visitor sees first, and where the tracker is explained.
  *
  * It is built to SHOW the tracker rather than describe it:
- *   - the opening screen has the live globe itself behind the headline (the tracker is already
- *     running underneath; once it is ready the page's backdrop fades and the real thing shows
- *     through). Until then, and on a machine that cannot draw it, the headline stands alone;
- *   - a showcase of real screens (SHOTS in featureList.ts; retaken with `npm run shots`);
+ *   - the opening screen has the live globe itself behind the headline. The tracker is
+ *     starting up underneath: as soon as it has a globe to draw (`goLive`) the page's backdrop
+ *     fades and the real thing shows through, and the objects appear on it when the catalogue
+ *     has loaded (`ready`). Until then, and on a machine that cannot draw it, the headline
+ *     stands alone;
+ *   - a showcase of real screens that changes by itself like a slideshow (SHOTS in
+ *     featureList.ts; retaken with `npm run shots`);
  *   - a live drawing of the search that runs the project's own hash table (hashDemo.ts);
- *   - a plate of the tracker's 3D models, drawn by the same code that draws them in orbit;
+ *   - a plate of six of the tracker's 3D models, drawn by the same code that draws them in
+ *     orbit, and a button to the catalogue of all of them;
  *   - the complete list of features (FEATURES in featureList.ts — the one place to keep it
  *     current), as a compact index;
  *   - a small corner for games, and a small drawing that explains the name.
@@ -34,6 +38,12 @@ export interface LandingHost {
   howItWorks(): void;
 }
 
+/** The plate: six kinds that look nothing like one another. The rest are a button away. */
+const PLATE: ModelKind[] = ['iss', 'telescope', 'starlink', 'gnss', 'dragon', 'weather'];
+
+const SLIDE_HOLD_MS = 20000; // after the visitor chooses a screen themselves, how long the slideshow leaves it alone
+const TOUCH_HOLD_MS = 4000; // … and after a finger has been on it
+
 export class Landing {
   /** Resolves when the visitor first chooses to go in (immediately if the page was skipped on arrival). */
   readonly entered: Promise<void>;
@@ -48,7 +58,9 @@ export class Landing {
   private readonly slots: Map<ModelKind, HTMLImageElement>; // the plate: one waiting picture per kind
   private lastScroll = 0; // performance.now() when the page last moved
   private touching = false; // a finger is on the page
-  private live = false;
+  private live = false; // the globe is showing through the opening screen
+  private loaded = false; // the tracker has everything: its renderer may be borrowed for the plate
+  private syncSlides: () => void = () => undefined; // start or pause the slideshow to suit what is on screen
 
   constructor() {
     this.visible = !document.documentElement.classList.contains('no-landing');
@@ -99,59 +111,170 @@ export class Landing {
     this.host = host;
   }
 
-  // ---- the showcase: one large real screen at a time ----------------------------------------
+  // ---- the showcase: one large real screen at a time, changing like a slideshow ---------------
 
+  /**
+   * The tabs over the product pictures, and the slideshow that moves through them.
+   *
+   * The timer is the progress line itself: a CSS animation on the active tab (landing.css,
+   * `ld-tab-progress`), and its `animationend` is what moves on. So the line and the change
+   * cannot drift apart, and pausing is one class. It runs only while the picture is on screen
+   * and the page is visible; it pauses under the pointer, under a finger and while a tab has
+   * the keyboard focus; a screen the visitor chose themselves is left alone for a good while;
+   * and with "reduce motion" set it never runs at all.
+   *
+   * It never changes the page's length (see also the plate below). On a wide screen the tall
+   * phone picture sits beside its words in the room the wide pictures take, and that room is
+   * held while it shows. On a narrow screen it is far taller than the others, so there the
+   * slideshow passes over it; its tab still shows it.
+   */
   private drawShowcase(): void {
     const tabs = $('ld-tabs'), image = $<HTMLImageElement>('ld-shot'), text = $('ld-shot-text'), screen = $('ld-screen');
-    const show = (shot: Shot, button: HTMLElement) => {
-      for (const other of tabs.children) {
-        other.classList.toggle('is-on', other === button);
-        other.setAttribute('aria-selected', String(other === button));
+    const buttons: HTMLElement[] = [];
+    const address = (k: number) => `./shots/${SHOTS[k].file}.webp`;
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const narrow = () => window.innerWidth <= 860; // where landing.css stacks the phone picture over its words
+    let current = 0;
+    let shown = false; // the first picture has been fetched
+    let onScreen = false, pointed = false, focused = false, touched = false;
+    let heldUntil = 0; // performance.now() until which the slideshow leaves the visitor's own choice alone
+    let request = 0;
+
+    const show = (k: number) => {
+      const shot: Shot = SHOTS[k];
+      const mine = ++request;
+      // On a wide screen the phone picture takes less height than the wide ones: keep the height
+      // they had while it shows, so nothing below moves. (Applied with the change of picture, not before.)
+      const height = shot.phone && !narrow() ? (SHOTS[current].phone ? screen.style.minHeight : `${screen.offsetHeight}px`) : '';
+      current = k;
+      shown = true;
+      buttons.forEach((button, index) => {
+        button.classList.toggle('is-on', index === k);
+        button.setAttribute('aria-selected', String(index === k));
+      });
+      // On a phone the tabs are a strip that scrolls sideways: bring the active one into it.
+      // (Only the strip is moved. scrollIntoView would be free to scroll the page as well.)
+      if (tabs.scrollWidth > tabs.clientWidth) {
+        const left = buttons[k].getBoundingClientRect().left - tabs.getBoundingClientRect().left + tabs.scrollLeft;
+        tabs.scrollTo({ left: Math.max(0, left - 24), behavior: still.matches ? 'auto' : 'smooth' });
       }
-      screen.classList.toggle('is-phone', !!shot.phone);
       screen.classList.add('is-changing');
       const next = new Image();
-      next.onload = next.onerror = () => {
+      const dipped = new Promise((resolve) => setTimeout(resolve, 170)); // long enough for the old picture to dim
+      next.onload = next.onerror = () => void dipped.then(() => {
+        if (mine !== request) return; // another screen was chosen meanwhile
+        screen.style.minHeight = height;
+        screen.classList.toggle('is-phone', !!shot.phone);
         image.src = next.src;
         image.alt = `Screen from the tracker: ${shot.tab.toLowerCase()}`;
         text.textContent = shot.text;
         screen.classList.remove('is-changing');
-      };
-      next.src = `./shots/${shot.file}.webp`;
+        new Image().src = address(following()); // have the one after ready, so the next change is instant
+      });
+      next.src = address(k);
     };
+    /** The screen the slideshow shows after the current one. */
+    const following = (): number => {
+      for (let step = 1; step <= SHOTS.length; step++) {
+        const k = (current + step) % SHOTS.length;
+        if (!(SHOTS[k].phone && narrow())) return k;
+      }
+      return current;
+    };
+    const sync = () => {
+      const now = performance.now();
+      const running = shown && !still.matches && now >= heldUntil;
+      tabs.classList.toggle('is-auto', running);
+      tabs.classList.toggle('is-paused', running && !(this.visible && onScreen && !document.hidden && !pointed && !focused && !touched));
+    };
+    this.syncSlides = sync;
+    const hold = (ms: number) => {
+      heldUntil = Math.max(heldUntil, performance.now() + ms);
+      setTimeout(sync, ms + 30);
+      sync();
+    };
+
     SHOTS.forEach((shot, k) => {
       const button = document.createElement('button');
       button.textContent = shot.tab;
       button.setAttribute('role', 'tab');
-      button.addEventListener('click', () => show(shot, button));
+      button.addEventListener('click', () => {
+        show(k);
+        hold(SLIDE_HOLD_MS);
+      });
       // Fetch a picture when its tab is pointed at, so the click shows it at once.
-      button.addEventListener('pointerenter', () => (new Image().src = `./shots/${shot.file}.webp`), { once: true });
+      button.addEventListener('pointerenter', () => (new Image().src = address(k)), { once: true });
+      buttons.push(button);
       tabs.append(button);
-      if (k === 0) {
-        // The first picture is only fetched when the showcase comes near the screen.
-        new IntersectionObserver((entries, observer) => {
-          if (!entries[0].isIntersecting) return;
-          observer.disconnect();
-          show(shot, button);
-        }, { root: this.scroller, rootMargin: '600px' }).observe(screen);
-        button.classList.add('is-on');
-        text.textContent = shot.text;
+    });
+    buttons[0].classList.add('is-on');
+    text.textContent = SHOTS[0].text;
+    // The first picture is only fetched when the showcase comes near the screen.
+    new IntersectionObserver((entries, observer) => {
+      if (!entries[0].isIntersecting) return;
+      observer.disconnect();
+      show(0);
+      sync();
+    }, { root: this.scroller, rootMargin: '600px' }).observe(screen);
+    // … and the slideshow only runs while a good part of it can actually be seen.
+    new IntersectionObserver((entries) => {
+      onScreen = entries[0].isIntersecting;
+      sync();
+    }, { root: this.scroller, threshold: 0.35 }).observe(screen);
+
+    tabs.addEventListener('animationend', (event) => {
+      if (event.animationName === 'ld-tab-progress') show(following());
+    });
+    for (const part of [tabs, screen]) {
+      part.addEventListener('pointerenter', (event) => {
+        if (event.pointerType !== 'mouse') return;
+        pointed = true;
+        sync();
+      });
+      part.addEventListener('pointerleave', () => {
+        pointed = false;
+        sync();
+      });
+      part.addEventListener('touchstart', () => {
+        touched = true;
+        sync();
+      }, { passive: true });
+      for (const end of ['touchend', 'touchcancel']) {
+        part.addEventListener(end, () => {
+          touched = false;
+          hold(TOUCH_HOLD_MS);
+        }, { passive: true });
       }
+    }
+    // Only focus from the keyboard counts: a tab keeps the focus after a click, and that must not stop the show for good.
+    tabs.addEventListener('focusin', (event) => {
+      focused = (event.target as HTMLElement).matches(':focus-visible');
+      sync();
+    });
+    tabs.addEventListener('focusout', () => {
+      focused = false;
+      sync();
+    });
+    document.addEventListener('visibilitychange', sync);
+    still.addEventListener('change', sync);
+    window.addEventListener('resize', () => {
+      if (!SHOTS[current].phone) screen.style.minHeight = ''; // the held height was for the old width
     });
   }
 
   // ---- the plate of spacecraft ------------------------------------------------------------
 
   /**
-   * The plate's layout, made once and complete: a square and a caption for every kind of
-   * model. The pictures arrive later, but the page already has its final length, so nothing
-   * moves under the visitor's finger when they do. (Figures used to be added one by one as
-   * they were drawn; on a phone the page grew while it was being scrolled.)
+   * The plate's layout, made once and complete: a square and a caption for each of the six
+   * kinds shown. The pictures arrive later, but the page already has its final length, so
+   * nothing moves under the visitor's finger when they do. (Figures used to be added one by
+   * one as they were drawn; on a phone the page grew while it was being scrolled. And the
+   * plate used to show every kind: the owner asked for a few, and a way to the rest.)
    */
   private layPlate(): Map<ModelKind, HTMLImageElement> {
     const slots = new Map<ModelKind, HTMLImageElement>();
     const figures: HTMLElement[] = [];
-    for (const kind of Object.keys(KIND_LABEL) as ModelKind[]) {
+    for (const kind of PLATE) {
       const figure = document.createElement('figure');
       const image = Object.assign(document.createElement('img'), { alt: '' });
       figure.append(image, Object.assign(document.createElement('figcaption'), { textContent: KIND_LABEL[kind] }));
@@ -159,7 +282,16 @@ export class Landing {
       slots.set(kind, image);
     }
     $('ld-plate').replaceChildren(...figures);
+    // "See all models" presses the button that opens the catalogue of models. That catalogue is
+    // another module's; if its button is not on the page there is nothing to open, and no button here.
+    $('landing-models').addEventListener('click', () => document.getElementById('gallery-open')?.click());
+    this.offerModels();
     return slots;
+  }
+
+  /** Show "See all models" only while there is a catalogue of models to open. */
+  private offerModels(): void {
+    $('landing-models').hidden = !document.getElementById('gallery-open');
   }
 
   /**
@@ -169,10 +301,10 @@ export class Landing {
    * being touched or has just moved; the queue simply waits.
    */
   private drawPlate(): void {
-    if (this.plateDrawn || !this.plateWanted || !this.live) return;
+    if (this.plateDrawn || !this.plateWanted || !this.loaded) return;
     this.plateDrawn = true;
     const queue = [...this.slots];
-    const quiet = (): boolean => !this.touching && performance.now() - this.lastScroll > 350;
+    const quiet = (): boolean => this.quiet;
     const later = (work: () => void, ms: number) => ('requestIdleCallback' in window ? window.requestIdleCallback(work, { timeout: ms * 4 }) : setTimeout(work, ms));
     const next = () => {
       if (queue.length === 0) return;
@@ -246,12 +378,37 @@ export class Landing {
   }
 
   /**
-   * The tracker underneath has loaded and is drawing: let it show through the opening screen,
-   * and draw the things that need its renderer.
+   * Is this a moment when a little work would not be felt? True whenever the page is away;
+   * while it is up, only if it is neither under a finger nor has just scrolled.
+   */
+  get quiet(): boolean {
+    return !this.visible || (!this.touching && performance.now() - this.lastScroll > 350);
+  }
+
+  /** Is the globe showing through the opening screen yet? */
+  get isLive(): boolean {
+    return this.live;
+  }
+
+  /**
+   * The tracker underneath has a globe to draw: let it show through the opening screen. This
+   * comes early, as soon as the Earth's own picture has arrived; the objects are still loading.
    */
   goLive(): void {
     this.live = true;
     this.root.classList.add('is-live');
+  }
+
+  /**
+   * The tracker has loaded everything: say so beside the button, put the real size of the
+   * catalogue into the figures, and draw the things that borrow its renderer.
+   */
+  ready(objects: number): void {
+    this.loaded = true;
+    this.root.classList.add('is-ready');
+    this.status(`${fmtInt(objects)} objects loaded and moving`);
+    this.setCount(objects);
+    this.offerModels();
     this.drawPlate();
   }
 
@@ -260,6 +417,7 @@ export class Landing {
     if (!this.visible) return;
     this.visible = false;
     this.demo.setAllowed(false);
+    this.syncSlides();
     document.body.classList.remove('home-open');
     this.root.classList.add('is-leaving');
     setTimeout(() => {
@@ -276,6 +434,8 @@ export class Landing {
     if (this.visible) return;
     this.visible = true;
     this.demo.setAllowed(true);
+    this.offerModels();
+    this.syncSlides();
     document.documentElement.classList.remove('no-landing');
     document.body.classList.add('home-open');
     this.root.classList.remove('is-away', 'is-leaving');

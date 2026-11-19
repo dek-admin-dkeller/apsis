@@ -47,6 +47,8 @@ export const FEATURES: FeatureGroup[] = [
       { name: 'Sharp ground', text: 'Zoom in and the ground under you is redrawn from detailed NASA imagery, by day and by night.' },
       { name: 'Names and a hover card', text: 'Names appear as you zoom in. Point at any dot for a picture, what it is and who runs it.' },
       { name: 'Colour and filter', text: 'Colour the dots by type, orbit, height, owner, launch year or tilt, and hide what you do not need.' },
+      { name: 'Search', text: 'One field finds an object by name, nickname or number, a place, a time or an action, and forgives a misspelling. Press / or Ctrl K.', fresh: true },
+      { name: 'Search by type', text: 'Type “telescope”, “weather” or “chinese radar” and choose the type: only those objects stay on the globe until you clear it.', fresh: true },
       { name: 'The sky behind', text: 'Real stars, constellations, the planets, the Moon, and tonight’s aurora over the poles.' },
       { name: 'Views and time', text: 'Whole Earth, low orbit, the geostationary ring, Earth with the Moon. Pause time, run it backwards, or up to a thousand times faster.' },
       { name: 'Growth by year', text: 'Drag a slider from 1957 to today and see what is still up there from each year.', fresh: true },
@@ -57,7 +59,7 @@ export const FEATURES: FeatureGroup[] = [
     title: 'Follow one object',
     summary: 'Pick anything and stay with it: where it is, what it is, and what it can see.',
     items: [
-      { name: 'Inspector', text: 'Live height, speed and position, the path over the ground, the shape of the orbit, and its record: owner, launch date, size.' },
+      { name: 'Inspector', text: 'Live height, speed and position, the path over the ground, the shape of the orbit, its record (owner, launch date, size) and a link to its Wikipedia article.' },
       { name: '3D models and photos', text: 'Forty-nine kinds of spacecraft modelled in 3D, from a CubeSat to the Webb telescope, beside a real photo where one exists.' },
       { name: 'Ride along', text: 'Sit on a satellite and look out from it.' },
       { name: 'Passes over you', text: 'When it will next cross your sky, and the path it will take across it.' },
@@ -93,7 +95,6 @@ export const FEATURES: FeatureGroup[] = [
       { name: 'Orbit changes', text: 'Which satellites have raised or lowered their orbits since the data was last refreshed, and what is new or gone.', fresh: true },
       { name: 'Space weather and re-entries', text: 'How active the Sun is today, and roughly how long the lowest objects have left.', fresh: true },
       { name: 'Spacecraft catalogue', text: 'Every 3D model on one page. Pick one to turn it round, read what it is, and go and find one in orbit.', fresh: true },
-      { name: 'Command bar', text: 'Press Ctrl K and type an object, a place, a time or an action.', fresh: true },
     ],
   },
   {

@@ -1,4 +1,11 @@
-/** Loading screen: animated object counter and progress bar. */
+/**
+ * Loading screen: animated object counter and progress bar.
+ *
+ * Opened straight into the tracker it stays up until everything has loaded, then lifts off.
+ * From the home page it is under that page and mostly never seen: it is set aside as soon as
+ * the globe can be drawn (`setAside`), and only comes back if the visitor goes into the
+ * tracker before the rest has loaded. Its progress is kept up to date either way.
+ */
 
 import { $, fmtInt } from './dom.ts';
 
@@ -39,6 +46,15 @@ export class LoadingScreen {
     $('loading').classList.add('is-liftoff'); // the rocket leaves the top of the screen …
     await new Promise((resolve) => setTimeout(resolve, 900));
     $('loading').classList.add('is-done'); // … and the globe fades in behind it
+  }
+
+  /**
+   * Take the screen out of the picture without ending it (true), or bring it back (false).
+   * Used while the home page is showing the live globe through itself: the page's backdrop
+   * is see-through then, and this screen must not be what shows.
+   */
+  setAside(on: boolean): void {
+    $('loading').classList.toggle('is-aside', on);
   }
 
   /**
