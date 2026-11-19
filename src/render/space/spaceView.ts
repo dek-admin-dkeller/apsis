@@ -187,6 +187,7 @@ export class SpaceView {
   private lastTap = { key: '', time: 0 };
   private builtAt = 0;
   private linked = new Set<string>();
+  private surface = false; // cloud-covered worlds are shown by their ground instead
   private snap = true; // size the map's dots outright on the next frame (a new view, a camera that was just placed)
   private readonly shift = { x: 0, y: 0, wantX: 0, wantY: 0 }; // how far the picture is moved aside, fractions of the screen
   private readonly scratch = new THREE.Vector3();
@@ -377,13 +378,36 @@ export class SpaceView {
       // camera goes up to is given the full one then. If there is no small copy, the full one.
       const imagery = IMAGERY[body.id];
       if (imagery) {
-        this.loadMap(imagery.base.replace(/\.(jpg|webp|png)$/, '_s.$1'), (texture) => {
+        this.loadMap(this.face(body.id).replace(/\.(jpg|webp|png)$/, '_s.$1'), (texture) => {
           if (texture && this.items.includes(item) && !item.sharp) mesh.setMap(texture);
           else if (!texture) this.sharpen(item);
         });
       }
     }
     return item;
+  }
+
+  /**
+   * The picture a body is seen by. A world wrapped in cloud (Venus) is seen by its clouds, as
+   * it is from space; `surface` swaps in the ground under them (radar, for Venus).
+   */
+  private face(id: BodyId): string {
+    const imagery = IMAGERY[id]!;
+    return imagery.clouds && id !== 'earth' && !this.surface ? imagery.clouds : imagery.base;
+  }
+
+  /** Show the ground of cloud-covered worlds instead of their clouds (or the clouds again). */
+  setSurface(on: boolean): void {
+    if (this.surface === on) return;
+    this.surface = on;
+    for (const item of this.items) {
+      if (item.target.kind !== 'body' || !item.mesh || !IMAGERY[item.target.body.id]?.clouds || item.target.body.id === 'earth') continue;
+      item.sharp = false;
+      this.sharpen(item);
+    }
+  }
+  get showingSurface(): boolean {
+    return this.surface;
   }
 
   /** Give a body its full map, its rings, and (the Earth) its night lights and clouds. */
@@ -398,10 +422,11 @@ export class SpaceView {
     // High setting, on a computer (a 4096-pixel map is 85 MB of graphics memory with its mipmaps).
     const best = item.centre && this.kit.quality === 'high' && !this.host.isPhone() ? imagery.baseHigh : undefined;
     let haveBest = false;
-    this.loadMap(imagery.base, (texture) => {
-      if (texture && here() && !haveBest) mesh.setMap(texture);
+    const face = this.face(body.id);
+    this.loadMap(face, (texture) => {
+      if (texture && here() && !haveBest && this.face(body.id) === face) mesh.setMap(texture);
     });
-    if (best) {
+    if (best && face === imagery.base) {
       this.loadMap(best, (texture) => {
         if (!texture || !here()) return;
         haveBest = true;

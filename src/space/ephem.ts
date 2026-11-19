@@ -268,8 +268,26 @@ const MOON_LAT: readonly (readonly number[])[] = [
   [4, 0, 0, -1, 1021], [4, 0, -1, 1, 833],
 ];
 
-/** The Moon relative to the Earth's centre, km, ICRF, at `d` days of uniform time past J2000. */
+/**
+ * The Moon relative to the Earth's centre, km, ICRF, at `d` days of uniform time past J2000.
+ * The series is seventy sines and cosines, and one frame asks for it several times at the same
+ * instant (the Moon itself, and the Earth's own offset from the Earth–Moon barycentre, which
+ * every position measured from the Earth needs): the last answer is kept.
+ */
+let moonAt = NaN;
+const moonKept: Vec = [0, 0, 0];
 function moonGeocentric(d: number, out: Vec): Vec {
+  if (d !== moonAt) {
+    moonSeries(d, moonKept);
+    moonAt = d;
+  }
+  out[0] = moonKept[0];
+  out[1] = moonKept[1];
+  out[2] = moonKept[2];
+  return out;
+}
+
+function moonSeries(d: number, out: Vec): Vec {
   const T = d / 36525;
   // Mean longitude of the Moon (from the equinox of date) and the four arguments, degrees.
   const L = 218.3164477 + 481267.88123421 * T - 0.0015786 * T * T;

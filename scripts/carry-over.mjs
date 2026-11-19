@@ -1,12 +1,12 @@
 // Push builds: keep the data the site is already showing.
 //
-// The scheduled build downloads fresh elements, radio records and catalogue facts, and they
-// live only in the published site (they are never committed back). A build started by a push
+// The scheduled build downloads fresh elements, radio records, catalogue facts and deep-space
+// positions, and they live only in the published site (they are never committed back). A build started by a push
 // would otherwise publish the older snapshot stored in the repository and lose the orbit-change
 // comparison, until the next scheduled run up to 8 hours later.
 //
 // So before a push build this script reads the data files back from the published site — the
-// project's own pages; nothing is asked of CelesTrak or SatNOGS — and keeps each one that
+// project's own pages; nothing is asked of CelesTrak, SatNOGS or JPL — and keeps each one that
 //   - parses as JSON,
 //   - has the same top-level fields as the copy in the repository (a push that changes a
 //     file's layout must not be handed the old layout back), and
@@ -23,7 +23,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const DATA = join(dirname(fileURLToPath(import.meta.url)), '..', 'public/data');
-const FILES = ['satellites.json', 'radio.json', 'satcat.json'];
+const FILES = ['satellites.json', 'radio.json', 'satcat.json', 'deep.json'];
 
 const site = process.argv[2];
 if (!site || !/^https:\/\//.test(site)) {

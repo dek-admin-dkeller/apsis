@@ -34,9 +34,11 @@ npm run build        # tsc --noEmit && vite build → dist/   (must pass with ze
 npm run bench        # brute force vs hash, look-ahead completeness; exits 1 on any mismatch
 npm run fetch-data   # textures + CelesTrak elements + SATCAT facts into public/ (2 h / 24 h guards)
 npm run fetch-radio  # SatNOGS radio records into public/data/radio.json (6 h guard; also run by CI)
+npm run fetch-deep   # JPL Horizons + CNEOS into public/data/deep.json and scripts/fixtures/deep-reference.json (12 h guard; also run by CI)
 npm run shots        # retake the home page's product pictures (needs Chrome and the dev server running)
 npm run build-borders  # regenerate public/data/borders.bin from the world-atlas package
-npm run check        # the feature checks (orbit changes, visible passes, report, decay, search); exits 1 on a failure
+npm run check        # the feature checks (orbit changes, visible passes, report, decay, search, groups, and the
+                     # solar system against JPL Horizons: check-deep prints the worst errors); exits 1 on a failure
 ```
 
 Node ≥ 22.18 (the bench imports `.ts` files directly; `erasableSyntaxOnly` keeps that legal).
@@ -146,8 +148,12 @@ src/render/                 scene (renderer, bloom, quality presets), globe (Ear
                             previews, thumbnails), prewarm (models built in idle slices from the home page), cameraRig (fly-to, object focus, Earth drift), firstPerson (ride-along,
                             sky view, phone motion), orbitLine, groundTrack, encounterViz (close-approach drawing),
                             conjunctionMarkers, gridViz, constellation (orbits + coverage map), siteMarker, padMarkers
+src/space/                  beyond Earth orbit (see "Beyond Earth orbit"): types (the contract), bodies, ephem (positions,
+                            rotation, Kepler), deep (deep.json, craft positions), imagery (maps, tile layers, credits),
+                            dsn (live Deep Space Network), showers (annual meteor showers)
 src/features/               optional modules installed through the App interface (see "Feature modules"): radio, changes,
-                            weather, launches, tonight (+ tonightWords), report (+ reportPage), growth, commands (+ commandParse)
+                            weather, launches, tonight (+ tonightWords), report (+ reportPage), growth, commands (+ commandParse),
+                            flybys, fireballs, showers, dsn (the four share beyond.css)
 src/ui/                     app (the App interface), featureList (every feature, drawn on the home page), objectTabs (the
                             Objects panel's three tabs), inspector (+ charts), monitor (live pairs), ahead (prediction), encounterPanel, howto
                             (walkthrough), hashTrace, benchmarkModal, filters, search (+ searchMatch, searchIndex,
@@ -156,14 +162,16 @@ src/ui/                     app (the App interface), featureList (every feature,
                             gallery (the spacecraft catalogue), share (QR), tour, cinema (autopilot + recording), sheet (phone sheets), landing (welcome
                             page), launch + intro (loading screen), dom (DOM, number, unit and clock helpers)
 index.html                  all static markup; ids are the contract between HTML and the ui modules
-scripts/                    fetch-data.mjs, fetch-radio.mjs, diff-elements.mjs (writes changes.json), carry-over.mjs (push
-                            builds keep the published data), build-borders.mjs, bench.mjs, shots.mjs, and the checks behind
-                            `npm run check`: check-changes, check-visibility, check-report, decay-check, test-command (the
-                            search: grammar, matching, keyword index), check-groups
-public/                     data/ (satellites.json, satcat.json, radio.json, borders.bin; changes.json exists only in the
-                            published site), shots/, textures/, icons/, manifest.webmanifest
-.github/workflows/deploy.yml  build + deploy to Pages; every 8 h it refreshes CelesTrak and SatNOGS data first (not committed
-                            back); a push build keeps the data the site already shows (carry-over.mjs)
+scripts/                    fetch-data.mjs, fetch-radio.mjs, fetch-deep.mjs (+ deep-craft.mjs, horizons.mjs), diff-elements.mjs
+                            (writes changes.json), carry-over.mjs (push builds keep the published data), build-borders.mjs,
+                            bench.mjs, shots.mjs, make-deep-fixture.mjs and build-space-maps.py (both run by hand), and the
+                            checks behind `npm run check`: check-changes, check-visibility, check-report, decay-check,
+                            test-command (the search: grammar, matching, keyword index), check-groups, check-deep (fixtures/ holds its two reference files)
+public/                     data/ (satellites.json, satcat.json, radio.json, deep.json, borders.bin; changes.json exists only
+                            in the published site), shots/, textures/ (space/ = the maps of other bodies), icons/,
+                            manifest.webmanifest
+.github/workflows/deploy.yml  build + deploy to Pages; every 8 h it refreshes CelesTrak, SatNOGS and JPL data first (not
+                            committed back); a push build keeps the data the site already shows (carry-over.mjs)
 ```
 
 ## UI structure (desktop)
@@ -322,6 +330,69 @@ with `sky-immersive` on `<body>`: `firstPerson.css` hides the whole interface an
 a faint close button (the banner's own Exit button, restyled), any message, and "Set north"
 when the phone has no compass. Taps do not select objects in that mode.
 
+## Beyond Earth orbit (`src/space/`): data and maths
+
+Everything outside this folder knows only objects in Earth orbit. `src/space/` adds the Sun,
+planets and moons ("bodies") and the spacecraft CelesTrak cannot describe ("craft").
+`src/space/types.ts` is the contract between this layer and whatever draws it.
+
+- **One frame: ICRF / J2000 equatorial, kilometres, Unix ms.** x → the equinox, z → the
+  celestial pole. It is within a third of a degree of the TEME frame SGP4 gives the tracker,
+  so the same scene conversion applies: ICRF `(x, y, z)` → scene `(x, z, −y)`.
+- **Clock.** The app's clock is UTC; orbits run on uniform time, 69.184 s ahead
+  (`TT_MINUS_UTC_MS` in `ephem.ts`, the same constant in `scripts/horizons.mjs`). Horizons'
+  vector tables are tagged in TDB; every script converts at the edge.
+
+```
+scripts/deep-craft.mjs (the facts: name, aliases, agency, launch date, model, DSN codes)
+        │ scripts/fetch-deep.mjs ── JPL Horizons state vectors (scripts/horizons.mjs: one request
+        │                           at a time, ≥ 1.1 s apart) + JPL CNEOS fly-bys and fireballs
+        ▼
+public/data/deep.json (DeepData)          scripts/fixtures/deep-reference.json (Horizons' own later positions,
+        │                                  same download: what check-deep compares deep.json against)
+        ▼ space/deep.ts: loadDeep() (once; also hands the moons' fresh orbits to ephem.ts)
+craftPosition(craft, t) → km about craft.centre      bodyPosition / bodyRelative / bodyAxes (space/ephem.ts, pure maths)
+```
+
+- `bodies.ts`: `BODIES` and `BODY_LIST`, 21 bodies. GM of a giant planet is the planet
+  alone (used for things orbiting close to it).
+- `ephem.ts`: planets from JPL's "approximate positions" table (1800–2050); the Earth is
+  that table's Earth–Moon barycentre minus the Moon's share; the Moon is a 70-term series
+  (Meeus ch. 47) precessed to J2000; the other moons are ellipses in a fixed plane with
+  fitted long-term rates (`MOON_ORBITS`, from `node scripts/make-deep-fixture.mjs --fit`),
+  whose shape and phase `setMoonElements()` replaces with the osculating elements in
+  deep.json. Rotation is the IAU model per body (`ROTATION`), with the periodic terms for
+  the Moon, Neptune and the Galilean moons; the Earth uses GMST carried back through
+  precession; the five small moons are simply locked to their planet. Everything here must
+  stay importable by Node (no DOM, no three.js) and cheap: the 3D side calls it for every
+  body each frame.
+- **Motion has three forms** (`Motion` in types.ts): `elements` (Kepler; hyperbolas have
+  `aKm < 0`, `e > 1`; orbiters carry optional measured `rates`, applied as a turn about the
+  PLANET's pole: in ICRF a plane precessing about Mars's pole changes inclination and node
+  together, and a first version that advanced the ICRF node was 10° out after a week),
+  `samples` (Catmull–Rom through equal steps, held at the ends) and `surface` (a latitude
+  and longitude turned with `bodyAxes`). Always go through `craftPosition` / `motionPosition`
+  (a fly-by's path is a Motion about the Earth); do not re-implement them.
+- fetch-deep builds each orbit from Horizons' position and velocity with the SAME GM the
+  browser propagates with (`stateToElements`), so the round trip is exact at the epoch. A
+  craft "round the Sun" that is inside a planet's sphere of influence at that moment (a
+  gravity assist, an arrival) is given about that planet instead. A craft Horizons cannot
+  place is skipped with a log line; the script never fails a build.
+- `imagery.ts`: one map per body (2:1, longitude 0 in the middle, east right) in
+  `public/textures/space/`, made by `scripts/build-space-maps.py` (run by hand; Pillow), plus
+  NASA Trek tile layers whose deepest level and CORS header were checked. `IMAGE_CREDITS`
+  must be shown wherever credits are: the Solar System Scope textures are CC BY 4.0.
+- `dsn.ts`: `watchDsn()` polls NASA's DSN Now XML once a minute only while something
+  watches. `showers.ts`: twelve annual showers; peaks solved from the Sun's longitude.
+- **The evidence** is `scripts/check-deep.mjs` (part of `npm run check`): it compares the
+  ephemeris with `scripts/fixtures/deep-truth.json` (Horizons, twelve dates 2024–2030) and
+  deep.json with the reference file, and prints the worst errors. If you change `ephem.ts`,
+  run it; if you add a craft, run `npm run fetch-deep -- --force` and commit deep.json and
+  deep-reference.json together (the check refuses a mismatched pair).
+- A jump inside Horizons' own trajectory (two mission files that do not join) shows up in
+  the sampled-path check; it is detected, reported and not counted. Do not "fix" it by
+  loosening the 1,000 km tolerance.
+
 ## Feature modules (`src/features/`)
 
 Features added after the core do not live in `main.ts`. Each is one file in `src/features/`
@@ -341,6 +412,10 @@ tracker. Each module draws inside an empty element reserved for it in `index.htm
 | `report.ts` | `#enc-export` | Close-approach report (new tab, or a saved file if the tab is blocked) and CSV |
 | `growth.ts` | `#growth-body` | Year slider; registers one filter with `app.setFilter('growth', …)`; cleared by Home (`app.onHome`) |
 | `commands.ts` | nothing of its own | Places, times, clock speeds and actions for the search field: one source registered with `app.addSearch`; `commandParse.ts` holds the grammar of times and speeds |
+| `flybys.ts` | `#flybys-body` | Asteroid fly-bys from deep.json, soonest first (real clock); choosing one calls `app.jumpTo` |
+| `fireballs.ts` | `#fireballs-body` | Recent fireballs from deep.json; marks on the globe (it reuses `PadMarkers`) only while the section is on screen |
+| `showers.ts` | `#showers-body` | Meteor showers active / next on the SIMULATED clock (`space/showers.ts`); rebuilt when the simulated day changes |
+| `dsn.ts` | `#dsn-body` | Live Deep Space Network links (`space/dsn.ts`): one read 4 s after start for the tile, then once a minute only while on screen |
 
 To add a feature: write the module, reserve an element if it needs one (in the Objects panel:
 a `<details class="sec" data-tab data-section>` in the right tab), add one import and one name
@@ -396,9 +471,15 @@ and the query API when an object's own name is tried as a title; cached per arti
 (`src/data/crew.ts`), NASA GIBS map tiles (`src/render/tiles.ts`, only while zoomed in and
 only with the `sharpGround` setting on), Launch Library 2 from The Space Devs (only when the
 launches section is opened; about 15 requests an hour are allowed, the answer is kept for an
-hour), nothing else from the browser. SatNOGS is read at BUILD time only
+hour), NASA's DSN Now feed (`src/space/dsn.ts`: one read shortly after start, then once a
+minute only while the Deep Space Network section is on screen), NASA Solar System Treks map
+tiles (the layers in `src/space/imagery.ts`, for whatever draws other bodies close up),
+nothing else from the browser. SatNOGS is read at BUILD time only
 (`scripts/fetch-radio.mjs`, 6 h guard, at most 22 requests; its API sends no CORS headers,
-and its data is CC BY-SA and credited in About). No analytics, no accounts. Location is used only after
+and its data is CC BY-SA and credited in About). JPL Horizons and JPL CNEOS are also BUILD
+time only (`scripts/fetch-deep.mjs`, 12 h guard, about 90 requests one at a time; Horizons
+sends no CORS headers). The maps of other bodies are bundled; the Solar System Scope ones
+are CC BY 4.0 and must be credited (`IMAGE_CREDITS`). No analytics, no accounts. Location is used only after
 an in-app yes plus the browser's own prompt, and stays in `localStorage`.
 
 ## Robustness (added after a "black screen on a friend's laptop" report that could not be reproduced)
@@ -575,7 +656,7 @@ search list above a real on-screen keyboard (it is sized from `visualViewport`).
 ## Deploying
 
 Push to `main` → the workflow builds and publishes `dist/` to GitHub Pages. The scheduled run
-(every 8 h) downloads fresh CelesTrak and SatNOGS data before building, compares the new
+(every 8 h) downloads fresh CelesTrak, SatNOGS and JPL (deep-space) data before building, compares the new
 elements with the published ones (`changes.json`), and re-enables itself so GitHub does not
 pause the schedule after 60 days of inactivity. A push build downloads nothing from outside:
 `scripts/carry-over.mjs` reads the data files back from the published site and keeps each one

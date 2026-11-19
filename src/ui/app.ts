@@ -41,6 +41,7 @@ export type PanelName = 'objects' | 'layers' | 'conj' | 'settings';
 export type SectionName =
   | 'watchlist' | 'notable' | 'type' | 'orbit' | 'appearance' // Browse
   | 'tonight' | 'launches' | 'changes' | 'newest' | 'trains' | 'lowest' // Activity
+  | 'flybys' | 'fireballs' | 'showers' | 'dsn' // Activity, beyond Earth orbit
   | 'constellations' | 'growth' | 'designer'; // Tools
 
 /**
@@ -96,6 +97,11 @@ export interface App {
   select(sat: Satellite | null): void;
   /** Objects whose name starts with or contains the query, or whose NORAD id matches. */
   search(query: string, limit?: number): Satellite[];
+  /**
+   * Leave the tracker to watch one asteroid of the fly-by list pass the Earth, on its real
+   * path (the clock is moved to the pass). False if that asteroid's path is not known.
+   */
+  showFlyby(name: string): boolean;
   /** Offer more things in the search field (bodies, spacecraft beyond Earth orbit …). */
   addSearch(provider: SearchProvider): void;
   /** Put the cursor in the search field, optionally with `text` already typed in it (the list then shows what it finds). */

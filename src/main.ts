@@ -66,10 +66,14 @@ import { Landing } from './ui/landing.ts';
 import type { App, FrameInfo, SearchProvider } from './ui/app.ts';
 import { installChanges } from './features/changes.ts';
 import { installCommands } from './features/commands.ts';
+import { installDsn } from './features/dsn.ts';
+import { installFireballs } from './features/fireballs.ts';
+import { installFlybys } from './features/flybys.ts';
 import { installGrowth } from './features/growth.ts';
 import { installLaunches } from './features/launches.ts';
 import { installRadio } from './features/radio.ts';
 import { installReport } from './features/report.ts';
+import { installShowers } from './features/showers.ts';
 import { installTonight } from './features/tonight.ts';
 import { installWeather } from './features/weather.ts';
 import { Labels } from './ui/labels.ts';
@@ -2034,6 +2038,7 @@ const app: App = {
   select: (sat) => select(sat),
   search: (query, limit) => (catalog ? searchCatalog(catalog, query, limit) : []),
   addSearch: (provider) => void searchProviders.push(provider),
+  showFlyby: (name) => places.showFlyby(name),
   focusSearch: (text) => search.focus(text),
   flyToGround: (latDeg, lonDeg, altitudeKm = 2500) => {
     if (fp.mode !== 'off') fp.exit();
@@ -2105,7 +2110,7 @@ const search = new Search(app, searchProviders);
 
 // One line per module. A module that throws while setting itself up is reported and skipped:
 // an optional extra must never stop the tracker from starting.
-for (const install of [installRadio, installChanges, installWeather, installLaunches, installTonight, installReport, installGrowth, installCommands]) {
+for (const install of [installRadio, installChanges, installWeather, installLaunches, installTonight, installReport, installGrowth, installCommands, installFlybys, installFireballs, installShowers, installDsn]) {
   try {
     install(app);
   } catch (error) {

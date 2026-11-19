@@ -453,6 +453,23 @@
               <div id="weather-body"></div>
               <ol class="watch-list" id="feed-low"></ol>
             </details>
+            <!-- Beyond Earth orbit: lists filled by features/flybys.ts, fireballs.ts, showers.ts and dsn.ts. -->
+            <details class="sec" name="obj-activity" data-tab="activity" data-section="flybys" data-feature data-tile="Asteroid fly-bys" data-hint="Rocks passing the Earth in the coming weeks">
+              <summary>Asteroid fly-bys</summary>
+              <div id="flybys-body"></div>
+            </details>
+            <details class="sec" name="obj-activity" data-tab="activity" data-section="fireballs" data-feature data-tile="Fireballs" data-hint="The brightest recent meteors, marked on the globe">
+              <summary>Fireballs</summary>
+              <div id="fireballs-body"></div>
+            </details>
+            <details class="sec" name="obj-activity" data-tab="activity" data-section="showers" data-feature data-tile="Meteor showers" data-hint="Which showers are active, and which come next">
+              <summary>Meteor showers</summary>
+              <div id="showers-body"></div>
+            </details>
+            <details class="sec" name="obj-activity" data-tab="activity" data-section="dsn" data-feature data-tile="Deep space links" data-hint="Which dish is talking to which spacecraft right now">
+              <summary>Deep Space Network</summary>
+              <div id="dsn-body"></div>
+            </details>
 
             <!-- ================= Tools: things to do with the catalogue ================= -->
             <details class="sec" name="obj-tools" data-tab="tools" data-section="constellations" data-tile="Constellations" data-hint="Draw a whole network and where it reaches">
@@ -1098,6 +1115,8 @@
             <div><dt>Radio records</dt><dd><a href="https://satnogs.org" target="_blank" rel="noopener noreferrer">SatNOGS</a>, a volunteer ground-station network of the Libre Space Foundation, CC BY-SA</dd></div>
             <div><dt>Upcoming launches</dt><dd><a href="https://thespacedevs.com" target="_blank" rel="noopener noreferrer">The Space Devs</a>, Launch Library 2</dd></div>
             <div><dt>Space weather and aurora</dt><dd>NOAA Space Weather Prediction Center</dd></div>
+            <div><dt>Beyond Earth orbit</dt><dd>Spacecraft and moons from <a href="https://ssd.jpl.nasa.gov/horizons/" target="_blank" rel="noopener noreferrer">NASA / JPL Horizons</a>; asteroid fly-bys and fireballs from <a href="https://cneos.jpl.nasa.gov" target="_blank" rel="noopener noreferrer">JPL CNEOS</a>; dish activity from NASA's Deep Space Network Now</dd></div>
+            <div><dt>Maps of other worlds</dt><dd>NASA / JPL / USGS mosaics (public domain), close-up detail streamed from NASA Solar System Treks; the Sun, the giant planets, Saturn's rings and Venus's clouds by <a href="https://www.solarsystemscope.com/textures/" target="_blank" rel="noopener noreferrer">Solar System Scope</a>, CC BY 4.0</dd></div>
             <div><dt id="about-data-label">Data loaded</dt><dd id="about-data">–</dd></div>
             <div><dt>This device</dt><dd id="about-diag">–</dd></div>
           </dl>

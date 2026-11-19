@@ -35,6 +35,7 @@ import { BODIES, BODY_LIST } from '../space/bodies.ts';
 import { craftPosition, loadDeep } from '../space/deep.ts';
 import { watchDsn } from '../space/dsn.ts';
 import { bodyRelative } from '../space/ephem.ts';
+import { IMAGERY } from '../space/imagery.ts';
 import type { Body, BodyId, Craft, DsnLink, Flyby, Motion, Vec } from '../space/types.ts';
 import type { SearchHit } from './app.ts';
 import { $, fmt, fmtInt, fmtKm, fmtKmS, lengthUnit, lengthValue } from './dom.ts';
@@ -509,6 +510,13 @@ export class Places {
     }
   }
 
+  /** Go and watch one asteroid pass the Earth (by its name in the fly-by list). False if its path is not known. */
+  showFlyby(name: string): boolean {
+    const rock = this.crafts.find((craft) => craft.passing?.name === name);
+    if (rock) this.showCraft(rock);
+    return rock !== undefined;
+  }
+
   /** How many of the craft beyond Earth orbit are drawn with one kind of 3D model, and a way to go and see one. */
   countOf(model: string): number {
     return this.crafts.filter((craft) => craft.model === model).length;
@@ -531,7 +539,8 @@ export class Places {
     const target: Target = { kind: 'craft', craft };
     // An asteroid can only be shown around its pass: go to a little before its closest moment.
     if (craft.passing && Math.abs(this.host.time() - craft.passing.timeMs) > 2 * DAY) this.host.jumpTo(craft.passing.timeMs - 40 * 60000);
-    if (craft.centre === 'sun' && !this.nearSun(craft)) void this.travel({ kind: 'map', focus: target });
+    if (this.spot === 'place' && this.hereBody === craft.centre) this.pick(this.place, target); // already there
+    else if (craft.centre === 'sun' && !this.nearSun(craft)) void this.travel({ kind: 'map', focus: target });
     else void this.travel({ kind: 'place', body: craft.centre, focus: target });
   }
 
@@ -692,6 +701,16 @@ export class Places {
       distance.textContent = farText(km);
       light.textContent = duration((km / LIGHT_KM_S) * 1000);
     };
+    if (here && IMAGERY[body.id]?.clouds && body.id !== 'earth') {
+      // A world under permanent cloud: the visitor can look beneath it.
+      const under = el('button', 'link pc-under', this.place.showingSurface ? 'Show the clouds again' : 'Look under the clouds');
+      under.type = 'button';
+      under.addEventListener('click', () => {
+        this.place.setSurface(!this.place.showingSurface);
+        under.textContent = this.place.showingSurface ? 'Show the clouds again' : 'Look under the clouds';
+      });
+      into.append(under);
+    }
     if (!here) this.lists(body, into); // at the place itself that list is the rail's "Objects" panel
     into.append(el('p', 'pc-blurb', body.blurb), this.wiki(body.wiki));
   }
