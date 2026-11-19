@@ -7,7 +7,8 @@
  * show a full-screen 3D world do it (Apple Maps, Google Earth, Eyes on the Solar System: the
  * picture is the interface, a few floating controls, sheets that swipe away), there is now:
  *
- *   the pill    one 40 px capsule above the tab bar, "‹ Earth ›", with a line of context above
+ *   the pill    the middle item of the tab bar itself, "‹ Earth ›" (it used to float above the
+ *               bar; the owner asked for the two to be one, to take less room), with a line of context above
  *               the name. Tap it at a world: out to the WHOLE solar system in one move. Tap it
  *               on the solar system: go in to the world the camera is beside, or (looking at
  *               all of it) open the list of worlds. Swipe it sideways, or tap ‹ ›: the next or
@@ -102,7 +103,9 @@ export class WorldStrip {
     this.prev.setAttribute('aria-label', 'Previous world');
     this.next.setAttribute('aria-label', 'Next world');
     this.pill.append(this.prev, this.label, this.next);
-    document.body.append(this.scrim, this.sheet, this.pill);
+    document.body.append(this.scrim, this.sheet);
+    // Inside the tab bar (the rail is the tab bar on a phone; on a computer the pill is hidden).
+    (document.querySelector('#hud .rail') ?? document.body).append(this.pill);
     this.prev.addEventListener('click', () => this.step(-1));
     this.next.addEventListener('click', () => this.step(1));
     this.scrim.addEventListener('click', () => this.closeSheet());

@@ -142,7 +142,7 @@ export const FEATURES: FeatureGroup[] = [
     summary: 'The same tracker, made for a small screen and for pointing at the sky.',
     items: [
       { name: 'Hold it up to the sky', text: 'The sky button fills the screen with what is overhead in the direction the phone is pointing. Tap anything for a small card saying what it is.', fresh: true },
-      { name: 'One pill between worlds', text: 'A small “‹ Earth ›” pill above the tab bar: tap it for the whole solar system, swipe it (or tap ‹ ›) for the next world, swipe it up for every world at once. A two-finger tap on the picture goes up a level.', fresh: true },
+      { name: 'One pill between worlds', text: 'A small “‹ Earth ›” in the middle of the tab bar: tap it for the whole solar system, swipe it (or tap ‹ ›) for the next world, swipe it up for every world at once. A two-finger tap on the picture goes up a level.', fresh: true },
       { name: 'Built around the globe', text: 'Few controls on screen, and panels you can drag out of the way.' },
     ],
   },
@@ -161,7 +161,7 @@ export const WHATS_NEW: Update[] = [
     title: 'Flip through what you search, and a simpler phone',
     items: [
       'Search a type (“spacex”, “weather”, “telescope”) and step through every object of it one at a time, each with its 3D model: ‹ › or the arrow keys, a swipe on a phone. Done shows everything again and leaves you on the one you stopped at.',
-      'On a phone, one small pill above the tab bar replaces the strip of planets and the path at the top: tap it for the whole solar system, swipe it for the next world, swipe it up for all of them. A two-finger tap goes up a level.',
+      'On a phone, a small “‹ Earth ›” in the middle of the tab bar replaces the strip of planets and the path at the top: tap it for the whole solar system, swipe it for the next world, swipe it up for all of them. A two-finger tap goes up a level.',
       'The never-photographed parts of Pluto, Charon, Triton and Uranus’s moons are filled in with an educated guess made from each world’s own terrain (a switch in Layers turns it off), and each world’s card says which part no one has seen.',
       'The bell’s list is cleaner: spacecraft in contact folded into one row, a date column for what is coming, notifications as a switch.',
       'Launch climbs: a failed launch is shown as far as it got with its reported cause; the webcast link appears only when one is listed; pressing Live or Escape during a climb no longer leaves the camera stuck.',

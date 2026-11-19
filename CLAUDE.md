@@ -750,8 +750,10 @@ it is used. So:
   still `WorldStrip`). The owner found the path at the top ("tap Solar system, tap again") and the
   90 px strip of planet chips fiddly and in the way, and asked for a modern app feel with gestures
   and as little on screen as possible; a research pass over Apple Maps, Google Earth, NASA Eyes and
-  Sky Guide gave the design. On a phone `#path` is hidden and the pill (`#m-worlds`, 44 px, above
-  the tab bar, everywhere including the tracker) says where you are: tap = the WHOLE solar system
+  Sky Guide gave the design. On a phone `#path` is hidden and the pill (`#m-worlds`) is the MIDDLE
+  ITEM OF THE TAB BAR (moved into `#hud > .rail`, CSS `order` puts Objects · Layers · pill ·
+  Monitor · Settings; it first floated above the bar and the owner asked for one bar), everywhere
+  including the tracker, and says where you are: tap = the WHOLE solar system
   in one move (`places.visitSystem`); on the solar system tap = go in to the world beside you, or
   open the sheet; swipe it or ‹ › = next / previous world outwards (`ORDER`); swipe up or hold =
   the sheet of worlds (grid of `_s` globes, the current planet's moons in a row; swipe down,
