@@ -230,6 +230,7 @@ const places = new Places({
   time: () => clock.time,
   isPhone: () => isPhone(),
   drift: () => store.settings.earthDrift,
+  figures: () => sky.constellations,
   match: matchScore,
   jumpTo: (timeMs) => jumpTo(timeMs),
   toast: (text) => toast(text),
@@ -382,6 +383,10 @@ function applySettings(s: Settings, changed: keyof Settings | null): void {
   setUnits(s.units);
   setClockZone(s.clockZone);
   places.setSky(s.stars, s.constellations);
+  places.setOptions({
+    orbits: s.spaceOrbits, names: s.spaceNames, craft: s.spaceCraft, allCraft: s.spaceAllCraft, sites: s.landingSites,
+    skyNames: s.skyLabels, selOrbit: s.orbitPath, selTrack: s.groundTrack, selFootprint: s.footprint, selModel: s.model,
+  });
   if (changed === null || changed === 'units') $('d-label').textContent = alertDistance(screeningDistance);
   if (changed === 'units' || changed === 'clockZone') {
     // Panels that only redraw when something happens are told to redraw now.
@@ -1702,10 +1707,21 @@ function updateSelection(realSeconds: number): void {
 // Zooming by hand means "I'll frame this myself": the automatic framing below lets go until
 // the pair is re-centred from the panel.
 canvas.addEventListener('wheel', () => (encAutoFrame = false), { passive: true });
-// Zooming out past the furthest the tracker goes carries on out to the solar system.
+// Zooming out past the furthest the tracker goes carries on out to the solar system: with
+// the wheel, or on a phone with a pinch that begins at that limit and keeps going.
+const pastTheEdge = (): boolean =>
+  !places.elsewhere && !landing.showing && !rig.flying && !rig.focused && fp.mode === 'off' &&
+  kit.controls.target.lengthSq() < 1 && kit.camera.position.length() > kit.controls.maxDistance * 0.985;
 canvas.addEventListener('wheel', (event) => {
-  if (event.deltaY <= 0 || places.elsewhere || landing.showing || rig.flying || rig.focused || fp.mode !== 'off') return;
-  if (kit.controls.target.lengthSq() < 1 && kit.camera.position.length() > kit.controls.maxDistance * 0.985) places.openSystem();
+  if (event.deltaY > 0 && pastTheEdge()) places.openSystem();
+}, { passive: true });
+const fingersApart = (event: TouchEvent) => Math.hypot(event.touches[0].clientX - event.touches[1].clientX, event.touches[0].clientY - event.touches[1].clientY);
+let pinchStart = 0;
+canvas.addEventListener('touchstart', (event) => (pinchStart = event.touches.length === 2 ? fingersApart(event) : 0), { passive: true });
+canvas.addEventListener('touchmove', (event) => {
+  if (event.touches.length !== 2 || pinchStart <= 0 || fingersApart(event) / pinchStart > 0.8 || !pastTheEdge()) return;
+  pinchStart = 0; // one step out per pinch
+  places.openSystem();
 }, { passive: true });
 canvas.addEventListener('touchstart', (event) => {
   if (event.touches.length > 1) encAutoFrame = false;
