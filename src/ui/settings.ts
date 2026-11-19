@@ -21,6 +21,12 @@ export interface Settings {
   groundTrack: boolean;
   footprint: boolean;
   model: boolean;
+  // away from the tracker (the solar system and other worlds; ui/places.ts)
+  spaceOrbits: boolean; // the paths of planets, moons and spacecraft
+  spaceNames: boolean; // names over the picture
+  spaceCraft: boolean; // spacecraft at all
+  spaceAllCraft: boolean; // on the solar system: name every craft, not only the well-known ones
+  landingSites: boolean; // historic landing sites on the ground
   autoOrbit: boolean;
   // Earth
   earthDrift: boolean;
@@ -66,6 +72,11 @@ const DEFAULTS: Settings = {
   groundTrack: true,
   footprint: true,
   model: true,
+  spaceOrbits: true,
+  spaceNames: true,
+  spaceCraft: true,
+  spaceAllCraft: false,
+  landingSites: true,
   autoOrbit: true,
   earthDrift: true,
   siteMarker: true,

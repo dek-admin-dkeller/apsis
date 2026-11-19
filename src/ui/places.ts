@@ -30,15 +30,17 @@
 import '../space.css';
 import type * as THREE from 'three';
 import type { OtherView, SceneKit } from '../render/scene.ts';
-import { MAP_REST, PLACE_REST, PLACE_REST_PHONE, SpaceView, targetKey, type Pose, type SpaceHost, type Target } from '../render/space/spaceView.ts';
+import { MAP_REST, PLACE_REST, PLACE_REST_PHONE, SpaceView, targetKey, type Pose, type SpaceHost, type SpaceOptions, type Target } from '../render/space/spaceView.ts';
+import { wikiSummary } from '../data/wiki.ts';
 import { BODIES, BODY_LIST } from '../space/bodies.ts';
-import { craftPosition, loadDeep } from '../space/deep.ts';
+import { craftPeriodMs, craftPosition, loadDeep } from '../space/deep.ts';
 import { watchDsn } from '../space/dsn.ts';
-import { bodyRelative } from '../space/ephem.ts';
+import { bodyAxes, bodyPosition, bodyRelative } from '../space/ephem.ts';
 import { IMAGERY } from '../space/imagery.ts';
-import type { Body, BodyId, Craft, DsnLink, Flyby, Motion, Vec } from '../space/types.ts';
+import { SITES } from '../space/sites.ts';
+import type { Body, BodyId, Craft, DsnLink, Flyby, Motion, Site, Vec } from '../space/types.ts';
 import type { SearchHit } from './app.ts';
-import { $, fmt, fmtInt, fmtKm, fmtKmS, lengthUnit, lengthValue } from './dom.ts';
+import { $, fmt, fmtInt, fmtKm, fmtKmS, getUnits, lengthUnit, lengthValue } from './dom.ts';
 import { clockStamp, duration } from './inspector.ts';
 
 export interface PlacesHost {
@@ -48,6 +50,8 @@ export interface PlacesHost {
   time(): number;
   isPhone(): boolean;
   drift(): boolean;
+  /** The constellation figures: name and direction among the stars (Sky.constellations). */
+  figures(): { name: string; direction: THREE.Vector3 }[];
   /** How well `query` matches any of `texts`, 0…1 (the search field's own scorer). */
   match(query: string, ...texts: string[]): number;
   /** Move the clock. */
@@ -124,6 +128,45 @@ function rockCraft(flyby: Flyby): Craft | null {
   };
 }
 
+const SITE_KIND: Record<Site['kind'], string> = { crewed: 'Crewed landing', lander: 'Landing site', rover: 'Rover landing site', probe: 'Probe' };
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** '1969-07-20' → '20 Jul 1969' (a day in history is the same day on any clock). */
+function dayText(iso: string): string {
+  const [year, month, day] = iso.split('-').map(Number);
+  return month && day ? `${day} ${MONTHS[month - 1]} ${year}` : String(year);
+}
+const yearsSince = (iso: string, nowMs: number): number => Math.max(0, Math.floor((nowMs - Date.parse(iso)) / (365.25 * DAY)));
+/** A temperature in the unit that goes with the chosen length unit: °C with kilometres, °F with miles. */
+const tempText = (c: number): string => (getUnits() === 'metric' ? `${fmtInt(c)} °C` : `${fmtInt(c * 1.8 + 32)} °F`);
+const latLonText = (lat: number, lon: number): string => {
+  const east = ((lon + 540) % 360) - 180;
+  return `${fmt(Math.abs(lat), 2)}° ${lat >= 0 ? 'N' : 'S'}, ${fmt(Math.abs(east), 2)}° ${east >= 0 ? 'E' : 'W'}`;
+};
+
+/**
+ * A historic landing site, dressed as a craft that stands on the ground (see Craft.site), so
+ * the views can mark it, name it and show its card with the code they already have.
+ */
+function siteCraft(site: Site): Craft {
+  return {
+    id: `site-${site.id}`,
+    name: site.name,
+    short: site.name,
+    aliases: [site.name.toLowerCase()],
+    centre: site.body,
+    model: site.model,
+    status: 'silent',
+    agency: site.agency,
+    launched: site.date,
+    role: SITE_KIND[site.kind],
+    blurb: site.blurb,
+    wiki: site.wiki,
+    dsn: [],
+    motion: { type: 'surface', latDeg: site.latDeg, lonDeg: site.lonDeg },
+    site,
+  };
+}
+
 /** A long distance in words: "384,400 km", "1.67 million km", "24.9 billion km" (or miles). */
 function farText(km: number): string {
   const value = lengthValue(km);
@@ -175,6 +218,7 @@ export class Places {
       onPick: (target) => this.pick(view(), target),
       onOpen: (target) => this.open(target),
       onOut: () => this.openSystem(),
+      figures: host.figures,
       isPhone: host.isPhone,
       drift: host.drift,
     });
@@ -182,9 +226,13 @@ export class Places {
     this.map = new SpaceView(host.kit, host.backdrop(), side(() => this.map));
     $('pc-close').addEventListener('click', () => this.closeCard());
     for (const button of document.querySelectorAll<HTMLElement>('[data-places-open]')) button.addEventListener('click', () => this.openSystem());
+    // The button in the top bar (and its round twin on a phone): out to the solar system, and from there home.
+    for (const id of ['system-btn', 'm-system']) $(id).addEventListener('click', () => (this.spot === 'map' ? void this.travel({ kind: 'tracker' }) : this.openSystem()));
+    this.crafts = SITES.map(siteCraft);
+    this.place.setCraft(this.crafts, host.time());
     void loadDeep().then((deep) => {
       if (!deep) return;
-      this.crafts = [...deep.craft, ...deep.flybys.map(rockCraft).filter((rock): rock is Craft => rock !== null)];
+      this.crafts = [...deep.craft, ...deep.flybys.map(rockCraft).filter((rock): rock is Craft => rock !== null), ...SITES.map(siteCraft)];
       this.place.setCraft(this.crafts, host.time());
       this.map.setCraft(this.crafts, host.time());
       if (this.spot === 'place') this.fillHere();
@@ -255,6 +303,12 @@ export class Places {
     if (this.shown) this.show(this.shown);
   }
 
+  /** The Layers switches that apply away from the tracker (see SpaceOptions). */
+  setOptions(options: SpaceOptions): void {
+    this.place.setOptions(options);
+    this.map.setOptions(options);
+  }
+
   /** The Layers switches for the sky apply everywhere. */
   setSky(stars: boolean, figures: boolean): void {
     this.place.setSky(stars, figures);
@@ -304,6 +358,8 @@ export class Places {
     this.here.classList.add('is-hidden');
     const where = this.spot === 'place' ? this.place.where : null;
     $('place-name').textContent = this.spot === 'map' ? 'Solar system' : where?.kind === 'place' ? BODIES[where.body].name : '';
+    $('system-btn-text').textContent = this.spot === 'map' ? 'Back to Earth' : 'Solar system';
+    $('system-btn').title = this.spot === 'map' ? 'Zoom back in to the Earth and everything in orbit round it' : 'Zoom out to the solar system: the Moon, the planets and the spacecraft out there';
     if (away && !this.stopDsn) {
       this.stopDsn = watchDsn((links) => {
         this.links = links;
@@ -524,10 +580,10 @@ export class Places {
 
   /** How many of the craft beyond Earth orbit are drawn with one kind of 3D model, and a way to go and see one. */
   countOf(model: string): number {
-    return this.crafts.filter((craft) => craft.model === model).length;
+    return this.crafts.filter((craft) => craft.model === model && !craft.site).length;
   }
   showOne(model: string): boolean {
-    const craft = this.crafts.find((candidate) => candidate.model === model && !candidate.passing) ?? this.crafts.find((candidate) => candidate.model === model);
+    const craft = this.crafts.find((candidate) => candidate.model === model && !candidate.passing && !candidate.site) ?? this.crafts.find((candidate) => candidate.model === model && !candidate.site);
     if (craft) this.showCraft(craft);
     return craft !== undefined;
   }
@@ -606,8 +662,10 @@ export class Places {
 
   /** The spacecraft, passing asteroids and moons of a body, as lists that take the visitor to each. */
   private lists(body: Body, into: HTMLElement): void {
-    const crafts = this.crafts.filter((craft) => craft.centre === body.id && !craft.passing && (body.id !== 'sun' || this.nearSun(craft)));
+    const crafts = this.crafts.filter((craft) => craft.centre === body.id && !craft.passing && !craft.site && (body.id !== 'sun' || this.nearSun(craft)));
     if (crafts.length > 0) into.append(el('h3', 'pc-label', body.id === 'earth' ? 'Beyond Earth orbit' : 'Spacecraft'), this.craftList(crafts));
+    const sites = this.crafts.filter((craft) => craft.centre === body.id && craft.site).sort((a, b) => a.launched.localeCompare(b.launched));
+    if (sites.length > 0) into.append(el('h3', 'pc-label', 'Landing sites'), this.craftList(sites));
     const rocks = this.crafts.filter((craft) => craft.centre === body.id && craft.passing && Math.abs(craft.passing.timeMs - this.host.time()) < 3 * DAY);
     if (rocks.length > 0) into.append(el('h3', 'pc-label', 'Asteroids passing'), this.craftList(rocks));
     const moons = BODY_LIST.filter((other) => other.parent === body.id && other.kind === 'moon');
@@ -629,7 +687,7 @@ export class Places {
       const row = el('li');
       const button = el('button', craft.status === 'silent' ? 'is-silent' : '');
       button.type = 'button';
-      button.append(el('b', '', craft.short), el('span', '', craft.passing ? `${fmt(craft.passing.distanceKm / MOON_KM, 1)} × the Moon’s distance` : craft.role));
+      button.append(el('b', '', craft.short), el('span', '', craft.passing ? `${fmt(craft.passing.distanceKm / MOON_KM, 1)} × the Moon’s distance` : craft.site ? craft.launched.slice(0, 4) : craft.role));
       button.addEventListener('click', () => this.showCraft(craft));
       row.append(button);
       list.append(row);
@@ -647,6 +705,9 @@ export class Places {
     const shift: [number, number] = !target ? [0, 0] : this.host.isPhone() ? [0, 0.17] : [0.07, 0];
     this.place.setShift(...shift);
     this.map.setShift(...shift);
+    // The switches a selected satellite has in the tracker, for a craft in orbit at a place.
+    const orbiting = target?.kind === 'craft' && this.spot === 'place' && target.craft.motion.type !== 'surface' && !target.craft.passing;
+    $('pc-acts').classList.toggle('is-hidden', !orbiting);
     if (!target) return;
     const body = $('pc-body');
     body.replaceChildren();
@@ -697,6 +758,12 @@ export class Places {
     rows.push(['Diameter', fmtKm(body.radiusKm * 2)]);
     if (body.dayHours) rows.push(['Turns once in', `${spanText(body.dayHours / 24)}${body.dayHours < 0 ? ', backwards' : ''}`]);
     if (body.parent) rows.push([`Round ${body.parent === 'sun' ? 'the Sun' : BODIES[body.parent].name} in`, spanText(body.periodDays)]);
+    // Gravity at the surface follows from its mass and size: g = GM / r² (km³/s² and km → m/s²).
+    const gravity = (body.gm / (body.radiusKm * body.radiusKm)) * 1000;
+    if (body.id !== 'sun') rows.push(['Gravity', `${fmt(gravity, gravity < 1 ? 3 : 2)} m/s² (${fmt(gravity / 9.807, gravity < 0.98 ? 3 : 2)} of Earth’s)`]);
+    if (body.tempC !== undefined) rows.push([body.kind === 'star' || body.radiusKm > 20000 ? 'Temperature' : 'Temperature on the ground', tempText(body.tempC)]);
+    if (body.air) rows.push(['Air', body.air]);
+    if (body.discovered) rows.push(['Found by', body.discovered]);
     into.append(this.facts(rows));
     const vec: Vec = [0, 0, 0];
     this.live = () => {
@@ -717,28 +784,64 @@ export class Places {
       into.append(under);
     }
     if (!here) this.lists(body, into); // at the place itself that list is the rail's "Objects" panel
-    into.append(el('p', 'pc-blurb', body.blurb), this.wiki(body.wiki));
+    into.append(el('p', 'pc-blurb', body.blurb));
+    this.article(body.wiki, `body:${body.id}`, into, false);
   }
 
   private craftCard(craft: Craft, into: HTMLElement): void {
     $('pc-name').textContent = craft.name;
     $('pc-kind').textContent = craft.agency ? `${craft.role} · ${craft.agency}` : craft.role;
-    const pass = craft.passing;
+    const pass = craft.passing, site = craft.site;
     const centre = BODIES[craft.centre];
+    const motion = craft.motion;
+    const now0 = this.host.time();
     const contact = el('p', 'pc-contact');
-    const distance = el('span'), light = el('span'), fromCentre = el('span'), speed = el('span');
-    const year = Number(craft.launched.slice(0, 4));
-    const surface = craft.motion.type === 'surface';
-    const rows: [string, HTMLElement | string][] = [['From Earth now', distance], ['Its signal takes', light]];
-    if (!surface && craft.centre !== 'earth') rows.push([craft.centre === 'sun' ? 'From the Sun' : `Above ${centre.name}`, fromCentre]);
-    if (!surface) rows.push([`Speed past ${craft.centre === 'sun' ? 'the Sun' : centre.name}`, speed]);
+    const distance = el('span'), light = el('span'), fromCentre = el('span'), speed = el('span'), sun = el('span');
+    const rows: [string, HTMLElement | string][] = [];
+
     if (pass) {
-      rows.length = 0;
       rows.push(['From Earth now', distance], ['Closest', clockStamp(pass.timeMs)], ['Misses by', `${fmtKm(pass.distanceKm)} (${fmt(pass.distanceKm / MOON_KM, 1)} × the Moon)`],
         ['Speed past Earth', speed], ['Size', `${fmtInt(pass.sizeM[0])} – ${fmtInt(pass.sizeM[1])} m`]);
+    } else if (motion.type === 'surface') {
+      // Something standing on the ground: where, since when, and whether the Sun is up there now.
+      rows.push([site ? 'Landed' : 'Launched', `${dayText(craft.launched)} (${fmtInt(yearsSince(craft.launched, now0))} years ago)`]);
+      if (craft.arrived) rows.push(['Landed', dayText(craft.arrived)]);
+      rows.push(['Where', latLonText(motion.latDeg, motion.lonDeg)], ['Sun there now', sun], ['From Earth now', distance], [site ? 'Light takes' : 'Its signal takes', light]);
+      if (craft.ended) rows.push(['Last contact', dayText(craft.ended)]);
     } else {
-      rows.push(['Launched', `${year} (${fmtInt(new Date(this.host.time()).getUTCFullYear() - year)} years ago)`]);
+      rows.push(['From Earth now', distance], ['Its signal takes', light]);
+      if (craft.centre !== 'earth') rows.push([craft.centre === 'sun' ? 'From the Sun' : `Above ${centre.name}`, fromCentre]);
+      rows.push([`Speed past ${craft.centre === 'sun' ? 'the Sun' : centre.name}`, speed]);
+      // One trip round: how long it takes, and how low and how high it goes (sampled along the
+      // real path, so an orbit that is being dragged round by the body's shape is still right).
+      const period = craftPeriodMs(craft);
+      if (period !== null && period < 400 * 365.25 * DAY) {
+        rows.push(['Once round in', spanText(period / DAY)]);
+        if (craft.centre !== 'sun') {
+          let low = Infinity, high = 0;
+          const p: Vec = [0, 0, 0];
+          for (let i = 0; i < 90; i++) {
+            craftPosition(craft, now0 + (period * i) / 90, p);
+            const r = Math.hypot(p[0], p[1], p[2]);
+            low = Math.min(low, r);
+            high = Math.max(high, r);
+          }
+          rows.push(['Lowest and highest', `${fmtKm(Math.max(0, low - centre.radiusKm))} – ${fmtKm(Math.max(0, high - centre.radiusKm))}`]);
+          // The tilt of its path to the body's equator, from the direction it circles in.
+          const a: Vec = [0, 0, 0], b: Vec = [0, 0, 0];
+          craftPosition(craft, now0, a);
+          craftPosition(craft, now0 + Math.min(period / 400, 60000), b);
+          const h = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+          const pole = bodyAxes(craft.centre, now0).pole;
+          const size = Math.hypot(h[0], h[1], h[2]);
+          if (size > 0) rows.push([`Tilt to ${centre.name}’s equator`, `${fmt((Math.acos(Math.max(-1, Math.min(1, (h[0] * pole[0] + h[1] * pole[1] + h[2] * pole[2]) / size))) * 180) / Math.PI, 1)}°`]);
+        }
+      }
+      rows.push(['Launched', `${dayText(craft.launched)} (${fmtInt(yearsSince(craft.launched, now0))} years ago)`]);
+      if (craft.arrived) rows.push(['Arrived', dayText(craft.arrived)]);
+      if (craft.ended) rows.push(['Last contact', dayText(craft.ended)]);
     }
+    if (craft.massKg) rows.push(['Mass at launch', `${fmtInt(craft.massKg)} kg`]);
     const held = el('p', 'note');
     into.append(contact, this.facts(rows), held);
 
@@ -755,16 +858,53 @@ export class Places {
       const next = craftPosition(craft, t + 1000, b).pos;
       speed.textContent = fmtKmS(Math.hypot(next[0] - now.pos[0], next[1] - now.pos[1], next[2] - now.pos[2]));
       held.textContent = !now.held ? '' : pass ? 'Its path is only known for a few days either side of the pass.' : 'Outside the span its path is predicted for: shown where the prediction ends.';
+      if (motion.type === 'surface' && r > 0) {
+        // How high the Sun stands there: the angle between "straight up" at the spot and the Sun.
+        const toSun = bodyPosition(craft.centre, t, c);
+        const sunKm = Math.hypot(toSun[0], toSun[1], toSun[2]) || 1;
+        const up = -(now.pos[0] * toSun[0] + now.pos[1] * toSun[1] + now.pos[2] * toSun[2]) / (r * sunKm);
+        const height = (Math.asin(Math.max(-1, Math.min(1, up))) * 180) / Math.PI;
+        sun.textContent = height > 0.5 ? `Day, ${fmt(height, 0)}° up` : height > -6 ? 'On the horizon' : 'Night';
+      }
 
       const names = new Set(craft.dsn.map((name) => name.toUpperCase()));
       const link = this.links.find((candidate) => names.has(candidate.craft.toUpperCase()) && (candidate.up || candidate.down));
-      contact.className = `pc-contact ${link ? 'is-live' : craft.status === 'silent' ? 'is-silent' : ''}`;
+      contact.className = `pc-contact ${link ? 'is-live' : craft.status === 'silent' && !site ? 'is-silent' : ''}`;
       contact.textContent = link
         ? `In contact now · ${link.site} ${link.dish} ${link.up && link.down ? 'sending and receiving' : link.down ? 'receiving' : 'sending'}`
-        : craft.status === 'silent' ? 'No longer answering' : '';
+        : craft.status === 'silent' && !site ? 'No longer answering' : '';
     };
     into.append(el('p', 'pc-blurb', craft.blurb));
-    if (craft.wiki) into.append(this.wiki(craft.wiki));
+    if (craft.wiki) this.article(craft.wiki, `craft:${craft.id}`, into, true);
+  }
+
+  /**
+   * What Wikipedia has on it: the article's picture (for a craft: nobody has a photograph of
+   * a planet that beats the one on screen), its opening lines, and the link. Fetched when the
+   * card opens, kept by data/wiki.ts, and dropped if the card has moved on by the time it
+   * arrives. The link is there at once either way.
+   */
+  private article(title: string, key: string, into: HTMLElement, withPhoto: boolean): void {
+    const link = this.wiki(title);
+    into.append(link);
+    void wikiSummary(title).then((summary) => {
+      if (!summary || !this.shown || targetKey(this.shown) !== key || !link.isConnected) return;
+      if (withPhoto && summary.imageUrl) {
+        const photo = el('img', 'pc-photo');
+        photo.alt = '';
+        photo.referrerPolicy = 'no-referrer';
+        photo.src = summary.imageUrl;
+        into.prepend(photo);
+      }
+      if (summary.extract) {
+        const text = el('p', 'pc-extract', summary.extract);
+        const more = el('button', 'link pc-more', 'More');
+        more.type = 'button';
+        more.addEventListener('click', () => (more.textContent = text.classList.toggle('is-open') ? 'Less' : 'More'));
+        link.before(text, more);
+        link.textContent = 'Read it on Wikipedia';
+      }
+    });
   }
 
   private wiki(title: string): HTMLElement {

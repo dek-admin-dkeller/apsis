@@ -63,6 +63,27 @@ export interface Pose {
   quat: THREE.Quaternion;
 }
 
+/** What is drawn besides the bodies themselves: the Layers switches that apply away from the tracker. */
+export interface SpaceOptions {
+  /** The paths of planets, moons and spacecraft. */
+  orbits: boolean;
+  /** Names over the picture. */
+  names: boolean;
+  /** Spacecraft at all. */
+  craft: boolean;
+  /** On the solar system: name every craft and draw every path, not only the well-known ones. */
+  allCraft: boolean;
+  /** Historic landing sites. */
+  sites: boolean;
+  /** Names of the constellations. */
+  skyNames: boolean;
+  /** For the craft being looked at: its orbit, its path over the ground, the ground that can see it, its 3D model. */
+  selOrbit: boolean;
+  selTrack: boolean;
+  selFootprint: boolean;
+  selModel: boolean;
+}
+
 export interface SpaceHost {
   /** The element the name tags are put in (it covers the canvas). */
   tags: HTMLElement;
@@ -72,6 +93,8 @@ export interface SpaceHost {
   onOpen(target: Target): void;
   /** The visitor zoomed out as far as this view goes and kept going. */
   onOut(): void;
+  /** The constellation figures: name and direction among the stars (star axes). */
+  figures(): { name: string; direction: THREE.Vector3 }[];
   isPhone(): boolean;
   /** Turn slowly round the body while nothing is being touched (the tracker's own setting). */
   drift(): boolean;
@@ -196,6 +219,13 @@ export class SpaceView {
   private ground: GroundTiles | null = null; // close-up ground of the place's body, where its map is served in tiles
   private sharpGround = true; // the Layers switch (Settings.sharpGround)
   private lastT = 0; // the clock at the previous frame, to tell how fast time is running
+  private options: SpaceOptions = { orbits: true, names: true, craft: true, allCraft: false, sites: true, skyNames: true, selOrbit: true, selTrack: false, selFootprint: false, selModel: true };
+  private skyRoot: HTMLElement | null = null; // constellation names, made on first use
+  private readonly skyTags: { tag: HTMLElement; direction: THREE.Vector3 }[] = [];
+  private track: THREE.Line | null = null; // the selected craft's path over the ground (a child of the body, so it turns with it)
+  private trackKey = '';
+  private trackAt = 0;
+  private readonly footprint: THREE.LineLoop; // the edge of the ground that can see the selected craft
 
   constructor(kit: SceneKit, backdrop: THREE.Group, host: SpaceHost) {
     this.kit = kit;
@@ -215,6 +245,13 @@ export class SpaceView {
     this.corona = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.5 }));
     this.corona.renderOrder = 3;
     this.scene.add(this.sunSprite, this.corona);
+
+    const rim = new THREE.BufferGeometry();
+    rim.setAttribute('position', new THREE.BufferAttribute(new Float32Array(96 * 3), 3));
+    this.footprint = new THREE.LineLoop(rim, new THREE.LineBasicMaterial({ color: 0x7fe3ff, transparent: true, opacity: 0.6, depthWrite: false }));
+    this.footprint.frustumCulled = false;
+    this.footprint.visible = false;
+    this.scene.add(this.footprint);
 
     const canvas = kit.renderer.domElement;
     this.controls = new OrbitControls(this.camera, canvas);
@@ -245,11 +282,28 @@ export class SpaceView {
     });
     // Zooming past either end of a view carries on into the next one: out of a place to the
     // map, and on the map into the body the camera has been brought right up to.
-    canvas.addEventListener('wheel', (event) => {
-      if (!this.live || this.flight) return;
+    const pastEdge = (outwards: boolean): boolean => {
+      if (!this.live || this.flight) return false;
       const distance = this.camera.position.distanceTo(this.controls.target);
-      if (event.deltaY > 0 && this.where?.kind === 'place' && distance > this.controls.maxDistance * 0.985) this.host.onOut();
-      else if (event.deltaY < 0 && this.where?.kind === 'system' && this.focus?.kind === 'body' && distance < this.controls.minDistance * 1.04) this.host.onOpen(this.focus);
+      if (outwards && this.where?.kind === 'place' && distance > this.controls.maxDistance * 0.985) this.host.onOut();
+      else if (!outwards && this.where?.kind === 'system' && this.focus?.kind === 'body' && distance < this.controls.minDistance * 1.04) this.host.onOpen(this.focus);
+      else return false;
+      return true;
+    };
+    canvas.addEventListener('wheel', (event) => void pastEdge(event.deltaY > 0), { passive: true });
+    // The same with two fingers: a pinch that begins at the edge of a view and keeps going.
+    // (One change of scene per pinch: `spent` stops a long pinch from skipping two steps.)
+    const spread = (event: TouchEvent) => Math.hypot(event.touches[0].clientX - event.touches[1].clientX, event.touches[0].clientY - event.touches[1].clientY);
+    let pinch = 0, spent = false;
+    canvas.addEventListener('touchstart', (event) => {
+      pinch = event.touches.length === 2 ? spread(event) : 0;
+      spent = false;
+    }, { passive: true });
+    canvas.addEventListener('touchmove', (event) => {
+      if (event.touches.length !== 2 || pinch <= 0 || spent) return;
+      const ratio = spread(event) / pinch;
+      if (ratio < 0.8) spent = pastEdge(true);
+      else if (ratio > 1.25) spent = pastEdge(false);
     }, { passive: true });
     window.addEventListener('resize', () => {
       this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -285,6 +339,11 @@ export class SpaceView {
     this.backdrop.children[0].visible = stars;
     this.backdrop.children[1].visible = stars;
     this.backdrop.children[2].visible = stars && figures;
+  }
+
+  /** The Layers switches that apply away from the tracker. */
+  setOptions(options: SpaceOptions): void {
+    this.options = options;
   }
 
   /**
@@ -337,6 +396,8 @@ export class SpaceView {
 
   /** Put everything away (the view is then not drawn or updated). */
   clear(): void {
+    this.dropTrack();
+    this.footprint.visible = false;
     this.ground?.dispose(); // its patches are children of the body's mesh, which goes next
     this.ground = null;
     for (const item of this.items) {
@@ -459,7 +520,7 @@ export class SpaceView {
 
   private addCraft(craft: Craft): Item {
     const item: Item = { target: { kind: 'craft', craft }, key: `craft:${craft.id}`, pos: new THREE.Vector3(), radius: 0, tag: null, mesh: null, shown: true, centre: false, beside: 0, sharp: false, base: 0, scale: 1, quiet: this.where?.kind === 'system' && !HEADLINE.has(craft.id) };
-    item.tag = this.makeTag(item, craft.short, craft.passing ? 'is-craft is-rock' : craft.status === 'silent' ? 'is-craft is-silent' : 'is-craft');
+    item.tag = this.makeTag(item, craft.short, craft.site ? 'is-craft is-site' : craft.passing ? 'is-craft is-rock' : craft.status === 'silent' ? 'is-craft is-silent' : 'is-craft');
     this.items.push(item);
     return item;
   }
@@ -510,7 +571,9 @@ export class SpaceView {
     const family = BODY_LIST.filter((other) => other.id !== id && (other.parent === id || (body.kind === 'moon' && (other.id === body.parent || other.parent === body.parent))));
     // Their maps too, except from the Sun: at true scale a planet seen from there is less than a pixel.
     const detail = this.kit.quality === 'fast' || id === 'sun' ? 'none' : 'full';
-    for (const other of family) this.addBody(other, other.radiusKm * this.unitsPerKm, false, detail);
+    // The planet a moon circles gets its full map (it fills a moon's sky); the other moons a small
+    // copy until one is looked at — a planet can have a dozen, and each full map is megabytes.
+    for (const other of family) this.addBody(other, other.radiusKm * this.unitsPerKm, false, detail === 'full' && other.id !== body.parent ? 'small' : detail);
     for (const craft of this.crafts) if (craft.centre === id) this.addCraft(craft);
 
     // Orbits: the path of everything here that circles something else here (moons round their
@@ -631,7 +694,7 @@ export class SpaceView {
     const colors = new Float32Array(crafts.length * 3);
     crafts.forEach((item, i) => {
       const craft = (item.target as { craft: Craft }).craft;
-      colors.set(craft.passing ? [0.78, 0.7, 0.62] : craft.status === 'silent' ? [0.55, 0.62, 0.74] : [1, 0.84, 0.56], i * 3);
+      colors.set(craft.site ? [0.74, 0.86, 1] : craft.passing ? [0.78, 0.7, 0.62] : craft.status === 'silent' ? [0.55, 0.62, 0.74] : [1, 0.84, 0.56], i * 3);
     });
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(crafts.length * 3), 3));
@@ -735,15 +798,17 @@ export class SpaceView {
           this.toWorld(state.pos, this.unitsPerKm, item.pos);
           // From the Sun, only what the true-scale view reaches: the far probes belong on the map.
           // A passing asteroid is here only for the few days its path is known for.
-          item.shown = (centre !== 'sun' || item.pos.length() < 60000) && !(craft.passing && state.held);
+          item.shown = (centre !== 'sun' || item.pos.length() < 60000) && !(craft.passing && state.held) && this.wanted(item);
         }
       }
       const sunSize = sunKm > 1 ? SUN_RADIUS_KM / sunKm : 0.0046;
       for (const item of this.items) if (item.mesh) this.light(item, tMs, this.sunDir, sunSize);
     } else {
       for (const item of this.items) {
-        if (item.target.kind === 'craft') this.mapPoint(craftPosition(item.target.craft, tMs, this.vec).pos, item.pos);
-        else if (item.target.body.id === 'sun') item.pos.set(0, 0, 0);
+        if (item.target.kind === 'craft') {
+          this.mapPoint(craftPosition(item.target.craft, tMs, this.vec).pos, item.pos);
+          item.shown = this.wanted(item);
+        } else if (item.target.body.id === 'sun') item.pos.set(0, 0, 0);
         else if (item.beside === 0) this.mapPoint(bodyPosition(item.target.body.id, tMs, this.vec), item.pos);
       }
       for (const item of this.items) {
@@ -769,6 +834,13 @@ export class SpaceView {
         this.light(item, tMs, this.scratch.normalize(), 0.004);
       }
     }
+  }
+
+  /** Is a craft (or landing site) switched on in Layers? What is being looked at always is. */
+  private wanted(item: Item): boolean {
+    if (item.target.kind !== 'craft') return true;
+    if (this.focus && targetKey(this.focus) === item.key) return true;
+    return item.target.craft.site ? this.options.sites : this.options.craft;
   }
 
   /** Position, spin and light one body. */
@@ -816,8 +888,10 @@ export class SpaceView {
     for (const { line, key, anchor } of this.lines) {
       if (anchor) line.position.copy(anchor.pos);
       const owner = this.items.find((item) => item.key === key);
-      const pathless = map && owner?.target.kind === 'craft' && !LEAVING.has(owner.target.craft.id);
-      line.visible = (owner?.shown ?? true) && !(pathless && owner !== focusItem);
+      const craft = owner?.target.kind === 'craft' ? owner.target.craft : null;
+      const pathless = map && craft !== null && !this.options.allCraft && !LEAVING.has(craft.id);
+      // The craft being looked at follows its own switch ("Orbit"), like a selected satellite in the tracker.
+      line.visible = (owner?.shown ?? true) && (craft && owner === focusItem ? this.options.selOrbit : this.options.orbits && !pathless);
       (line.material as THREE.LineBasicMaterial).opacity = focusItem?.key === key ? 0.85 : map ? 0.26 : 0.32;
     }
     if (this.dots) {
@@ -872,7 +946,118 @@ export class SpaceView {
     }
 
     this.updateModel(focusItem, tMs, realSeconds);
+    this.updateGround(focusItem, tMs);
     if (this.live) this.updateTags(focusItem);
+    this.updateSkyNames();
+  }
+
+  // ---- the selected craft's path over the ground, and the ground that can see it -----------------
+
+  private dropTrack(): void {
+    if (!this.track) return;
+    this.track.removeFromParent();
+    this.track.geometry.dispose();
+    (this.track.material as THREE.Material).dispose();
+    this.track = null;
+    this.trackKey = '';
+  }
+
+  private updateGround(focusItem: Item | null, tMs: number): void {
+    const where = this.where;
+    const craft = where?.kind === 'place' && focusItem?.target.kind === 'craft' ? focusItem.target.craft : null;
+    const centre = this.item(null);
+    const aloft = craft !== null && focusItem !== null && craft.motion.type !== 'surface' && !craft.passing && focusItem.pos.length() > R * 1.002;
+
+    // Footprint: the circle on the ground from which the craft is above the horizon. Seen from
+    // the body's centre it lies acos(R / r) away from the point straight under the craft.
+    this.footprint.visible = aloft && this.options.selFootprint;
+    if (this.footprint.visible && focusItem) {
+      const up = focusItem.pos.clone().normalize();
+      const reach = Math.acos(Math.min(1, R / focusItem.pos.length()));
+      const a = new THREE.Vector3().crossVectors(up, Math.abs(up.y) < 0.9 ? UP : new THREE.Vector3(1, 0, 0)).normalize();
+      const b = new THREE.Vector3().crossVectors(up, a);
+      const position = this.footprint.geometry.getAttribute('position') as THREE.BufferAttribute;
+      for (let i = 0; i < position.count; i++) {
+        const turn = (i / position.count) * Math.PI * 2;
+        this.scratch.copy(up).multiplyScalar(Math.cos(reach)).addScaledVector(a, Math.sin(reach) * Math.cos(turn)).addScaledVector(b, Math.sin(reach) * Math.sin(turn)).multiplyScalar(R * 1.006);
+        position.setXYZ(i, this.scratch.x, this.scratch.y, this.scratch.z);
+      }
+      position.needsUpdate = true;
+    }
+
+    // Ground track: where the craft is straight above during one trip round, starting a little
+    // behind it. The body turns underneath while the craft goes round, so the line is worked
+    // out in the body's own turning frame (latitude and longitude at each moment) and hung on
+    // the body's mesh; it does not close up, exactly as on the Earth.
+    const period = craft ? craftPeriodMs(craft) : null;
+    if (!aloft || !craft || !this.options.selTrack || !centre?.mesh || where?.kind !== 'place' || period === null || period > 12 * DAY) {
+      this.dropTrack();
+      return;
+    }
+    if (this.trackKey === craft.id && Math.abs(tMs - this.trackAt) < period * 0.03) return;
+    this.dropTrack();
+    const count = 240;
+    const points = new Float32Array(count * 3);
+    const east: Vec = [0, 0, 0];
+    for (let i = 0; i < count; i++) {
+      const t = tMs + period * (i / (count - 1) - 0.06);
+      const p = craftPosition(craft, t, this.vec).pos;
+      const { pole, prime } = bodyAxes(where.body, t);
+      east[0] = pole[1] * prime[2] - pole[2] * prime[1];
+      east[1] = pole[2] * prime[0] - pole[0] * prime[2];
+      east[2] = pole[0] * prime[1] - pole[1] * prime[0];
+      const r = Math.hypot(p[0], p[1], p[2]) || 1;
+      const scale = (R * 1.006) / r;
+      // The body's own axes: longitude 0 on +X, north on +Y, 90° east on −Z.
+      points[i * 3] = (p[0] * prime[0] + p[1] * prime[1] + p[2] * prime[2]) * scale;
+      points[i * 3 + 1] = (p[0] * pole[0] + p[1] * pole[1] + p[2] * pole[2]) * scale;
+      points[i * 3 + 2] = -(p[0] * east[0] + p[1] * east[1] + p[2] * east[2]) * scale;
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(points, 3));
+    this.track = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0xffb454, transparent: true, opacity: 0.75, depthWrite: false }));
+    this.track.frustumCulled = false;
+    centre.mesh.mesh.add(this.track);
+    this.trackKey = craft.id;
+    this.trackAt = tMs;
+  }
+
+  // ---- constellation names ---------------------------------------------------------------------
+
+  /** The names of the constellation figures, as in the tracker: the same sky, so the same names. */
+  private updateSkyNames(): void {
+    const on = this.live && this.options.skyNames && this.backdrop.children[2].visible;
+    if (!on) {
+      if (this.skyRoot) this.skyRoot.hidden = true;
+      return;
+    }
+    if (!this.skyRoot) {
+      this.skyRoot = document.createElement('div');
+      this.tagRoot.prepend(this.skyRoot);
+      for (const figure of this.host.figures()) {
+        const tag = document.createElement('div');
+        tag.className = 'sky-label is-figure';
+        tag.textContent = figure.name;
+        this.skyRoot.append(tag);
+        this.skyTags.push({ tag, direction: figure.direction });
+      }
+    }
+    this.skyRoot.hidden = false;
+    const eye = this.camera.position;
+    const ray = new THREE.Vector3(), screen = new THREE.Vector3(), toBody = new THREE.Vector3();
+    for (const { tag, direction } of this.skyTags) {
+      ray.copy(direction).applyQuaternion(this.frame);
+      let visible = this.project(screen.copy(eye).addScaledVector(ray, 1000), screen);
+      // Behind a body? (The stars are at infinity: any body the sight line passes through hides them.)
+      for (const item of this.items) {
+        if (!visible) break;
+        if (!item.mesh) continue;
+        const along = toBody.copy(item.pos).sub(eye).dot(ray);
+        if (along > 0 && toBody.addScaledVector(ray, -along).length() < item.radius) visible = false;
+      }
+      tag.style.display = visible ? '' : 'none';
+      if (visible) tag.style.transform = `translate(${screen.x.toFixed(1)}px, ${screen.y.toFixed(1)}px) translate(-50%, -50%)`;
+    }
   }
 
   // ---- the camera ----------------------------------------------------------------------------
@@ -1025,7 +1210,19 @@ export class SpaceView {
     const distance = item.radius > 0 ? item.radius / (map ? MAP_REST : 1 / 3.6) : map ? 5 : 0.13;
     const away = this.camera.position.clone().sub(item.pos);
     if (away.lengthSq() < 1e-9) away.set(0, 0.3, 1);
-    const toOffset = away.normalize().multiplyScalar(distance);
+    away.normalize();
+    if (!map && item.radius === 0 && item.pos.lengthSq() > 1e-6) {
+      // A craft is looked at from above and to one side (the side the camera is on), so the
+      // world it circles and that world's horizon are behind it — never from underneath, with
+      // the world behind the camera and only stars in the picture.
+      const outward = item.pos.clone().normalize();
+      const lean = away.clone().addScaledVector(outward, -away.dot(outward));
+      if (lean.lengthSq() < 1e-6) lean.crossVectors(outward, Math.abs(outward.y) < 0.9 ? UP : new THREE.Vector3(1, 0, 0));
+      // (Something standing on the ground is looked at from higher up, or the view is all horizon.)
+      const grounded = item.target.kind === 'craft' && item.target.craft.motion.type === 'surface';
+      away.copy(outward).multiplyScalar(grounded ? 0.8 : 0.55).addScaledVector(lean.normalize(), grounded ? 0.6 : 0.84).normalize();
+    }
+    const toOffset = away.multiplyScalar(distance);
     if (duration <= 0) {
       // Put there outright (the body is about to be one side of a dissolve): at its full size now.
       if (item.mesh) {
@@ -1100,7 +1297,7 @@ export class SpaceView {
 
   private updateModel(focusItem: Item | null, tMs: number, realSeconds: number): void {
     const craft = focusItem?.target.kind === 'craft' ? focusItem.target.craft : null;
-    if (!craft || !focusItem) {
+    if (!craft || !focusItem || !this.options.selModel) {
       this.modelHolder.visible = false;
       return;
     }
@@ -1188,7 +1385,10 @@ export class SpaceView {
       // gets one only once the camera has come near enough for it to be more than a speck.
       if (visible && disc > window.innerHeight * 0.3) visible = false;
       if (visible && item.beside > 0 && disc < 5 && item !== focusItem) visible = false;
-      if (visible && item.quiet && item !== focusItem && distance > 60) visible = false;
+      if (visible && item.quiet && !this.options.allCraft && item !== focusItem && distance > 60) visible = false;
+      if (visible && !this.options.names && item !== focusItem) visible = false;
+      // A landing site is a dot on the ground from afar; its name appears as the camera comes down to it.
+      if (visible && item.target.kind === 'craft' && item.target.craft.site && item !== focusItem && distance > R * 2.4) visible = false;
       if (item === focusItem && this.modelHolder.visible) visible = false; // its model is on screen and its card names it
       const drop = disc + 12;
       const width = tag.textContent!.length * 6.5 + 16;

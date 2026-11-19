@@ -129,6 +129,12 @@ export interface Craft {
    * numbers of its pass (ui/places.ts makes these from DeepData.flybys).
    */
   passing?: Flyby;
+  /**
+   * Set on a historic landing site (see Site). Like a passing asteroid it is not a working
+   * spacecraft, but it is a named point with a card that the views can show with the code
+   * they have, so ui/places.ts gives each site to them as a craft that stands on the ground.
+   */
+  site?: Site;
 }
 
 /**
