@@ -1413,9 +1413,15 @@ function ofKind(kind: ModelKind): Satellite[] {
   return byKind.lists.get(kind) ?? [];
 }
 const gallery = new Gallery({
-  count: (kind) => ofKind(kind).length,
+  // A kind is either in the Earth catalogue or one of the craft beyond Earth orbit (ui/places.ts).
+  count: (kind) => ofKind(kind).length || places.countOf(kind),
   show: (kind) => {
     const list = ofKind(kind);
+    if (list.length === 0 && places.countOf(kind) > 0) {
+      if (landing.showing) landing.enter();
+      places.showOne(kind);
+      return;
+    }
     if (list.length === 0 || !byKind) return;
     const asked = byKind.asked.get(kind) ?? 0; // asked again, it shows the next one
     byKind.asked.set(kind, asked + 1);

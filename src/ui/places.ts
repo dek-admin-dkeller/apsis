@@ -476,6 +476,49 @@ export class Places {
     this.chrome();
   }
 
+  /**
+   * Be somewhere at once, with no journey: for a link that opens the app at a place (nothing
+   * was on screen before it, so there is nothing to move from).
+   */
+  private jump(to: Exclude<Destination, { kind: 'tracker' }>): void {
+    if (this.busy) return;
+    const t = this.host.time();
+    if (this.spot === 'tracker') this.host.leaving();
+    this.place.setLive(false);
+    this.map.setLive(false);
+    const view = to.kind === 'map' ? this.map : this.place;
+    if (to.kind === 'map') {
+      if (!this.map.where) this.map.build({ kind: 'system' }, t);
+    } else {
+      this.place.build({ kind: 'place', body: to.body }, t);
+    }
+    this.host.kit.blend(null);
+    this.host.kit.show(view.scene, view.camera, view.controls.target);
+    view.setLive(true);
+    this.spot = to.kind;
+    if (this.trackerOn) {
+      this.trackerOn = false;
+      this.host.onAway(true);
+    }
+    this.chrome();
+    if (to.focus) {
+      view.setFocus(to.focus, t, 0);
+      this.show(to.focus);
+    } else if (to.kind === 'place' && !this.host.isPhone()) {
+      this.show({ kind: 'body', body: BODIES[to.body] });
+    }
+  }
+
+  /** How many of the craft beyond Earth orbit are drawn with one kind of 3D model, and a way to go and see one. */
+  countOf(model: string): number {
+    return this.crafts.filter((craft) => craft.model === model).length;
+  }
+  showOne(model: string): boolean {
+    const craft = this.crafts.find((candidate) => candidate.model === model && !candidate.passing) ?? this.crafts.find((candidate) => candidate.model === model);
+    if (craft) this.showCraft(craft);
+    return craft !== undefined;
+  }
+
   /** Go to a body: its place, or for the Earth the tracker. */
   goBody(body: BodyId): void {
     if (body === 'earth') void this.travel({ kind: 'tracker' });
@@ -649,7 +692,7 @@ export class Places {
       distance.textContent = farText(km);
       light.textContent = duration((km / LIGHT_KM_S) * 1000);
     };
-    this.lists(body, into);
+    if (!here) this.lists(body, into); // at the place itself that list is the rail's "Objects" panel
     into.append(el('p', 'pc-blurb', body.blurb), this.wiki(body.wiki));
   }
 
@@ -741,11 +784,19 @@ export class Places {
     const place = q.get('place'), craftId = q.get('craft'), at = q.get('at');
     if (!place && !craftId) return false;
     const deep = await loadDeep();
-    const craft = deep?.craft.find((candidate) => candidate.id === craftId) ?? this.crafts.find((candidate) => candidate.id === craftId);
-    if (craft) this.showCraft(craft);
-    else if (place === 'system') void this.travel({ kind: 'map', focus: at && at in BODIES ? { kind: 'body', body: BODIES[at as BodyId] } : null });
-    else if (place && place in BODIES && place !== 'earth') this.goBody(place as BodyId);
-    else return false;
+    const craft = this.crafts.find((candidate) => candidate.id === craftId) ?? deep?.craft.find((candidate) => candidate.id === craftId);
+    if (craft) {
+      const focus: Target = { kind: 'craft', craft };
+      if (craft.passing && Math.abs(this.host.time() - craft.passing.timeMs) > 2 * DAY) this.host.jumpTo(craft.passing.timeMs - 40 * 60000);
+      if (craft.centre === 'sun' && !this.nearSun(craft)) this.jump({ kind: 'map', focus });
+      else this.jump({ kind: 'place', body: craft.centre, focus });
+    } else if (place === 'system') {
+      this.jump({ kind: 'map', focus: at && at in BODIES ? { kind: 'body', body: BODIES[at as BodyId] } : null });
+    } else if (place && place in BODIES && place !== 'earth' && BODIES[place as BodyId].visitable) {
+      this.jump({ kind: 'place', body: place as BodyId });
+    } else {
+      return false;
+    }
     return true;
   }
 }

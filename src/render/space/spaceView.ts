@@ -38,14 +38,14 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { KIND_LABEL, type ModelKind } from '../../data/describe.ts';
+import { isModelKind, type ModelKind } from '../../data/describe.ts';
 import { BODIES, BODY_LIST } from '../../space/bodies.ts';
 import { craftPeriodMs, craftPosition } from '../../space/deep.ts';
 import { bodyAxes, bodyPosition, bodyRelative } from '../../space/ephem.ts';
 import { IMAGERY } from '../../space/imagery.ts';
 import type { Body, BodyId, Craft, Vec } from '../../space/types.ts';
 import { easeIn, easeOut } from '../cameraRig.ts';
-import { buildModel } from '../satModels.ts';
+import { buildModel, modelBase } from '../satModels.ts';
 import type { OtherView, SceneKit } from '../scene.ts';
 import { addRing, createBody, glowTexture, MAX_OCCLUDERS, type BodyMesh } from './bodyMesh.ts';
 
@@ -165,6 +165,7 @@ export class SpaceView {
   private readonly fillLight = new THREE.DirectionalLight(0xbcd6ff, 0.9);
   private readonly modelHolder = new THREE.Group();
   private modelKey = '';
+  private modelKind: ModelKind = 'probe';
   private dots: THREE.Points | null = null;
   private lines: { line: THREE.Line; key: string; anchor: Item | null }[] = [];
   private flight: Flight | null = null;
@@ -1002,9 +1003,8 @@ export class SpaceView {
       this.modelKey = craft.id;
       this.modelHolder.clear();
       // The data file names its model; an unknown name falls back to the generic probe.
-      const kinds = KIND_LABEL as Record<string, string>;
-      const kind = (craft.model in kinds ? craft.model : 'probe' in kinds ? 'probe' : 'telescope') as ModelKind;
-      this.modelHolder.add(buildModel(kind));
+      this.modelKind = isModelKind(craft.model) ? craft.model : 'probe';
+      this.modelHolder.add(buildModel(this.modelKind));
     }
     const map = this.where?.kind === 'system';
     const position = focusItem.pos;
@@ -1017,7 +1017,7 @@ export class SpaceView {
     const surface = craft.motion.type === 'surface';
     const up = position.lengthSq() > 1e-9 && !map ? position.clone().normalize() : UP.clone();
     this.modelHolder.position.copy(position);
-    if (surface) this.modelHolder.position.addScaledVector(up, size * 0.3); // standing on the ground, not half sunk in it
+    if (surface) this.modelHolder.position.addScaledVector(up, -modelBase(this.modelKind) * size); // standing on the ground, not half sunk in it
     // Which way it is travelling: where it will be a moment from now.
     const ahead = new THREE.Vector3();
     if (surface) ahead.crossVectors(UP, up);
