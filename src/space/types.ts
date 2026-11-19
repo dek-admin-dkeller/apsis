@@ -54,6 +54,12 @@ export interface Body {
   blurb: string;
   /** English Wikipedia article title. */
   wiki: string;
+  /** Who found it and when, for a body that had to be discovered: 'Galileo Galilei, 1610'. */
+  discovered?: string;
+  /** Typical temperature at the surface (for a giant, at the cloud tops), °C. */
+  tempC?: number;
+  /** What its air is made of, in a few words, if it has any worth the name: 'Thin carbon dioxide'. */
+  air?: string;
 }
 
 /**
@@ -110,6 +116,12 @@ export interface Craft {
   wiki: string;
   /** The names NASA's Deep Space Network feed uses for it (upper case), if it talks through that network. */
   dsn: string[];
+  /** The day it got where it is now (entered orbit, landed, reached its station), ISO, when that is known. */
+  arrived?: string;
+  /** For a craft that has fallen silent: the day of its last contact, ISO. */
+  ended?: string;
+  /** Mass at launch, kg. */
+  massKg?: number;
   motion: Motion;
   /**
    * Set on an asteroid flying past the Earth. It is not a spacecraft, but it is drawn, named,
@@ -117,6 +129,33 @@ export interface Craft {
    * numbers of its pass (ui/places.ts makes these from DeepData.flybys).
    */
   passing?: Flyby;
+}
+
+/**
+ * A place on the ground where something from Earth came down and stayed: the Apollo landings,
+ * the Vikings, Huygens on Titan. (Craft still working on the ground are in DeepData.craft with
+ * a `surface` motion; these are the historic ones.) src/space/sites.ts holds the list.
+ */
+export interface Site {
+  /** Short stable name: 'apollo-11'. */
+  id: string;
+  /** 'Apollo 11' */
+  name: string;
+  body: BodyId;
+  /** Planetocentric latitude and EAST longitude, degrees. */
+  latDeg: number;
+  lonDeg: number;
+  /** The day it landed, ISO. */
+  date: string;
+  agency: string;
+  /** People walked there; a lander that stayed put; one that drove; one that only fell or struck. */
+  kind: 'crewed' | 'lander' | 'rover' | 'probe';
+  /** Which 3D model stands there: 'lander' or 'rover'. */
+  model: string;
+  /** One or two sentences for the information card. */
+  blurb: string;
+  /** English Wikipedia article title. */
+  wiki: string;
 }
 
 /** An asteroid passing the Earth (JPL CNEOS close-approach data). */
