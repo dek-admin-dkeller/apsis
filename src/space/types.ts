@@ -59,14 +59,27 @@ export interface Body {
 /**
  * How a craft moves, about the body named in `Craft.centre`:
  *   elements  an ordinary two-body orbit (osculating elements from JPL Horizons): orbiters, and
- *             craft cruising round the Sun. Propagated in the browser with Kepler's equation.
+ *             craft cruising round the Sun. Propagated in the browser with Kepler's equation
+ *             (a < 0 and e > 1 for the hyperbolas of the craft leaving the solar system).
  *   samples   positions at equal steps of time, interpolated: for craft whose path is not an
  *             ellipse about one body (the L1 / L2 halo orbits). Outside the sampled span the
  *             nearest end is held.
  *   surface   it stands on the ground of `centre` (rovers and landers).
  */
 export type Motion =
-  | { type: 'elements'; epochMs: number; aKm: number; e: number; incl: number; node: number; peri: number; m0: number } // angles in radians, ICRF equator
+  | {
+      type: 'elements'; epochMs: number; aKm: number; e: number; incl: number; node: number; peri: number; m0: number; // angles in radians, ICRF equator
+      /**
+       * Optional, for orbiters close to a planet or moon: how the orbit itself turns, measured
+       * from Horizons over the week after `epochMs` (radians per second). A planet's bulge swings
+       * the orbit's plane round the planet's pole (`axis`, a unit vector; `node` is how fast),
+       * turns the ellipse within its plane (`peri`) and changes the pace along it (`m`, which
+       * REPLACES the rate Kepler's third law gives). Without these a low Mars orbiter is 20° from
+       * its true place after one day. Use ephem.ts's elementsPosition / deep.ts's craftPosition,
+       * which apply them.
+       */
+      rates?: { axis: Vec; node: number; peri: number; m: number };
+    }
   | { type: 'samples'; t0Ms: number; stepMs: number; xyz: number[] } // km, x y z x y z …
   | { type: 'surface'; latDeg: number; lonDeg: number }; // planetocentric latitude, east longitude
 
@@ -113,6 +126,11 @@ export interface Flyby {
   h: number;
   /** Likely diameter range, metres. */
   sizeM: [number, number];
+  /**
+   * Its path past the Earth, for the closest dozen (within 0.02 AU): 'samples' about the Earth's
+   * centre, every 30 minutes from three days before closest approach to three days after.
+   */
+  motion?: Motion;
 }
 
 /** A bright meteor seen by US Government sensors (JPL fireball data). */
