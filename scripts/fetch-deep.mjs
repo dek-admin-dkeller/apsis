@@ -30,7 +30,7 @@ import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CRAFT } from './deep-craft.mjs';
-import { TT_MINUS_UTC_MS, vectors } from './horizons.mjs';
+import { BODY_CODE, coverageLimit, TT_MINUS_UTC_MS, vectorRun, vectors } from './horizons.mjs';
 import { BODIES } from '../src/space/bodies.ts';
 import { bodyAxes, bodyPosition, meanMotion, stateToElements } from '../src/space/ephem.ts';
 
@@ -47,12 +47,7 @@ const FIREBALLS = 40;
 /** Fly-bys closer than this get a path (the app draws them passing the Earth); at most this many, nearest first. */
 const PATH_WITHIN_AU = 0.02, PATHS = 12;
 
-/** Horizons' numbers for the bodies craft are described about. */
-const CODE = {
-  sun: 10, mercury: 199, venus: 299, earth: 399, moon: 301, mars: 499, phobos: 401, deimos: 402,
-  jupiter: 599, io: 501, europa: 502, ganymede: 503, callisto: 504, saturn: 699, enceladus: 602, titan: 606,
-  uranus: 799, neptune: 899, triton: 801, pluto: 999, charon: 901,
-};
+const CODE = BODY_CODE;
 const MOONS = Object.values(BODIES).filter((body) => body.kind === 'moon').map((body) => body.id);
 
 const exists = (p) => access(p).then(() => true, () => false);
@@ -68,19 +63,6 @@ async function getJson(url) {
   return JSON.parse(await res.text());
 }
 
-/**
- * Horizons says where a trajectory file ends when asked for a moment beyond it:
- * 'No ephemeris for target "IMAP (spacecraft)" after A.D. 2026-DEC-14 00:01:09.1834 TDB'.
- * Returns that moment (Unix ms) and which side it bounds, or null for any other message.
- */
-function coverageLimit(message) {
-  const m = /(after|prior to) A\.D\. (\d{4})-([A-Z]{3})-(\d\d) (\d\d):(\d\d)/i.exec(message);
-  if (!m) return null;
-  const month = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'].indexOf(m[3].toUpperCase());
-  if (month < 0) return null;
-  return { side: m[1].toLowerCase() === 'after' ? 'end' : 'start', ms: Date.UTC(Number(m[2]), month, Number(m[4]), Number(m[5]), Number(m[6])) - TT_MINUS_UTC_MS };
-}
-
 /** State vectors at a list of moments; if the trajectory does not reach the later ones, at as many as it does reach. */
 async function vectorsWithin(target, centre, times) {
   try {
@@ -93,21 +75,7 @@ async function vectorsWithin(target, centre, times) {
   }
 }
 
-/** An even run of positions; if the trajectory ends inside the span, the part of the span it covers. */
-async function run(target, centre, startMs, stopMs, stepMinutes) {
-  try {
-    return await vectors(target, centre, { startMs, stopMs, stepMinutes });
-  } catch (error) {
-    const limit = coverageLimit(error.message);
-    if (!limit) throw error;
-    const step = stepMinutes * 60000;
-    // Keep the grid: the cut end moves by whole steps, so samples stay at t0 + k × step.
-    if (limit.side === 'end') stopMs = startMs + Math.floor((limit.ms - 60000 - startMs) / step) * step;
-    else startMs += Math.ceil((limit.ms + 60000 - startMs) / step) * step;
-    if (stopMs - startMs < 4 * step) throw error;
-    return await vectors(target, centre, { startMs, stopMs, stepMinutes });
-  }
-}
+const run = vectorRun;
 
 /**
  * Is a craft that is "round the Sun" in fact deep inside a planet's reach right now (a gravity

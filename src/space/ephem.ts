@@ -14,9 +14,10 @@
  *             the table does not carry and are the worst, at about 0.07°.
  *   the Moon  a trigonometric series (the largest terms of Meeus's abridged ELP-2000/82): the
  *             Sun disturbs the Moon's orbit far too much for an ellipse to do.
- *   moons     a precessing ellipse about the planet. The rates are fixed; the shape and the
- *             phase are replaced by fresh osculating elements from deep.json when
- *             setMoonElements() is called, so near the download date they are almost exact.
+ *   moons     an ellipse about the planet that turns and swings at rates fitted to sixty years
+ *             of JPL positions (moonOrbits.ts). The shape and the phase are replaced by fresh
+ *             osculating elements from deep.json when setMoonElements() is called, so near
+ *             the download date they are almost exact.
  *
  * Orientation follows the IAU rotation models: the pole's right ascension and declination and
  * the angle W of the prime meridian, W = W0 + rate × days.
@@ -25,6 +26,7 @@
  */
 
 import { BODIES } from './bodies.ts';
+import { MOON_ORBITS, SWING_EPOCH_MS, type MoonOrbit } from './moonOrbits.ts';
 import type { BodyId, Motion, Vec } from './types.ts';
 
 export type ElementsMotion = Extract<Motion, { type: 'elements' }>;
@@ -114,12 +116,7 @@ export function elementsPosition(el: ElementsMotion, gm: number, tMs: number, ou
   // pole is 37° from z, and a plane turning about it changes inclination and node together.
   const [xp, yp] = solveInPlane(el.aKm, el.e, el.m0 + r.m * dt);
   fromOrbitPlane(xp, yp, el.incl, el.node, el.peri + r.peri * dt, out);
-  const [kx, ky, kz] = r.axis, [x, y, z] = out;
-  const c = Math.cos(r.node * dt), s = Math.sin(r.node * dt), along = (kx * x + ky * y + kz * z) * (1 - c);
-  out[0] = x * c + (ky * z - kz * y) * s + kx * along;
-  out[1] = y * c + (kz * x - kx * z) * s + ky * along;
-  out[2] = z * c + (kx * y - ky * x) * s + kz * along;
-  return out;
+  return turnAbout(out, r.axis, r.node * dt);
 }
 
 /**
@@ -326,48 +323,50 @@ function moonSeries(d: number, out: Vec): Vec {
 // ── The other moons ─────────────────────────────────────────────────────────────────────
 
 /**
- * A moon's orbit about its planet: an ellipse in a fixed plane (ICRF equator and equinox) whose
- * long axis may turn slowly. `rate` is how fast the mean LONGITUDE advances along the orbit (radians per day;
- * Triton's backward motion is in its inclination, over 90°) and `periRate` how fast the periapsis does.
- * A planet's bulge and the other moons make the true rate differ from what Kepler's third law
- * gives for the instantaneous ellipse, by up to a quarter of a degree a day for Io; the rates
- * here are fitted to twenty years of JPL positions instead, so the phase holds for decades.
+ * The built-in orbits are in moonOrbits.ts (a generated table: see the comment there for what
+ * each number means). Summed up: an ellipse about the planet whose plane swings slowly round
+ * a fixed axis, whose long axis turns within the plane, and along which the moon runs at a
+ * steady pace plus a few slow swings. That is enough to keep every moon within a degree or two
+ * for decades, including the awkward ones: Mimas, which a resonance with Tethys pushes 44°
+ * back and forth over seventy years, and Janus and Epimetheus, which trade orbits every four.
  */
-interface MoonOrbit {
-  epochMs: number;
-  aKm: number;
-  e: number;
-  incl: number;
-  node: number;
-  peri: number;
-  m0: number;
-  rate: number;
-  periRate: number;
+
+/**
+ * An orbit ready to use. `swing0` is what to take off the slow swings: nothing for a table
+ * entry (its m0 is the steady part alone), but for a downloaded ellipse, whose m0 is where the
+ * moon really was at that moment, the value the swings had then.
+ */
+type LiveOrbit = MoonOrbit & { swing0: number };
+
+/** The smaller arrows of a changing eccentricity vector (see `wobble` in moonOrbits.ts), added up at a moment. */
+function wobbleAt(o: MoonOrbit, tMs: number): [number, number] {
+  const d = (tMs - SWING_EPOCH_MS) / DAY_MS;
+  let x = 0, y = 0;
+  for (let k = 0; k < o.wobble.length; k += 3) {
+    x += o.wobble[k + 1] * Math.cos(o.wobble[k + 2] + o.wobble[k] * d);
+    y += o.wobble[k + 1] * Math.sin(o.wobble[k + 2] + o.wobble[k] * d);
+  }
+  return [x, y];
 }
 
-/** Built-in mean orbits (fitted by `node scripts/make-deep-fixture.mjs --fit`), so everything works offline. */
-const MOON_ORBITS: Partial<Record<BodyId, MoonOrbit>> = {
-  phobos: { epochMs: 1767225600000, aKm: 9375.0, e: 0.015118, incl: 0.6479082, node: 0.8323454, peri: 3.461183, m0: 0.2249917, rate: 19.70206093594, periRate: 7.595566e-3 },
-  deimos: { epochMs: 1767225600000, aKm: 23457.5, e: 0, incl: 0.6247765, node: 0.778082, peri: 0, m0: 0.3706828, rate: 4.97701268622, periRate: 0 },
-  io: { epochMs: 1767225600000, aKm: 421765.1, e: 0.004154, incl: 0.4450996, node: 6.2492507, peri: 3.949952, m0: 1.8620674, rate: 3.55155229935, periRate: -1.290696e-2 },
-  europa: { epochMs: 1767225600000, aKm: 671062.6, e: 0.009357, incl: 0.4433183, node: 6.2440824, peri: 0.812402, m0: 4.073222, rate: 1.76932276922, periRate: -1.290698e-2 },
-  ganymede: { epochMs: 1767225600000, aKm: 1070430.1, e: 0.002015, incl: 0.4472656, node: 6.24937, peri: 5.927714, m0: 0.0583926, rate: 0.87820791652, periRate: 9.579312e-5 },
-  callisto: { epochMs: 1767225600000, aKm: 1882753.2, e: 0.007253, incl: 0.4405868, node: 6.2518198, peri: 0.204961, m0: 1.3754557, rate: 0.37648622066, periRate: 3.081557e-5 },
-  enceladus: { epochMs: 1767225600000, aKm: 238035.4, e: 0.004735, incl: 0.1128072, node: 2.278884, peri: 2.462052, m0: 4.7980492, rate: 4.58553713275, periRate: 5.900739e-3 },
-  titan: { epochMs: 1767225600000, aKm: 1221862.3, e: 0.028677, incl: 0.1106777, node: 2.2160167, peri: 3.857537, m0: 6.1508427, rate: 0.39404254399, periRate: 2.480549e-5 },
-  triton: { epochMs: 1767225600000, aKm: 354759.1, e: 0, incl: 1.9317439, node: 3.7396618, peri: 0, m0: 0.5757983, rate: 1.06914289879, periRate: 0 },
-  charon: { epochMs: 1767225600000, aKm: 19595.8, e: 0.000161, incl: 1.6797672, node: 3.8922409, peri: 2.711922, m0: 1.3187254, rate: 0.98371173638, periRate: 4.24212e-8 },
-};
+/** The slow swings of a moon's longitude at a moment (radians). */
+function swingAt(o: MoonOrbit, tMs: number): number {
+  const d = (tMs - SWING_EPOCH_MS) / DAY_MS;
+  let sum = 0;
+  for (let k = 0; k < o.swing.length; k += 3) sum += o.swing[k + 1] * Math.sin(o.swing[k] * d) + o.swing[k + 2] * Math.cos(o.swing[k] * d);
+  return sum;
+}
 
 /** Orbits in use: the built-in ones until deep.json supplies fresher shapes and phases. */
-const moonOrbits: Partial<Record<BodyId, MoonOrbit>> = { ...MOON_ORBITS };
+const moonOrbits: Partial<Record<BodyId, LiveOrbit>> = {};
+for (const key of Object.keys(MOON_ORBITS) as BodyId[]) moonOrbits[key] = { ...MOON_ORBITS[key]!, swing0: 0 };
 
 /**
  * Use the osculating elements downloaded with deep.json (each moon about its planet, at the
  * moment of the download) for the shape, the plane and the phase of every moon's orbit, keeping
- * the built-in long-term rates. Near the download date positions are then right to a small
- * fraction of a degree; years away they are as good as the built-in orbits. The Earth's Moon is
- * left to its series, which beats any single ellipse after a few days.
+ * the built-in long-term rates and swings. Near the download date positions are then right to
+ * a small fraction of a degree; years away they are as good as the built-in orbits. The Earth's
+ * Moon is left to its series, which beats any single ellipse after a few days.
  */
 export function setMoonElements(moons: Partial<Record<BodyId, Motion>> | null | undefined): void {
   for (const key of Object.keys(MOON_ORBITS) as BodyId[]) {
@@ -377,18 +376,73 @@ export function setMoonElements(moons: Partial<Record<BodyId, Motion>> | null | 
       && [el.epochMs, el.aKm, el.e, el.incl, el.node, el.peri, el.m0].every(Number.isFinite)
       // A wrong body's elements must not move a moon: the size has to be the one expected.
       && Math.abs(el.aKm / base.aKm - 1) < 0.05;
-    moonOrbits[key] = usable
-      ? { epochMs: el.epochMs, aKm: el.aKm, e: el.e, incl: el.incl, node: el.node, peri: el.peri, m0: el.m0, rate: base.rate, periRate: base.periRate }
-      : base;
+    const orbit: MoonOrbit = usable ? { ...base, epochMs: el.epochMs, aKm: el.aKm, e: el.e, incl: el.incl, node: el.node, peri: el.peri, m0: el.m0 } : base;
+    if (usable && base.wobble.length > 0) rebase(orbit, base, el.peri + el.m0);
+    moonOrbits[key] = { ...orbit, swing0: usable ? swingAt(orbit, orbit.epochMs) : 0 };
   }
+}
+
+/**
+ * A downloaded ellipse for a moon whose orbit keeps changing shape. Its eccentricity vector at
+ * the download moment is the SUM of the steady arrow and the smaller ones; the smaller ones
+ * are known from the table, so the steady one is what is left when they are taken away. Two
+ * details: the table's arrows are measured from the table orbit's own node, which the
+ * download's plane does not share, so they are first turned to the new reference; and the
+ * moon's place along the orbit must come out exactly as downloaded.
+ */
+function rebase(orbit: MoonOrbit, base: MoonOrbit, meanAngle: number): void {
+  // Where the table's reference direction (its node, carried round the axis since) lies in
+  // the downloaded plane, as an angle from the downloaded node.
+  const ref = turnAbout([Math.cos(base.node), Math.sin(base.node), 0], base.axis, base.nodeRate * ((orbit.epochMs - base.epochMs) / DAY_MS));
+  const cn = Math.cos(orbit.node), sn = Math.sin(orbit.node), ci = Math.cos(orbit.incl), si = Math.sin(orbit.incl);
+  const along = ref[0] * cn + ref[1] * sn, aside = -ref[0] * sn * ci + ref[1] * cn * ci + ref[2] * si;
+  const turn = Math.atan2(aside, along);
+  orbit.wobble = base.wobble.map((value, k) => (k % 3 === 2 ? value + turn : value));
+  const [wx, wy] = wobbleAt(orbit, orbit.epochMs);
+  const x = orbit.e * Math.cos(orbit.peri) - wx, y = orbit.e * Math.sin(orbit.peri) - wy;
+  orbit.e = Math.hypot(x, y);
+  orbit.peri = Math.atan2(y, x);
+  orbit.m0 = meanAngle - orbit.peri; // so that m0 + peri is still the downloaded mean angle from the node
 }
 
 /** A moon (not the Earth's) relative to its planet, km, ICRF. */
 function moonAboutPlanet(id: BodyId, tMs: number, out: Vec): Vec {
   const o = moonOrbits[id]!;
   const days = (tMs - o.epochMs) / DAY_MS;
-  const [xp, yp] = solveInPlane(o.aKm, o.e, o.m0 + (o.rate - o.periRate) * days);
-  return fromOrbitPlane(xp, yp, o.incl, o.node, o.peri + o.periRate * days, out);
+  const swing = o.swing.length > 0 ? swingAt(o, tMs) - o.swing0 : 0;
+  let e = o.e, peri = o.peri + o.periRate * days;
+  if (o.wobble.length > 0) {
+    // The ellipse's shape at this moment: the steady arrow plus the smaller ones.
+    const [wx, wy] = wobbleAt(o, tMs);
+    const x = e * Math.cos(peri) + wx, y = e * Math.sin(peri) + wy;
+    e = Math.hypot(x, y);
+    peri = Math.atan2(y, x);
+  }
+  // The mean angle from the node runs steadily (plus its swings); the mean anomaly is that
+  // angle less wherever the periapsis is now.
+  const [xp, yp] = solveInPlane(o.aKm, e, o.m0 + o.peri + o.rate * days + swing - peri);
+  fromOrbitPlane(xp, yp, o.incl, o.node, peri, out);
+  if (o.nodeRate !== 0) turnAbout(out, o.axis, o.nodeRate * days);
+  if (o.partner) {
+    // Pluto's small moons: the orbit above is about the centre of mass of Pluto and Charon.
+    // Step from Pluto's centre to that point: Charon's share of the pair's mass along the line to Charon.
+    const share = BODIES[o.partner].gm / (BODIES[BODIES[id].parent!].gm + BODIES[o.partner].gm);
+    const c = moonAboutPlanet(o.partner, tMs, [0, 0, 0]);
+    out[0] += share * c[0];
+    out[1] += share * c[1];
+    out[2] += share * c[2];
+  }
+  return out;
+}
+
+/** Rotate a vector about a unit axis by an angle (Rodrigues' formula), in place. */
+function turnAbout(v: Vec, axis: Vec, angle: number): Vec {
+  const [kx, ky, kz] = axis, [x, y, z] = v;
+  const c = Math.cos(angle), s = Math.sin(angle), along = (kx * x + ky * y + kz * z) * (1 - c);
+  v[0] = x * c + (ky * z - kz * y) * s + kx * along;
+  v[1] = y * c + (kz * x - kx * z) * s + ky * along;
+  v[2] = z * c + (kx * y - ky * x) * s + kz * along;
+  return v;
 }
 
 // ── Positions ───────────────────────────────────────────────────────────────────────────
@@ -465,39 +519,101 @@ export function bodyRelative(id: BodyId, centre: BodyId, tMs: number, out: Vec =
  * IAU rotation models (Working Group on Cartographic Coordinates and Rotational Elements, 2009
  * and 2015 reports): right ascension and declination of the north pole at J2000 and their
  * change per century, then the prime meridian angle W at J2000 and its change per day, all in
- * degrees. W is measured along the body's equator from where that equator rises through the
- * ICRF equator. These are the steady terms; the Moon, Neptune and Jupiter's four large moons
- * also nod by up to a degree or more, and get those terms below.
+ * degrees. A seventh number, where there is one, is W's change per century squared (tides are
+ * slowly speeding Phobos up). W is measured along the body's equator from where that equator
+ * rises through the ICRF equator. These are the steady terms; NOD below adds the periodic ones.
+ *
+ * Moons with no entry here are turned by lockedAxes(): Hyperion, which tumbles; Himalia, Nereid
+ * and Pluto's four small moons, whose spin nobody has pinned down well enough for a model; and
+ * Janus and Epimetheus, whose IAU models run at a constant rate and so ignore the exchange of
+ * orbits every four years that this app follows.
  */
-const ROTATION: Partial<Record<BodyId, readonly [number, number, number, number, number, number]>> = {
+const ROTATION: Partial<Record<BodyId, readonly number[]>> = {
   sun: [286.13, 0, 63.87, 0, 84.176, 14.1844],
   mercury: [281.0103, -0.0328, 61.4155, -0.0049, 329.5988, 6.1385108],
   venus: [272.76, 0, 67.16, 0, 160.2, -1.4813688],
   mars: [317.68143, -0.1061, 52.8865, -0.0609, 176.63, 350.89198226],
+  phobos: [317.67071657, -0.10844326, 52.88627266, -0.06134706, 35.1877444, 1128.84475928, 12.72192797],
+  deimos: [316.65705808, -0.10518014, 53.50992033, -0.05979094, 79.39932954, 285.16188899],
   jupiter: [268.056595, -0.006499, 64.495303, 0.002413, 284.95, 870.536],
-  saturn: [40.589, -0.036, 83.537, -0.004, 38.9, 810.7939024],
-  uranus: [257.311, 0, -15.175, 0, 203.81, -501.1600928],
-  neptune: [299.36, 0, 43.46, 0, 249.978, 541.1397757],
-  pluto: [132.993, 0, -6.163, 0, 302.695, 56.3625225],
+  amalthea: [268.05, -0.009, 64.49, 0.003, 231.67, 722.631456],
+  thebe: [268.05, -0.009, 64.49, 0.003, 8.56, 533.70041],
   io: [268.05, -0.009, 64.5, 0.003, 200.39, 203.4889538],
   europa: [268.08, -0.009, 64.51, 0.003, 36.022, 101.3747235],
   ganymede: [268.2, -0.009, 64.57, 0.003, 44.064, 50.3176081],
   callisto: [268.72, -0.009, 64.83, 0.003, 259.51, 21.5710715],
+  saturn: [40.589, -0.036, 83.537, -0.004, 38.9, 810.7939024],
+  mimas: [40.66, -0.036, 83.52, -0.004, 333.46, 381.994555],
+  enceladus: [40.66, -0.036, 83.52, -0.004, 6.32, 262.7318996],
+  tethys: [40.66, -0.036, 83.52, -0.004, 8.95, 190.6979085],
+  dione: [40.66, -0.036, 83.52, -0.004, 357.6, 131.5349316],
+  rhea: [40.38, -0.036, 83.55, -0.004, 235.16, 79.6900478],
   titan: [39.4827, 0, 83.4279, 0, 186.5855, 22.5769768],
+  iapetus: [318.16, -3.949, 75.03, -1.143, 355.2, 4.5379572],
+  phoebe: [356.9, 0, 77.8, 0, 178.58, 931.639],
+  uranus: [257.311, 0, -15.175, 0, 203.81, -501.1600928],
+  puck: [257.31, 0, -15.18, 0, 91.24, -472.545069],
+  miranda: [257.43, 0, -15.08, 0, 30.7, -254.6906892],
+  ariel: [257.43, 0, -15.1, 0, 156.22, -142.8356681],
+  umbriel: [257.43, 0, -15.1, 0, 108.05, -86.8688923],
+  titania: [257.43, 0, -15.1, 0, 77.74, -41.3514316],
+  oberon: [257.43, 0, -15.1, 0, 6.77, -26.7394932],
+  neptune: [299.36, 0, 43.46, 0, 249.978, 541.1397757],
+  proteus: [299.27, 0, 42.91, 0, 93.38, 320.7654228],
+  triton: [299.36, 0, 41.17, 0, 296.53, -61.2572637],
+  pluto: [132.993, 0, -6.163, 0, 302.695, 56.3625225],
+  charon: [132.993, 0, -6.163, 0, 122.695, 56.3625225],
 };
 
 /**
- * Jupiter's large moons: their orbits (and so their axes) swing about Jupiter's equator, Europa's
- * by half a degree. The angles J3 … J8 [degrees at J2000, degrees per century], then per moon the
- * terms [which J, right ascension × sin, declination × cos, prime meridian × sin], in degrees.
+ * The slow angles the periodic terms are built from, each [degrees at J2000, degrees per
+ * century]: the turning of a moon's orbit plane (or of a neighbour's) that its axis follows.
+ * Names as in the IAU reports (M Mars, J Jupiter, S Saturn, U Uranus, N Neptune).
  */
-const JOVIAN: Record<number, readonly [number, number]> = { 3: [283.9, 4850.7], 4: [355.8, 1191.3], 5: [119.9, 262.1], 6: [229.8, 64.3], 7: [352.25, 2382.6], 8: [113.35, 6070] };
-const JOVIAN_NOD: Partial<Record<BodyId, readonly (readonly [number, number, number, number])[]>> = {
-  io: [[3, 0.094, 0.04, -0.085], [4, 0.024, 0.011, -0.022]],
-  europa: [[4, 1.086, 0.468, -0.98], [5, 0.06, 0.026, -0.054], [6, 0.015, 0.007, -0.014], [7, 0.009, 0.002, -0.008]],
-  ganymede: [[4, -0.037, -0.016, 0.033], [5, 0.431, 0.186, -0.389], [6, 0.091, 0.039, -0.082]],
-  callisto: [[5, -0.068, -0.029, 0.061], [6, 0.59, 0.254, -0.533], [8, 0.01, -0.004, -0.008]],
+const ANGLES: Record<string, readonly [number, number]> = {
+  M1: [190.72646643, 15917.10818695], M2: [21.4689247, 31834.27934054], M3: [332.86082793, 19139.89694742], M4: [394.93256437, 38280.79631835], M5: [189.6327156, 41215158.1842005],
+  M6: [121.46893664, 660.22803474], M7: [231.05028581, 660.9912354], M8: [251.37314025, 1320.50145245], M9: [217.98635955, 38279.9612555], M10: [196.19729402, 19139.83628608],
+  J1: [73.32, 91472.9], J2: [24.62, 45137.2], J3: [283.9, 4850.7], J4: [355.8, 1191.3], J5: [119.9, 262.1], J6: [229.8, 64.3], J7: [352.25, 2382.6], J8: [113.35, 6070],
+  S3: [177.4, -36505.5], S4: [300, -7225.9], S5: [316.45, 506.2], S6: [345.2, -1016.3],
+  U10: [138.64, 8061.81], U11: [102.23, -2024.22], U12: [316.41, 2863.96], U13: [304.01, -51.94], U14: [308.71, -93.17], U15: [340.82, -75.32], U16: [259.14, -504.81],
+  N: [357.85, 52.316], N6: [142.61, 2824.6], N7: [177.85, 52.316],
 };
+
+/**
+ * The periodic terms: for each body a list of [angle, multiple, a, b, c], adding
+ * a × sin(multiple × angle) to the pole's right ascension, b × cos(…) to its declination and
+ * c × sin(…) to W, in degrees. Most are a fraction of a degree. The big ones: Mimas, whose face
+ * swings 45° with its seventy-year dance with Tethys (S5); Triton, whose pole circles 22° from
+ * Neptune's every 688 years (N7); Miranda, tilted 4° to Uranus's equator (U11).
+ */
+const NOD: Partial<Record<BodyId, readonly (readonly [string, number, number, number, number])[]>> = {
+  phobos: [['M1', 1, -1.78428399, -1.07516537, 1.42421769], ['M2', 1, 0.02212824, 0.00668626, -0.02273783], ['M3', 1, -0.01028251, -0.0064874, 0.00410711], ['M4', 1, -0.00475595, 0.00281576, 0.00631964], ['M5', 1, 0, 0, -1.143]],
+  deimos: [['M6', 1, 3.09217726, 1.83936004, -2.73954829], ['M7', 1, 0.22980637, 0.1432532, -0.39968606], ['M8', 1, 0.06418655, 0.01911409, -0.06563259], ['M9', 1, 0.02533537, -0.0148259, -0.0291294], ['M10', 1, 0.00778695, 0.0019243, 0.0169916]],
+  amalthea: [['J1', 1, -0.84, -0.36, 0.76], ['J1', 2, 0.01, 0, -0.01]],
+  thebe: [['J2', 1, -2.11, -0.91, 1.91], ['J2', 2, 0.04, 0.01, -0.04]],
+  io: [['J3', 1, 0.094, 0.04, -0.085], ['J4', 1, 0.024, 0.011, -0.022]],
+  europa: [['J4', 1, 1.086, 0.468, -0.98], ['J5', 1, 0.06, 0.026, -0.054], ['J6', 1, 0.015, 0.007, -0.014], ['J7', 1, 0.009, 0.002, -0.008]],
+  ganymede: [['J4', 1, -0.037, -0.016, 0.033], ['J5', 1, 0.431, 0.186, -0.389], ['J6', 1, 0.091, 0.039, -0.082]],
+  callisto: [['J5', 1, -0.068, -0.029, 0.061], ['J6', 1, 0.59, 0.254, -0.533], ['J8', 1, 0.01, -0.004, -0.008]],
+  mimas: [['S3', 1, 13.56, -1.53, -13.48], ['S5', 1, 0, 0, -44.85]],
+  tethys: [['S4', 1, 9.66, -1.09, -9.6], ['S5', 1, 0, 0, 2.23]],
+  rhea: [['S6', 1, 3.1, -0.35, -3.08]],
+  puck: [['U10', 1, -0.33, 0.33, -0.09]],
+  miranda: [['U11', 1, 4.41, 4.25, 1.15], ['U11', 2, -0.04, -0.02, -0.09], ['U12', 1, 0, 0, -1.27], ['U12', 2, 0, 0, 0.15]],
+  ariel: [['U13', 1, 0.29, 0.28, 0.08], ['U12', 1, 0, 0, 0.05]],
+  umbriel: [['U14', 1, 0.21, 0.2, 0.06], ['U12', 1, 0, 0, -0.09]],
+  titania: [['U15', 1, 0.29, 0.28, 0.08]],
+  oberon: [['U16', 1, 0.16, 0.16, 0.04]],
+  neptune: [['N', 1, 0.7, -0.51, -0.48]],
+  proteus: [['N', 1, 0.7, -0.51, -0.48], ['N6', 1, -0.05, -0.04, 0.04]],
+  triton: [
+    ['N7', 1, -32.35, 22.55, 22.25], ['N7', 2, -6.28, 2.1, 6.73], ['N7', 3, -2.08, 0.55, 2.05], ['N7', 4, -0.74, 0.16, 0.74], ['N7', 5, -0.28, 0.05, 0.28],
+    ['N7', 6, -0.11, 0.02, 0.11], ['N7', 7, -0.07, 0.01, 0.05], ['N7', 8, -0.02, 0, 0.02], ['N7', 9, -0.01, 0, 0.01],
+  ],
+};
+
+/** Does this body have a rotation model of its own (the alternative being lockedAxes below)? */
+export const hasRotationModel = (id: BodyId): boolean => id === 'earth' || id === 'moon' || ROTATION[id] !== undefined;
 
 /** Unit vectors from a pole (α0, δ0) and a prime meridian angle W, all in radians. */
 function axesFrom(ra: number, dec: number, w: number): { pole: Vec; prime: Vec } {
@@ -535,18 +651,16 @@ export function bodyAxes(id: BodyId, tMs: number): { pole: Vec; prime: Vec } {
   }
   const row = ROTATION[id];
   if (row) {
-    let ra = row[0] + row[1] * T, dec = row[2] + row[3] * T, w = row[4] + row[5] * d;
-    if (id === 'neptune') {
-      const N = (357.85 + 52.316 * T) * DEG; // the turning of Triton's orbit tips Neptune's axis by half a degree
-      ra += 0.7 * Math.sin(N);
-      dec -= 0.51 * Math.cos(N);
-      w -= 0.48 * Math.sin(N);
-    }
-    for (const [which, cRa, cDec, cW] of JOVIAN_NOD[id] ?? []) {
-      const J = (JOVIAN[which][0] + JOVIAN[which][1] * T) * DEG;
-      ra += cRa * Math.sin(J);
-      dec += cDec * Math.cos(J);
-      w += cW * Math.sin(J);
+    let ra = row[0] + row[1] * T, dec = row[2] + row[3] * T, w = row[4] + row[5] * d + (row[6] ?? 0) * T * T;
+    const terms = NOD[id];
+    if (terms) {
+      for (const [name, multiple, cRa, cDec, cW] of terms) {
+        const angle = multiple * (ANGLES[name][0] + ANGLES[name][1] * T) * DEG;
+        const sine = Math.sin(angle);
+        ra += cRa * sine;
+        dec += cDec * Math.cos(angle);
+        w += cW * sine;
+      }
     }
     return axesFrom(ra * DEG, dec * DEG, (w % 360) * DEG);
   }
@@ -554,16 +668,25 @@ export function bodyAxes(id: BodyId, tMs: number): { pole: Vec; prime: Vec } {
 }
 
 /**
- * The small moons (Phobos, Deimos, Enceladus, Triton, Charon) all keep one face to their
- * planet, with their axis square to their orbit. So instead of five more rotation models:
- * longitude 0 points at the planet, and the pole is the orbit's normal (reversed for Triton,
- * whose north pole by the IAU's rule is the one it turns clockwise about).
+ * For the moons with no rotation model (see ROTATION): one face kept to the planet, the axis
+ * square to the orbit. That is true of Janus and Epimetheus. For the others it is a stand-in
+ * and the truth is different: Hyperion tumbles chaotically, Himalia and Nereid spin in hours,
+ * and Pluto's small moons spin fast on steeply tilted axes. None of them has a map, so the
+ * stand-in only decides how a plain ball is turned.
  */
 function lockedAxes(id: BodyId, tMs: number): { pole: Vec; prime: Vec } {
   const o = moonOrbits[id]!;
   const si = Math.sin(o.incl);
-  const sign = id === 'triton' ? -1 : 1;
-  const pole: Vec = [sign * si * Math.sin(o.node), -sign * si * Math.cos(o.node), sign * Math.cos(o.incl)];
+  // The orbit's normal now: the normal at the epoch, carried round the axis the plane swings about.
+  const pole: Vec = [si * Math.sin(o.node), -si * Math.cos(o.node), Math.cos(o.incl)];
+  if (o.nodeRate !== 0) {
+    turnAbout(pole, o.axis, o.nodeRate * ((tMs - o.epochMs) / DAY_MS));
+    // The table's axis is rounded to seven places; keep the pole's length exactly one.
+    const size = Math.hypot(pole[0], pole[1], pole[2]);
+    pole[0] /= size;
+    pole[1] /= size;
+    pole[2] /= size;
+  }
   const p = moonAboutPlanet(id, tMs, [0, 0, 0]);
   // Towards the planet, with any part along the pole removed, so the two are exactly square.
   const along = p[0] * pole[0] + p[1] * pole[1] + p[2] * pole[2];

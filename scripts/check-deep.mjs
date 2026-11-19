@@ -29,7 +29,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BODIES, BODY_LIST } from '../src/space/bodies.ts';
 import { craftPeriodMs, craftPosition, motionPosition } from '../src/space/deep.ts';
-import { bodyAxes, bodyPosition, bodyRelative, elementsPosition, setMoonElements, stateToElements } from '../src/space/ephem.ts';
+import { bodyAxes, bodyPosition, bodyRelative, elementsPosition, hasRotationModel, setMoonElements, stateToElements } from '../src/space/ephem.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const read = (path) => JSON.parse(readFileSync(join(HERE, path), 'utf8'));
@@ -143,9 +143,9 @@ console.log(`\nAgainst JPL Horizons on ${truth.dates.length} dates, ${day(truth.
   // whose longitude and latitude Horizons printed. Rebuild that point from bodyAxes(), at the
   // moment the light left the body (Jupiter turns 24° while its light crosses to the Earth).
   let worstPole = { v: 0 }, worstPrime = { v: 0 }, worstLat = 0;
-  const lines = [];
+  const lines = [], standIns = [];
   for (const [id, rot] of Object.entries(truth.rotation)) {
-    let pole = 0, prime = 0;
+    let pole = 0, prime = 0, lat = 0;
     for (const row of rot.rows) {
       const toBody = fromRaDec(row.raDeg, row.decDeg);
       const tLeft = row.tMs - (row.rangeKm / C_KM_S) * 1000;
@@ -159,9 +159,17 @@ console.log(`\nAgainst JPL Horizons on ${truth.dates.length} dates, ${day(truth.
       // Latitude too, as a guard on the whole construction (Horizons' is measured from the
       // flattened surface's vertical: convert ours the same way).
       const latCentric = Math.asin(dot(toObserver, axes.pole));
-      const lat = Math.atan(Math.tan(latCentric) / (1 - rot.flattening) ** 2) / DEG;
-      worstLat = Math.max(worstLat, Math.abs(lat - row.subLatDeg));
+      lat = Math.max(lat, Math.abs(Math.atan(Math.tan(latCentric) / (1 - rot.flattening) ** 2) / DEG - row.subLatDeg));
     }
+    if (!hasRotationModel(id)) {
+      // Janus and Epimetheus: the IAU's models turn at a constant rate; here they stay locked
+      // to Saturn through their exchange of orbits, so only the pole is comparable.
+      standIns.push(`${id} pole ${pole.toFixed(2)}°`);
+      continue;
+    }
+    // The latitude guard only makes sense on a body that is nearly a sphere: on a lump such as
+    // Amalthea (250 x 146 x 128 km) Horizons' "latitude" follows the lump's own surface.
+    if (rot.flattening < 0.02) worstLat = Math.max(worstLat, lat);
     lines.push(`${id} ${pole.toFixed(3)}°/${prime.toFixed(3)}°`);
     if (pole > worstPole.v) worstPole = { v: pole, id };
     if (prime > worstPrime.v) worstPrime = { v: prime, id };
@@ -169,6 +177,7 @@ console.log(`\nAgainst JPL Horizons on ${truth.dates.length} dates, ${day(truth.
   check('rotation: north poles within 0.1°', worstPole.v < 0.1 && worstLat < 0.1, `worst ${worstPole.v.toFixed(4)}° (${worstPole.id}); latitude of the disc's centre within ${worstLat.toFixed(4)}°`);
   check('rotation: prime meridians within 0.5°', worstPrime.v < 0.5, `worst ${worstPrime.v.toFixed(4)}° (${worstPrime.id})`);
   console.log(`     pole / prime meridian: ${lines.join(', ')}`);
+  console.log(`     not modelled, so not compared: ${[...standIns, ...(truth.unturned ?? []).map((id) => `${id} (Horizons has no model either)`)].join(', ')}`);
 }
 
 // ── 3. The downloaded file against the same download's reference positions ──────────────

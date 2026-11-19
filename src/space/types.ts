@@ -24,10 +24,11 @@ export type BodyId =
   | 'sun'
   | 'mercury' | 'venus' | 'earth' | 'moon'
   | 'mars' | 'phobos' | 'deimos'
-  | 'jupiter' | 'io' | 'europa' | 'ganymede' | 'callisto'
-  | 'saturn' | 'enceladus' | 'titan'
-  | 'uranus' | 'neptune' | 'triton'
-  | 'pluto' | 'charon';
+  | 'jupiter' | 'amalthea' | 'thebe' | 'io' | 'europa' | 'ganymede' | 'callisto' | 'himalia'
+  | 'saturn' | 'epimetheus' | 'janus' | 'mimas' | 'enceladus' | 'tethys' | 'dione' | 'rhea' | 'titan' | 'hyperion' | 'iapetus' | 'phoebe'
+  | 'uranus' | 'puck' | 'miranda' | 'ariel' | 'umbriel' | 'titania' | 'oberon'
+  | 'neptune' | 'proteus' | 'triton' | 'nereid'
+  | 'pluto' | 'charon' | 'styx' | 'nix' | 'kerberos' | 'hydra';
 
 /** Kilometres (or a unit direction) in the ICRF frame described above. */
 export type Vec = [number, number, number];

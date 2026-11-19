@@ -24,6 +24,16 @@ export const jdUt = (ms) => ms / 86400000 + 2440587.5;
 /** A Julian date written with enough digits (under a tenth of a millisecond). */
 export const jdText = (jd) => jd.toFixed(9);
 
+/** Horizons' numbers for the bodies: planets are x99, moons the planet's digit and a serial number. */
+export const BODY_CODE = {
+  sun: 10, mercury: 199, venus: 299, earth: 399, moon: 301, mars: 499, phobos: 401, deimos: 402,
+  jupiter: 599, io: 501, europa: 502, ganymede: 503, callisto: 504, amalthea: 505, himalia: 506, thebe: 514,
+  saturn: 699, mimas: 601, enceladus: 602, tethys: 603, dione: 604, rhea: 605, titan: 606, hyperion: 607, iapetus: 608, phoebe: 609, janus: 610, epimetheus: 611,
+  uranus: 799, ariel: 701, umbriel: 702, titania: 703, oberon: 704, miranda: 705, puck: 715,
+  neptune: 899, triton: 801, nereid: 802, proteus: 808,
+  pluto: 999, charon: 901, nix: 902, hydra: 903, kerberos: 904, styx: 905,
+};
+
 let lastDone = 0;
 let queue = Promise.resolve();
 
@@ -87,4 +97,33 @@ export async function vectors(target, centre, when) {
     if (numbers.length < 6 || !numbers.every(Number.isFinite)) throw new Error('unreadable vector row');
     return { tMs: Math.round((Number(cells[0]) - 2440587.5) * 86400000 - TT_MINUS_UTC_MS), pos: numbers.slice(0, 3), vel: numbers.slice(3, 6) };
   });
+}
+
+/**
+ * Horizons says where a trajectory file ends when asked for a moment beyond it:
+ * 'No ephemeris for target "IMAP (spacecraft)" after A.D. 2026-DEC-14 00:01:09.1834 TDB'.
+ * Returns that moment (Unix ms) and which side it bounds, or null for any other message.
+ */
+export function coverageLimit(message) {
+  const m = /(after|prior to) A\.D\. (\d{4})-([A-Z]{3})-(\d\d) (\d\d):(\d\d)/i.exec(message);
+  if (!m) return null;
+  const month = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'].indexOf(m[3].toUpperCase());
+  if (month < 0) return null;
+  return { side: m[1].toLowerCase() === 'after' ? 'end' : 'start', ms: Date.UTC(Number(m[2]), month, Number(m[4]), Number(m[5]), Number(m[6])) - TT_MINUS_UTC_MS };
+}
+
+/** An even run of state vectors; if the trajectory ends inside the span, the part of the span it covers (the grid is kept). */
+export async function vectorRun(target, centre, startMs, stopMs, stepMinutes) {
+  try {
+    return await vectors(target, centre, { startMs, stopMs, stepMinutes });
+  } catch (error) {
+    const limit = coverageLimit(error.message);
+    if (!limit) throw error;
+    const step = stepMinutes * 60000;
+    // The cut end moves by whole steps, so samples stay at start + k × step.
+    if (limit.side === 'end') stopMs = startMs + Math.floor((limit.ms - 60000 - startMs) / step) * step;
+    else startMs += Math.ceil((limit.ms + 60000 - startMs) / step) * step;
+    if (stopMs - startMs < 4 * step) throw error;
+    return await vectors(target, centre, { startMs, stopMs, stepMinutes });
+  }
 }
