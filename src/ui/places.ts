@@ -239,6 +239,9 @@ export class Places {
       onOpen: (target) => this.open(target),
       onOut: () => this.openSystem(),
       onHover: (target, x, y) => this.hover(target, x, y),
+      onHoverMove: (x, y) => {
+        if (this.hoverKey) this.placeTip(x, y);
+      },
       figures: host.figures,
       isPhone: host.isPhone,
       drift: host.drift,
@@ -555,6 +558,12 @@ export class Places {
       tip.replaceChildren(picture, text);
     }
     tip.classList.remove('is-hidden');
+    this.placeTip(x, y);
+  }
+
+  /** Put the hover card beside the pointer. */
+  private placeTip(x: number, y: number): void {
+    const tip = $('tooltip');
     tip.classList.toggle('is-left', x > window.innerWidth - 340);
     tip.style.left = `${x}px`;
     tip.style.top = `${Math.min(Math.max(y, 70), window.innerHeight - 70)}px`;

@@ -102,6 +102,8 @@ export interface SpaceHost {
   onOut(): void;
   /** The pointer is over something that can be clicked (null: over nothing), at screen x, y. */
   onHover(target: Target | null, x: number, y: number): void;
+  /** The pointer moved between two hover tests: keep the card with it (cheap; every event). */
+  onHoverMove(x: number, y: number): void;
   /** The constellation figures: name and direction among the stars (star axes). */
   figures(): { name: string; direction: THREE.Vector3 }[];
   isPhone(): boolean;
@@ -356,7 +358,13 @@ export class SpaceView {
         return;
       }
       const now = performance.now();
-      if (now - hoverAt < 50) return;
+      // What is under the pointer is worked out at most 20 times a second (it is a pick through
+      // every item), but the card follows the pointer on every event: moved only with the test,
+      // it trailed the pointer in 50 ms jumps and looked like a low frame rate.
+      if (now - hoverAt < 50) {
+        this.host.onHoverMove(event.clientX, event.clientY);
+        return;
+      }
       hoverAt = now;
       const item = this.pick(event.clientX, event.clientY);
       canvas.style.cursor = item ? 'pointer' : '';
