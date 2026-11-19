@@ -449,18 +449,34 @@ public/data/deep.json (DeepData)          scripts/fixtures/deep-reference.json (
 craftPosition(craft, t) → km about craft.centre      bodyPosition / bodyRelative / bodyAxes (space/ephem.ts, pure maths)
 ```
 
-- `bodies.ts`: `BODIES` and `BODY_LIST`, 21 bodies. GM of a giant planet is the planet
-  alone (used for things orbiting close to it).
+- `bodies.ts`: `BODIES` and `BODY_LIST`, 45 bodies: the Sun, eight planets, Pluto and 35
+  moons (every one Horizons can place that is round or well known). Radius and GM from JPL's
+  satellite tables, periods and discoveries from NSSDC's fact sheets; `discovered`, `tempC`
+  and `air` only where there is a real answer. GM of a giant planet is the planet alone
+  (used for things orbiting close to it). `visitable` is true exactly when `imagery.ts` has
+  a map (the check enforces it): 31 bodies; fourteen small moons are plain coloured balls.
 - `ephem.ts`: planets from JPL's "approximate positions" table (1800–2050); the Earth is
   that table's Earth–Moon barycentre minus the Moon's share; the Moon is a 70-term series
-  (Meeus ch. 47) precessed to J2000; the other moons are ellipses in a fixed plane with
-  fitted long-term rates (`MOON_ORBITS`, from `node scripts/make-deep-fixture.mjs --fit`),
-  whose shape and phase `setMoonElements()` replaces with the osculating elements in
-  deep.json. Rotation is the IAU model per body (`ROTATION`), with the periodic terms for
-  the Moon, Neptune and the Galilean moons; the Earth uses GMST carried back through
-  precession; the five small moons are simply locked to their planet. Everything here must
-  stay importable by Node (no DOM, no three.js) and cheap: the 3D side calls it for every
-  body each frame.
+  (Meeus ch. 47) precessed to J2000. Rotation is the IAU model per body (`ROTATION`, with the
+  periodic terms in `NOD`), every constant checked against Horizons; the Earth uses GMST
+  carried back through precession; nine moons with no model (Hyperion tumbles; Janus and
+  Epimetheus; Himalia, Nereid, Pluto's small four) are locked to their planet. Everything
+  here must stay importable by Node (no DOM, no three.js) and cheap: the 3D side calls it for
+  a planet's whole family each frame.
+- `moonOrbits.ts` is GENERATED (`node scripts/make-deep-fixture.mjs --fit`, from sixty years
+  of Horizons positions; `--cache <folder>` keeps the samples so the fit can be reworked
+  without asking again). Each moon is an ellipse whose plane swings round a fitted axis
+  (`axis`, `nodeRate`), whose long axis turns (`periRate`), and whose longitude carries slow
+  sine waves (`swing`: Mimas ±44° over 71 years with Tethys, Janus and Epimetheus trading
+  orbits every 8). A few have a changing shape (`wobble`: Himalia, Hyperion, Phoebe, Nereid),
+  and Pluto's four small moons orbit the centre of mass of Pluto and Charon (`partner`). Lessons
+  that cost time: a fixed plane was 1–2° wrong for Phobos and Triton; the fit's own residual
+  hid a bug that the independent fixture showed at once (always run the check); measured
+  from Pluto's centre the small moons have no usable ellipse at all.
+- **The table beats a download inside its span.** deep.json carries each moon's osculating
+  ellipse, but `setMoonElements()` uses one only if the download falls outside 1996–2056:
+  one moment's ellipse carries that moment's passing disturbances (ten days on, a downloaded
+  Mimas is 0.5° out and Pluto's small moons 2°, the table a tenth of that).
 - **Motion has three forms** (`Motion` in types.ts): `elements` (Kepler; hyperbolas have
   `aKm < 0`, `e > 1`; orbiters carry optional measured `rates`, applied as a turn about the
   PLANET's pole: in ICRF a plane precessing about Mars's pole changes inclination and node
@@ -473,17 +489,37 @@ craftPosition(craft, t) → km about craft.centre      bodyPosition / bodyRelati
   craft "round the Sun" that is inside a planet's sphere of influence at that moment (a
   gravity assist, an arrival) is given about that planet instead. A craft Horizons cannot
   place is skipped with a log line; the script never fails a build.
-- `imagery.ts`: one map per body (2:1, longitude 0 in the middle, east right) in
-  `public/textures/space/`, made by `scripts/build-space-maps.py` (run by hand; Pillow), plus
-  NASA Trek tile layers whose deepest level and CORS header were checked. `IMAGE_CREDITS`
-  must be shown wherever credits are: the Solar System Scope textures are CC BY 4.0.
+- `imagery.ts`: one map per visitable body (2:1, longitude 0 in the middle, east right) in
+  `public/textures/space/`, each with a 256 px `<name>_s.jpg` beside it for the solar-system
+  view, made by `scripts/build-space-maps.py` (run by hand; Pillow), plus NASA Trek tile
+  layers whose deepest level and CORS header were checked. `IMAGE_CREDITS` must be shown
+  wherever credits are: the Solar System Scope textures are CC BY 4.0. Rules the script
+  follows: a map from anywhere but Trek is lined up against the Trek layer of the same world
+  by where its craters fall (`line_up`: it found NASA's colour maps of Saturn's moons half a
+  turn out, and the Mimas one a further 3.9° out, an older zero of longitude); parts no
+  camera has seen are one flat average tone, never black and never invented terrain
+  (`fill_unseen`); a map is bundled only if its public-domain status was confirmed at the
+  source (which is why Mimas and Rhea come from NASA's colour maps, used in grey, and not
+  from the DLR mosaics Trek serves as their tiles; and why Deimos has no map).
+- `sites.ts`: `SITES`, the 32 historic landing sites (Moon, Mars, Venus, Titan), each
+  coordinate from a primary source named in the file's header. Not for craft that deep.json
+  already stands on the ground. Ids are used in share links: do not rename them.
+- Craft facts live in `scripts/deep-craft.mjs`. `arrived`, `ended` and `massKg` are filled
+  only where a primary source confirms them (the header says which); after editing run
+  `node scripts/fetch-deep.mjs --facts`, which rewrites the facts in deep.json without the
+  network. `--only-new` asks Horizons only for craft or moons the file lacks.
 - `dsn.ts`: `watchDsn()` polls NASA's DSN Now XML once a minute only while something
   watches. `showers.ts`: twelve annual showers; peaks solved from the Sun's longitude.
 - **The evidence** is `scripts/check-deep.mjs` (part of `npm run check`): it compares the
-  ephemeris with `scripts/fixtures/deep-truth.json` (Horizons, twelve dates 2024–2030) and
-  deep.json with the reference file, and prints the worst errors. If you change `ephem.ts`,
-  run it; if you add a craft, run `npm run fetch-deep -- --force` and commit deep.json and
-  deep-reference.json together (the check refuses a mismatched pair).
+  ephemeris with `scripts/fixtures/deep-truth.json` (Horizons, twelve dates 2024–2030: every
+  planet and moon, and the orientation of all 36 bodies that have a rotation model) and
+  deep.json with the reference file, and prints the worst errors; it also checks the maps,
+  their small copies and the landing sites. If you change `ephem.ts`, run it. To add a moon:
+  `BodyId`, `BODIES`, `BODY_LIST`, `BODY_CODE` in `horizons.mjs`, then
+  `make-deep-fixture.mjs --fit` (adds it to the fixture and refits the table) and
+  `fetch-deep.mjs --only-new`. To add a craft: a row in `deep-craft.mjs`, then
+  `fetch-deep.mjs --only-new`. Commit deep.json and deep-reference.json together (the check
+  refuses a mismatched pair).
 - A jump inside Horizons' own trajectory (two mission files that do not join) shows up in
   the sampled-path check; it is detected, reported and not counted. Do not "fix" it by
   loosening the 1,000 km tolerance.
@@ -574,7 +610,7 @@ tiles (the layers in `src/space/imagery.ts`, for whatever draws other bodies clo
 nothing else from the browser. SatNOGS is read at BUILD time only
 (`scripts/fetch-radio.mjs`, 6 h guard, at most 22 requests; its API sends no CORS headers,
 and its data is CC BY-SA and credited in About). JPL Horizons and JPL CNEOS are also BUILD
-time only (`scripts/fetch-deep.mjs`, 12 h guard, about 90 requests one at a time; Horizons
+time only (`scripts/fetch-deep.mjs`, 12 h guard, about 130 requests one at a time; Horizons
 sends no CORS headers). The maps of other bodies are bundled; the Solar System Scope ones
 are CC BY 4.0 and must be credited (`IMAGE_CREDITS`). No analytics, no accounts. Location is used only after
 an in-app yes plus the browser's own prompt, and stays in `localStorage`.

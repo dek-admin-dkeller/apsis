@@ -14,14 +14,16 @@
 // What is asserted (the tolerances the project set itself):
 //   planets and Pluto   direction within 0.1°, distance within 0.5 %
 //   the Moon            within 0.5°
-//   other moons         within 2° along their orbit, built-in orbits over all twelve dates and
-//                       the downloaded ones over the ten days after the download
-//   rotation            poles within 0.1°, prime meridians within 0.5°
+//   other moons         within 2° of direction from their planet: the 34 in the table over all
+//                       twelve dates, and again over the ten days after the download
+//   rotation            poles within 0.1°, prime meridians within 0.5°, for all 36 bodies
+//                       that have a rotation model
 //   spacecraft          within 1 % of Horizons' distance at the download moment; sampled paths
 //                       within 1,000 km wherever Horizons was asked between two samples
 //   fly-by paths        closest point within 3 % of the listed distance and an hour of the listed time
 //   meteor showers      the Sun's longitude within 0.05° at two published peak times
-//   maps                every bundled picture present, 2:1, at its stated width
+//   landing sites       every site's body exists and can be visited, coordinates in range
+//   maps                every bundled picture present, 2:1, at its stated width, with its small copy
 // Everything else printed (how far orbits drift in a day, a week, a month) is information.
 
 import { readFileSync } from 'node:fs';
@@ -369,7 +371,40 @@ check('the reference positions are from the same download as deep.json', referen
     `19 Nov 2026: ${names(activeShowers(november))} active, then ${names(nextShowers(november, 3))}; 5 Jan 2027: ${names(activeShowers(january))}`);
 }
 
-// ── 5. The maps ─────────────────────────────────────────────────────────────────────────
+// ── 5. Landing sites ────────────────────────────────────────────────────────────────────
+
+{
+  const { SITES } = await import('../src/space/sites.ts');
+  const problems = [];
+  const ids = new Set();
+  // The thirteen that went live first: share links name them, so they must stay.
+  const FIRST = ['apollo-11', 'apollo-12', 'apollo-14', 'apollo-15', 'apollo-16', 'apollo-17', 'viking-1', 'viking-2', 'pathfinder', 'spirit', 'opportunity', 'phoenix', 'huygens'];
+  const standing = deep.craft.filter((craft) => craft.motion.type === 'surface');
+  for (const site of SITES) {
+    if (ids.has(site.id)) problems.push(`${site.id}: listed twice`);
+    ids.add(site.id);
+    const body = BODIES[site.body];
+    if (!body) { problems.push(`${site.id}: no such body as ${site.body}`); continue; }
+    if (!body.visitable) problems.push(`${site.id}: ${site.body} cannot be visited`);
+    if (!(Math.abs(site.latDeg) <= 90) || !(site.lonDeg >= -180 && site.lonDeg <= 180)) problems.push(`${site.id}: coordinates out of range (${site.latDeg}, ${site.lonDeg})`);
+    const landed = Date.parse(`${site.date}T00:00:00Z`);
+    if (!/^\d{4}-\d\d-\d\d$/.test(site.date) || !(landed > Date.UTC(1959, 0, 1) && landed < Date.now())) problems.push(`${site.id}: date ${site.date}`);
+    if (!['crewed', 'lander', 'rover', 'probe'].includes(site.kind) || !['lander', 'rover'].includes(site.model)) problems.push(`${site.id}: kind or model`);
+    for (const field of ['name', 'agency', 'blurb', 'wiki']) if (!site[field]) problems.push(`${site.id}: no ${field}`);
+    // Not a craft the data file already stands on the ground: by name, and by place (within 20 km).
+    if (deep.craft.some((craft) => craft.id === site.id)) problems.push(`${site.id}: also a craft in deep.json`);
+    for (const craft of standing) {
+      if (craft.centre !== site.body) continue;
+      const apart = Math.hypot(craft.motion.latDeg - site.latDeg, wrap180(craft.motion.lonDeg - site.lonDeg) * Math.cos(site.latDeg * DEG)) * DEG * body.radiusKm;
+      if (apart < 20) problems.push(`${site.id}: ${apart.toFixed(0)} km from ${craft.id}, which deep.json already places`);
+    }
+  }
+  for (const id of FIRST) if (!ids.has(id)) problems.push(`${id}: missing (share links use it)`);
+  const perBody = [...new Set(SITES.map((site) => site.body))].map((body) => `${SITES.filter((site) => site.body === body).length} on ${BODIES[body].name}`);
+  check(`${SITES.length} landing sites: bodies exist, coordinates in range, none repeats a craft in deep.json`, problems.length === 0, problems.join('; ') || perBody.join(', '));
+}
+
+// ── 6. The maps ─────────────────────────────────────────────────────────────────────────
 
 {
   // Width and height straight from the file: a JPEG states them after its SOF marker

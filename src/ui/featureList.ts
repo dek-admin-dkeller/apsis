@@ -89,6 +89,7 @@ export const FEATURES: FeatureGroup[] = [
     items: [
       { name: 'The solar system', text: 'Zoom out and the satellites fade away, leaving the Earth among the planets, each on the right side of the Sun for today’s date.', fresh: true },
       { name: 'Other worlds', text: 'Click a planet or a moon, then go in: the Moon, Mars, Jupiter and its four big moons, Saturn and its rings, out to Pluto, each lit and turning as it is right now.', fresh: true },
+      { name: 'Thirty-five moons', text: 'Every moon that is round or well known, from Phobos to Pluto’s Hydra, each where it really is today. Twenty-one are mapped from NASA’s pictures and open to visit; what no camera has seen is left blank rather than made up.', fresh: true },
       { name: 'Spacecraft out there', text: 'The Webb telescope, the orbiters and rovers at Mars, Juno, the Voyagers: fifty craft placed from NASA’s own trajectory data, with how far away each is and how long its signal takes.', fresh: true },
       { name: 'In contact now', text: 'A green mark on any craft that one of NASA’s deep-space dishes is talking to this minute.', fresh: true },
       { name: 'Asteroids passing', text: 'Follow a near-Earth asteroid along its real path as it goes past.', fresh: true },
