@@ -6,6 +6,9 @@
  *   Passes   when it next crosses the sky of the ground station, with a sky chart
  *   Record   catalogue facts (owner, launch, size), a Wikipedia summary, the raw record
  *
+ * Under the name there is always a link to Wikipedia: the object's article when one is known
+ * or found (data/wiki.ts), otherwise Wikipedia's search for its name.
+ *
  * All numbers come from SGP4 run for this one object on the main thread (data/ephemeris.ts).
  */
 
@@ -19,7 +22,8 @@ import {
 import { regionName } from '../data/regions.ts';
 import { ownerName, siteName, sizeClass, statusLabel, typeLabel, type CatalogFacts } from '../data/satcat.ts';
 import { CATEGORY_COLORS, type Satellite } from '../data/types.ts';
-import { articleFor, wikiSummary } from '../data/wiki.ts';
+import { displayName } from '../data/names.ts';
+import { articleFor, plainName, wikiGuess, wikiSearchUrl, wikiSummary, wikiUrl, type WikiSummary } from '../data/wiki.ts';
 import { ModelPreview } from '../render/satModels.ts';
 import { drawGroundMap, drawLineChart, drawOrbitShape, drawPolar, drawSunStrip } from './charts.ts';
 import { $, fmt, fmtKm, fmtKmS, getClockZone, getUnits, type Units } from './dom.ts';
@@ -128,6 +132,10 @@ export class Inspector {
     this.handlers = handlers;
     this.getObserver = getObserver;
     this.mapImage.src = './textures/earth-blue-marble.jpg';
+    // On a phone the tabs pin themselves under the name (mobile.css), so the layout has to know
+    // how tall the name is: it is one line or two, with the Wikipedia link under it.
+    const head = this.root.querySelector<HTMLElement>('.insp-head')!;
+    new ResizeObserver(() => this.root.style.setProperty('--insp-head', `${Math.round(head.getBoundingClientRect().height)}px`)).observe(head);
     $('insp-close').addEventListener('click', handlers.onClose);
     $('insp-trace').addEventListener('click', handlers.onTrace);
     $('insp-star').addEventListener('click', handlers.onStar);
@@ -185,7 +193,9 @@ export class Inspector {
     const o = sat.omm;
 
     $('insp-dot').style.color = CATEGORY_COLORS[sat.category];
-    $('insp-name').textContent = sat.name;
+    const title = $('insp-name');
+    title.textContent = displayName(sat); // "Hubble Space Telescope (HST)" where the catalogue's name is a code
+    title.title = title.textContent;
     $('insp-sub').replaceChildren(...[`NORAD ${sat.noradId}`, sat.intlDes || 'no designator', sat.category].map((text) => {
       const span = document.createElement('span');
       span.textContent = text;
@@ -242,20 +252,30 @@ export class Inspector {
     $('rc-raw').textContent = JSON.stringify(o, null, 2);
     $('rc-about').classList.add('is-hidden');
 
-    // ---- photograph + description from Wikipedia (if there is an article for its programme)
+    // ---- Wikipedia: a link under the name whatever happens, and a photograph and a description when there is an article
     const token = ++this.token;
     const article = articleFor(sat);
-    if (article) {
-      void wikiSummary(article).then((page) => {
-        if (token !== this.token || !page) return;
-        if (page.extract) {
-          $('rc-extract').textContent = page.extract;
-          $<HTMLAnchorElement>('rc-wiki').href = page.pageUrl;
-          $('rc-about').classList.remove('is-hidden');
-        }
-        this.setPhoto(page.imageUrl, page);
-      });
-    }
+    const link = $<HTMLAnchorElement>('insp-wiki');
+    const pointTo = (href: string, found: boolean) => {
+      link.href = href;
+      link.textContent = found ? 'Wikipedia' : 'Search Wikipedia';
+      link.title = found ? 'Read about it on Wikipedia (opens in a new tab)' : 'No article is known for this object: search Wikipedia for its name (opens in a new tab)';
+    };
+    // Straight away, before anything has been fetched: the article if the table knows one, else a search.
+    if (article) pointTo(wikiUrl(article), true);
+    else pointTo(wikiSearchUrl(plainName(sat)), false);
+    const arrived = (page: WikiSummary | null) => {
+      if (token !== this.token || !page) return;
+      pointTo(page.pageUrl, true);
+      if (page.extract) {
+        $('rc-extract').textContent = page.extract;
+        $<HTMLAnchorElement>('rc-wiki').href = page.pageUrl;
+        $('rc-about').classList.remove('is-hidden');
+      }
+      this.setPhoto(page.imageUrl, page);
+    };
+    // No article in the table: the object's own name is tried once as a title (remembered, like the others).
+    void (article ? wikiSummary(article) : wikiGuess(sat)).then(arrived);
 
     this.root.classList.remove('is-hidden');
     this.showTab(this.tab);

@@ -1,13 +1,25 @@
 // scripts/test-command.mjs — `node scripts/test-command.mjs`
 //
-// Checks the command bar's grammar (src/features/commandParse.ts) and its list of places
-// (src/data/places.ts) without a browser. Every case is a typed phrase and the exact moment or
-// speed it must turn into; phrases that must NOT be understood are tested just as strictly,
-// because a wrong guess would move the visitor's clock. Exits 1 on any failure.
+// Checks everything behind the search field that can be checked without a browser:
+//   - the grammar of typed times and speeds (src/features/commandParse.ts): every case is a
+//     phrase and the exact moment or speed it must turn into, and phrases that must NOT be
+//     understood are tested just as strictly, because a wrong guess would move the visitor's clock;
+//   - the forgiving matcher (src/ui/searchMatch.ts): case, spacing, misspellings;
+//   - the keyword hash table and the object finder on the real catalogue
+//     (src/ui/searchIndex.ts, src/ui/searchObjects.ts): "telescope" finds the telescopes;
+//   - the list of places (src/data/places.ts).
+// Exits 1 on any failure.
 // Node 22.18+ imports the project's TypeScript files directly (built-in type stripping).
 
-import { matchScore, normalize, parseSpeed, parseTime } from '../src/features/commandParse.ts';
+import { readFileSync } from 'node:fs';
+import { buildCatalog } from '../src/data/catalog.ts';
+import { describe } from '../src/data/describe.ts';
+import { displayName } from '../src/data/names.ts';
 import { PLACES } from '../src/data/places.ts';
+import { parseSpeed, parseTime, splitState } from '../src/features/commandParse.ts';
+import { buildKeywordIndex, findDescribed, findTopics, intersect } from '../src/ui/searchIndex.ts';
+import { editDistance, matchScore, normalize, withoutVerb } from '../src/ui/searchMatch.ts';
+import { ObjectFinder } from '../src/ui/searchObjects.ts';
 
 let failed = 0, passed = 0;
 const pad = (text, width) => String(text).padEnd(width);
@@ -155,40 +167,142 @@ speed('reverse', 'reverse');
 for (const phrase of ['', '100', '25544', '+90m', '-1d', 'speed', 'x', 'fast', '10 km', 'tomorrow 9 pm']) speed(phrase, 'not a speed');
 
 // ---- matching -------------------------------------------------------------------------------
-console.log('\nMatching (higher is a better fit, 0 is none).\n');
-const score = (query, phrase, want) => check('match', `${query} ~ ${phrase}`, matchScore(normalize(query), normalize(phrase)), want);
-score('Monitor', 'monitor', 100);
-score('mon', 'monitor', 80);
-score('colour by', 'colour by altitude', 85);
-score('col alt', 'colour by altitude', 60);
-score('altitude', 'colour by altitude', 50);
-score('titu', 'colour by altitude', 25);
-score('sao paulo', 'São Paulo', 100);
-score('washington dc', 'Washington, D.C.', 100);
-score('day night', 'Day / night line', 85);
+console.log('\nMatching (1 is the same text, 0 is no match; the scale is in src/ui/searchMatch.ts).\n');
+const score = (query, phrase, want) => check('match', `${query} ~ ${phrase}`, matchScore(query, phrase), want);
+score('Monitor', 'monitor', 1);
+score('mon', 'monitor', 0.85);
+score('colour by', 'colour by altitude', 0.9);
+score('col alt', 'colour by altitude', 0.72);
+score('altitude', 'colour by altitude', 0.62);
+score('titu', 'colour by altitude', 0.4);
+score('sao paulo', 'São Paulo', 1);
+score('washington dc', 'Washington, D.C.', 1);
+score('day night', 'Day / night line', 0.9);
+score('TERRASAR X', 'TerraSAR-X', 1);
+score('space x', 'SpaceX', 0.96);
 score('xyz', 'monitor', 0);
-score('monitor on', 'monitor', 0);
+score('iss', 'mission', 0); // three letters must be the word or its beginning, never "somewhere inside"
+score('starlink 1234', 'STARLINK-1235', 0); // numbers are never treated as misspelt
 const order = ['monitor', 'mon', 'col alt', 'altitude', 'titu'].map((q) => matchScore(q, q === 'monitor' || q === 'mon' ? 'monitor' : 'colour by altitude'));
 check('match', 'exact > prefix > words > loose', String(order.every((s, i) => i === 0 || s < order[i - 1])), 'true');
 
+// misspellings: found, but always below a proper match (0.6), and well above "not worth showing" (0.3)
+const fuzzy = (query, texts, least = 0.45) => {
+  const got = matchScore(query, ...texts);
+  check('typo', `${query} ~ ${texts[0]}`, `${got >= least && got < 0.6 ? 'found' : 'not found'}`, 'found');
+};
+fuzzy('james webber telescope', ['James Webb Space Telescope', 'jwst', 'webb'], 0.5); // the search that started all this
+fuzzy('hubbel', ['Hubble Space Telescope']);
+fuzzy('telescpe', ['Space telescopes']);
+fuzzy('jupitor', ['Jupiter']);
+fuzzy('satrun', ['Saturn']);
+fuzzy('new yrok', ['New York']);
+check('typo', 'james webb ~ James Webb Space Telescope', matchScore('james webb', 'James Webb Space Telescope', 'jwst', 'webb'), 0.9);
+check('typo', 'jwst ~ (its abbreviation)', matchScore('JWST', 'James Webb Space Telescope', 'jwst', 'webb'), 1);
+check('typo', 'hubble telescope ~ Hubble Space Telescope', matchScore('hubble telescope', 'Hubble Space Telescope'), 0.72);
+check('typo', 'telescope !~ telecom', matchScore('telescope', 'telecom'), 0);
+check('typo', 'edit distance hubbel → hubble (a swap)', editDistance('hubbel', 'hubble'), 1);
+check('typo', 'edit distance kitten → sitting', editDistance('kitten', 'sitting'), 3);
+
+// the small words around a command
+const verb = (phrase, want) => check('verb', phrase, withoutVerb(normalize(phrase)).bare, want);
+verb('go to Cairo', 'cairo');
+verb('show telescopes', 'telescopes');
+verb('find the hubble', 'hubble');
+verb('tokyo', 'tokyo');
+check('verb', 'go to cairo is travel', String(withoutVerb('go to cairo').going), 'true');
+check('verb', 'show clouds is not travel', String(withoutVerb('show clouds').going), 'false');
+const state = (phrase, want) => {
+  const { rest, state: way } = splitState(normalize(phrase));
+  check('switch', phrase, `${rest} / ${way === undefined ? 'not said' : way ? 'on' : 'off'}`, want);
+};
+state('monitor on', 'monitor / on');
+state('turn the monitor off', 'monitor / off');
+state('hide clouds', 'clouds / off');
+state('clouds', 'clouds / not said');
+
+// ---- the catalogue: objects by name, types by keyword ------------------------------------------
+console.log('\nThe real catalogue (public/data/satellites.json).\n');
+const catalog = buildCatalog(JSON.parse(readFileSync(new URL('../public/data/satellites.json', import.meta.url), 'utf8')));
+const facts = new Map();
+try {
+  for (const [id, type, status, owner] of JSON.parse(readFileSync(new URL('../public/data/satcat.json', import.meta.url), 'utf8')).rows) facts.set(id, { type, status, owner });
+} catch { /* the facts file is optional: owners are then not indexed */ }
+const finder = new ObjectFinder(catalog);
+const index = buildKeywordIndex(catalog.sats, facts);
+
+const first = (query, want) => check('object', query, finder.find(query, 6)[0]?.sat.name ?? 'nothing', want);
+first('hubble', 'HST');
+first('Hubble Space Telescope', 'HST');
+first('hubbel', 'HST'); // misspelt
+first('hubble telescope', 'HST');
+first('chandra', 'CXO');
+first('fermi', 'FGRST (GLAST)');
+first('iss', 'ISS (ZARYA)');
+first('space station', 'ISS (ZARYA)');
+first('tiangong', 'CSS (TIANHE)');
+first('25544', 'ISS (ZARYA)');
+first('terrasar x', 'TERRASAR-X');
+first('TerraSAR-X', 'TERRASAR-X');
+first('sentinal 2a', 'SENTINEL-2A'); // misspelt, beside a number that is right
+check('object', 'sentinal (misspelt) finds a Sentinel', String(finder.find('sentinal', 6).every((hit) => hit.sat.name.startsWith('SENTINEL')) && finder.find('sentinal', 6).length > 0), 'true');
+first('qqqqzzzz', 'nothing');
+check('object', 'displayName(HST)', displayName(catalog.byName.get('HST')[0]), 'Hubble Space Telescope (HST)');
+check('object', 'displayName(CXO)', displayName(catalog.byName.get('CXO')[0]), 'Chandra X-ray Observatory (CXO)');
+check('object', 'displayName(FGRST)', displayName(catalog.byName.get('FGRST (GLAST)')[0]), 'Fermi Gamma-ray Space Telescope (FGRST)');
+check('object', 'displayName leaves readable names alone', displayName(catalog.byName.get('LANDSAT 9')[0]), 'LANDSAT 9');
+
+const topic = (query, want) => check('type', query, findTopics(index, query, 3)[0]?.topic.label ?? 'nothing', want);
+topic('telescope', 'Space telescopes');
+topic('telescopes', 'Space telescopes');
+topic('telescpe', 'Space telescopes'); // misspelt
+topic('observatory', 'Space telescopes');
+topic('weather', 'Weather satellites');
+topic('weather satellites', 'Weather satellites');
+topic('debris', 'Debris fragments');
+topic('space junk', 'Debris fragments');
+topic('rocket', 'Rocket upper stages');
+topic('spacex', 'SpaceX');
+topic('gps', 'GPS navigation');
+topic('navigation', 'Navigation satellites');
+topic('geostationary', 'Geostationary orbit');
+topic('hubble', 'nothing'); // a name, not a type
+const telescopes = findTopics(index, 'telescope', 1)[0].topic;
+const names = new Set(telescopes.members.map((i) => catalog.sats[i].name));
+check('type', 'the telescopes include Hubble, Chandra, Fermi', String(['HST', 'CXO', 'FGRST (GLAST)'].every((name) => names.has(name))), 'true');
+check('type', 'every one of them is drawn as a telescope', String(telescopes.members.every((i) => describe(catalog.sats[i]).kind === 'telescope')), 'true');
+check('type', 'at least ten telescopes', String(telescopes.members.length >= 10), 'true');
+check('type', 'keyword lists are sorted, without repeats', String([...index.byWord.values()].every((list) => list.every((v, k) => k === 0 || v > list[k - 1]))), 'true');
+check('type', 'byWord("telescope") is those objects', String(index.byWord.get('telescope')?.length === telescopes.members.length), 'true');
+check('type', 'intersect', intersect([1, 3, 5, 7, 9], [2, 3, 4, 7, 10]).join(','), '3,7');
+if (facts.size > 0) {
+  topic('chinese', 'China');
+  topic('russian', 'Russia / CIS');
+  const both = findDescribed(index, 'chinese weather');
+  const china = index.byWord.get('chinese'), weather = index.byWord.get('weather');
+  check('type', 'chinese weather = the objects in both lists', String(!!both && both.members.length === intersect(china, weather).length && both.members.length > 0), 'true');
+  check('type', 'a name is not a description', String(findDescribed(index, 'hubble telescope')), 'null');
+}
+console.log(`     ${index.topics.length} types, ${index.byWord.size} keywords, ${telescopes.members.length} telescopes`);
+
 // ---- the places list ------------------------------------------------------------------------
 console.log('\nPlaces.\n');
-const names = new Map(); // normalised name or other name → the place that owns it (a hash table, to catch duplicates)
+const placeNames = new Map(); // normalised name or other name → the place that owns it (a hash table, to catch duplicates)
 let clashes = 0, outOfRange = 0;
 for (const place of PLACES) {
   if (!(place.lat >= -90 && place.lat <= 90 && place.lon >= -180 && place.lon <= 180)) outOfRange++;
   const key = normalize(place.name);
-  if (names.has(key)) {
+  if (placeNames.has(key)) {
     clashes++;
     console.log(`     "${place.name}" is listed twice`);
   }
-  names.set(key, place);
+  placeNames.set(key, place);
 }
 check('places', 'how many', String(PLACES.length >= 200 && PLACES.length <= 300), 'true');
 check('places', 'coordinates in range', outOfRange, 0);
 check('places', 'names listed twice', clashes, 0);
 const spot = (name, lat, lon) => {
-  const place = names.get(normalize(name));
+  const place = placeNames.get(normalize(name));
   check('places', name, place ? `${place.lat}, ${place.lon}` : 'missing', `${lat}, ${lon}`);
 };
 spot('Tokyo', 35.68, 139.69);

@@ -188,6 +188,7 @@ export function mountLaunch(container: HTMLElement): void {
   const tick = (now: number) => {
     if (loading.classList.contains('is-done') || !root.isConnected) return; // the loading screen has gone: stop
     requestAnimationFrame(tick);
+    if (loading.classList.contains('is-aside')) return; // set aside behind the home page: nobody is reading
     if (now - lastRead < 50) return; // 20 readings a second is plenty
     lastRead = now;
     const p = Math.min(1, Math.max(0, parseFloat(getComputedStyle(loading).getPropertyValue('--p')) || 0));

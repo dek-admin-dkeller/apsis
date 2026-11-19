@@ -1,11 +1,19 @@
 /**
- * Real photographs and a short description, from Wikipedia.
+ * Real photographs, a short description and a link, from Wikipedia.
  *
  * There is no photo of each of 19,000 objects, but most belong to a programme that has a
  * Wikipedia article with a lead picture (a Starlink satellite, the ISS, a GPS block…). The
  * object's name is matched to an article title here, and the article's summary is fetched
  * the first time it is needed — one small request per article per session, remembered in
  * a Map. Offline, or when an article has no picture, the inspector keeps its 3D model.
+ *
+ * Every object gets a link, picture or not:
+ *   - its programme's article, when the table below knows one (`articleFor`, `wikiUrl`);
+ *   - otherwise its own name is tried once as an article title when it is selected
+ *     (`wikiGuess`: "NUSANTARA SATU" has an article of its own that no table lists);
+ *   - failing that, Wikipedia's search for the name (`wikiSearchUrl`).
+ *
+ * The requests carry the article title and nothing else: no identifying headers, no cookies.
  */
 
 import type { Satellite } from './types.ts';
@@ -142,6 +150,7 @@ const ARTICLES: [RegExp, string][] = [
   [/^EARTHCARE/, 'EarthCARE'],
   [/^SMOS$/, 'Soil Moisture and Ocean Salinity'],
   [/^PROBA/, 'PROBA'],
+  [/^(WORLDVIEW )?LEGION/, 'WorldView Legion'],
   [/^WORLDVIEW/, 'WorldView-3'],
   [/^PLEIADES/, 'Pléiades (satellite)'],
   [/^SPOT \d/, 'SPOT (satellite)'],
@@ -153,7 +162,7 @@ const ARTICLES: [RegExp, string][] = [
   [/^RESOURCESAT/, 'Resourcesat-2'],
   [/^INSAT/, 'Indian National Satellite System'],
   [/^GSAT-/, 'GSAT'],
-  [/^(FLOCK|DOVE|SUPERDOVE)/, 'Planet Labs'],
+  [/^(FLOCK|DOVE|SUPERDOVE|PELICAN|TANAGER)/, 'Planet Labs'],
   [/^SKYSAT/, 'SkySat'],
   [/^LEMUR/, 'Spire Global'],
   [/^ICEYE/, 'ICEYE'],
@@ -161,7 +170,7 @@ const ARTICLES: [RegExp, string][] = [
   [/^(BLACKSKY|GLOBAL-\d)/, 'BlackSky'],
   [/^HAWK-/, 'HawkEye 360'],
   [/^SPACEBEE/, 'Swarm Technologies'],
-  [/^(BLUEWALKER|BLUEBIRD)/, 'AST SpaceMobile'],
+  [/^(BLUEWALKER|BLUEBIRD|SPACEMOBILE)/, 'AST SpaceMobile'],
   [/^O3B/, 'O3b'],
   [/^YAOGAN/, 'Yaogan'],
   [/^GAOFEN/, 'Gaofen'],
@@ -187,7 +196,7 @@ const ARTICLES: [RegExp, string][] = [
   [/^DIRECTV/, 'DirecTV satellite fleet'],
   [/^(TELSTAR|ANIK|NIMIQ)/, 'Telesat'],
   [/^GALAXY \d/, 'Galaxy (satellite)'],
-  [/^(SIRIUS|XM)[- ]/, 'Sirius XM'],
+  [/^(SIRIUS|XM|SXM)[- ]/, 'Sirius XM'],
   [/^THURAYA/, 'Thuraya'],
   [/^ARABSAT|^BADR/, 'Arabsat'],
   [/^TURKSAT/, 'Türksat (satellite)'],
@@ -201,6 +210,69 @@ const ARTICLES: [RegExp, string][] = [
   [/^SBIRS/, 'Space-Based Infrared System'],
   [/^DMSP/, 'Defense Meteorological Satellite Program'],
   [/^SKYNET/, 'Skynet (satellite)'],
+  // Science missions filed under a code or a short name.
+  [/^DAMPE/, 'Dark Matter Particle Explorer'],
+  [/^HINODE/, 'Hinode (satellite)'],
+  [/^NEOSSAT/, 'Near Earth Object Surveillance Satellite'],
+  [/^HXMT/, 'Hard X-ray Modulation Telescope'],
+  [/^EINSTEIN PROBE/, 'Einstein Probe'],
+  [/^SVOM/, 'Space Variable Objects Monitor'],
+  [/^SPHEREX/, 'SPHEREx'],
+  [/^PUNCH-/, 'Polarimeter to Unify the Corona and Heliosphere'],
+  [/^TIMED$/, 'TIMED'],
+  [/^XPOSAT/, 'XPoSat'],
+  [/^ACS3$/, 'Solar sail'],
+  [/^BIOMASS$/, 'Biomass (satellite)'],
+  [/^POLAR$/, 'Polar (satellite)'],
+  [/^LAGEOS/, 'LAGEOS'],
+  [/^CYGFM/, 'Cyclone Global Navigation Satellite System'],
+  [/^GOSAT/, 'Greenhouse Gases Observing Satellite'],
+  // The largest families that had no article at all (counted in public/data/satellites.json).
+  [/^GEESAT/, 'Geespace'],
+  [/^(PRAETORIAN |SDA[-_ ])/, 'Space Development Agency'],
+  [/^SITRO-AIS/, 'Sitronics'],
+  [/^SHIYAN/, 'Shiyan (satellite)'],
+  [/^RASSVET/, 'Bureau 1440'],
+  [/^TJS/, 'Tongxin Jishu Shiyan'],
+  [/^ION SCV/, 'ION Satellite Carrier'],
+  [/^USA \d/, 'List of USA satellites'],
+  [/^NUSAT/, 'ÑuSat'],
+  [/^IRIDE/, 'IRIDE'],
+  [/^PIESAT/, 'Hongtu-1'],
+  [/^TOMORROW/, 'Tomorrow.io'],
+  [/^QPS-SAR/, 'IQPS'],
+  [/^GHGSAT/, 'GHGSat'],
+  [/^STRIX/, 'Synspective'],
+  [/^APRIZESAT/, 'AprizeSat'],
+  [/^FOREST-/, 'OroraTech'],
+  [/^JCSAT/, 'JSAT (satellite constellation)'],
+  [/^FORMOSAT/, 'Taiwan Space Agency'],
+  [/^SATELIOT/, 'Sateliot'],
+  [/^FOSSASAT/, 'FOSSA Systems'],
+  [/^KOREASAT/, 'Koreasat'],
+  [/^ABS[- ]\d/, 'ABS (satellite operator)'],
+  [/^BSAT/, 'Broadcasting Satellite System Corporation'],
+  [/^ASTROCAST/, 'Astrocast'],
+  [/^KEPLER/, 'Kepler Communications'],
+  [/^LYNK/, 'Lynk Global'],
+  [/^UFO /, 'UHF Follow-On satellite'],
+  [/^(AMAZONAS|HISPASAT)/, 'Hispasat'],
+  [/^MERIDIAN/, 'Meridian (satellite)'],
+  [/^KANOPUS/, 'Kanopus'],
+  [/^(HUANJING|HJ-)/, 'Huanjing (satellite)'],
+  [/^HELLAS[- ]SAT/, 'Hellas Sat'],
+  [/^SYRACUSE/, 'Syracuse (satellite)'],
+  [/^THOR \d/, 'Thor (satellite)'],
+  [/^STAR ONE/, 'Star One (satellite operator)'],
+  [/^AMOS[- ]/, 'AMOS (satellite)'],
+  [/^MEASAT/, 'MEASAT Satellite Systems'],
+  [/^HYLAS/, 'Avanti Communications'],
+  [/^LUCH/, 'Luch (satellite)'],
+  [/^RISAT/, 'RISAT'],
+  [/^OPTUS/, 'Optus (satellite)'],
+  [/^DUBAISAT/, 'DubaiSat-1'],
+  [/^CZ-\d.* R\/B/, 'Long March (rocket family)'],
+  [/^COSMOS \d/, 'Kosmos (satellite)'], // last: the navigation and debris Cosmos entries above come first
 ];
 
 export function articleFor(sat: Satellite): string | null {
@@ -210,6 +282,12 @@ export function articleFor(sat: Satellite): string | null {
 }
 
 const cache = new Map<string, Promise<WikiSummary | null>>();
+
+/** The address of an article whose title is known (no request needed to make the link). */
+export const wikiUrl = (title: string): string => `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}`;
+
+/** Wikipedia's own search for a name: where the link goes when no article is known. */
+export const wikiSearchUrl = (text: string): string => `https://en.wikipedia.org/w/index.php?search=${encodeURIComponent(text)}`;
 
 /** Summary of one article (null if offline, missing, or not a normal article). */
 export function wikiSummary(title: string): Promise<WikiSummary | null> {
@@ -221,33 +299,108 @@ export function wikiSummary(title: string): Promise<WikiSummary | null> {
   return hit;
 }
 
+/** A fetch that gives up after six seconds, so a slow answer never leaves a panel waiting. */
+async function getJson(url: string): Promise<unknown> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6000);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    return res.ok ? await res.json() : null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Sort an article's lead picture into photo or logo and put the summary together. */
+async function summarise(title: string, extract: string, picture: string | null, pageUrl: string): Promise<WikiSummary> {
+  const kind = picture ? await classify(picture) : null;
+  // If the pixels could not be read (a blocked or rate-limited download), fall back on the
+  // file type: a lead image drawn as vector art (.svg) is a logo or a diagram, never a photo.
+  const isLogo = kind ? kind.logo : !!picture && /\.svg/i.test(picture);
+  return {
+    title,
+    extract,
+    imageUrl: isLogo ? null : picture,
+    logoUrl: isLogo ? picture : null,
+    logoDark: isLogo && (kind ? kind.dark : true), // unknown artwork is drawn white: safe on the dark interface
+    pageUrl,
+  };
+}
+
 async function load(title: string): Promise<WikiSummary | null> {
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 6000);
-    const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g, '_'))}`, { signal: controller.signal });
-    clearTimeout(timer);
-    if (!res.ok) return null;
-    const page = (await res.json()) as {
+    const page = (await getJson(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g, '_'))}`)) as {
       type?: string; title?: string; extract?: string;
       thumbnail?: { source?: string };
       content_urls?: { desktop?: { page?: string } };
-    };
-    if (page.type !== 'standard') return null;
-    const picture = page.thumbnail?.source ?? null;
-    const kind = picture ? await classify(picture) : null;
-    // If the pixels could not be read (a blocked or rate-limited download), fall back on the
-    // file type: a lead image drawn as vector art (.svg) is a logo or a diagram, never a photo.
-    const isLogo = kind ? kind.logo : !!picture && /\.svg/i.test(picture);
-    return {
-      title: page.title ?? title,
-      extract: page.extract ?? '',
-      imageUrl: isLogo ? null : picture,
-      logoUrl: isLogo ? picture : null,
-      logoDark: isLogo && (kind ? kind.dark : true), // unknown artwork is drawn white: safe on the dark interface
-      pageUrl: page.content_urls?.desktop?.page ?? `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}`,
-    };
+    } | null;
+    if (!page || page.type !== 'standard') return null;
+    return await summarise(page.title ?? title, page.extract ?? '', page.thumbnail?.source ?? null, page.content_urls?.desktop?.page ?? wikiUrl(title));
   } catch {
     return null; // offline or blocked: the inspector keeps the 3D model
+  }
+}
+
+// ---------------------------------------------------------------- objects no table lists
+
+/** An object's name as it would be searched for: no bracketed aside, no catalogue suffix. "NUSAT-57 (EDMEE CHANDON)" → "NUSAT-57". */
+export function plainName(sat: Satellite): string {
+  return sat.name.replace(/\s*\(.*$/, '').replace(/\s+(DEB|R\/B)\b.*$/i, '').trim() || sat.name;
+}
+
+/** "KOREASAT 6A" → "Koreasat 6A": words of letters are written as a title has them; codes and numbers stay as they are. */
+function asTitle(name: string): string {
+  return name.replace(/[A-Z]{4,}/g, (word) => word[0] + word.slice(1).toLowerCase());
+}
+
+/** Does this text read like the article of something in space? (A satellite called HERMES must not link to the Greek god.) */
+const ABOUT_SPACE = /satellite|spacecraft|space|orbit|launch|rocket|constellation|telescope|cubesat/i;
+
+/**
+ * An object the table does not know: try its own name as an article title, once. One request
+ * asks for the name as the catalogue writes it and as a title would ("NUSANTARA SATU",
+ * "Nusantara Satu", and with a hyphen before a final number); redirects are followed. A missing page, a disambiguation page or an article
+ * about something that is not in space all count as "no article" (null).
+ *
+ * This uses Wikipedia's query API rather than the summary address used above, because that
+ * one answers "no such page" with an error status, which the browser prints in the console
+ * for every object without an article; the query API answers the same question with a plain
+ * "missing". Fragments and rocket bodies are not asked about: they have no articles of their own.
+ */
+export function wikiGuess(sat: Satellite): Promise<WikiSummary | null> {
+  if (sat.category === 'Debris' || /\b(DEB|R\/B)\b/i.test(sat.name)) return Promise.resolve(null);
+  const name = plainName(sat);
+  const key = `guess:${name}`;
+  let hit = cache.get(key);
+  if (!hit) {
+    hit = guess(name);
+    cache.set(key, hit);
+  }
+  return hit;
+}
+
+interface QueryPage {
+  title?: string;
+  missing?: boolean;
+  extract?: string;
+  thumbnail?: { source?: string };
+  pageprops?: { disambiguation?: string };
+  fullurl?: string;
+}
+
+async function guess(name: string): Promise<WikiSummary | null> {
+  try {
+    const joined = name.replace(/ (?=\d)/, '-'); // "AZERSPACE 1" is written "Azerspace-1" as often as not
+    const titles = [...new Set([name, asTitle(name), joined, asTitle(joined)])];
+    const data = (await getJson(
+      'https://en.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&origin=*&redirects=1'
+      + '&prop=extracts%7Cpageimages%7Cpageprops%7Cinfo&exintro=1&explaintext=1&exsentences=3&piprop=thumbnail&pithumbsize=640&ppprop=disambiguation&inprop=url'
+      + `&titles=${encodeURIComponent(titles.join('|'))}`,
+    )) as { query?: { pages?: QueryPage[] } } | null;
+    const page = data?.query?.pages?.find((p) => !p.missing && p.title && p.pageprops?.disambiguation === undefined && ABOUT_SPACE.test(p.extract ?? ''));
+    if (!page) return null;
+    return await summarise(page.title!, page.extract ?? '', page.thumbnail?.source ?? null, page.fullurl ?? wikiUrl(page.title!));
+  } catch {
+    return null; // offline or blocked: the link stays a search
   }
 }
