@@ -16,19 +16,31 @@
  *             without the worker: a few thousand positions, not a hundred million.
  *
  * Distances here are true, between the craft's real paths from NASA's data (src/space/deep.ts).
+ *
+ * The same monitor runs on the SOLAR SYSTEM, for the craft out between the planets (round the
+ * Sun): there the cells are ten thousand times wider (1 million to 100 million km, `SCALE`),
+ * because nothing out there comes within a thousand kilometres of anything else, and the view
+ * bends each cell by the map's own squeeze of distance (SpaceView.setCells).
+ *
+ * With a craft selected and the cells shown, its own cell is lit amber and the block of 27
+ * cells the search looks through (its cell and the 26 around it) is outlined, as round the
+ * Earth (render/gridViz.ts), and the panel says what shares that block with it.
  */
 
 import { hashedPairs } from '../hashing/conjunction.ts';
 import type { SpaceView } from '../render/space/spaceView.ts';
 import { craftPosition } from '../space/deep.ts';
 import type { Craft, Vec } from '../space/types.ts';
-import { $, fmtInt, fmtKm } from './dom.ts';
+import { $, fmt, fmtInt, fmtKm, lengthUnit, lengthValue } from './dom.ts';
 import { clockStamp, duration } from './inspector.ts';
 
 const STEP_MS = 30000;
 const DAY_MS = 86400000;
 /** The most two craft can close on each other, km/s (twice the fastest orbital speed worth planning for). */
 const CLOSING_KM_S = 12;
+/** Cells on the solar system are this many times wider than at a world (the same three buttons). */
+const SCALE = { place: 1, map: 10000 } as const;
+type Mode = keyof typeof SCALE;
 
 interface Pass {
   a: Craft;
@@ -38,12 +50,13 @@ interface Pass {
 }
 
 export class PlaceWatch {
-  private readonly view: SpaceView;
+  private view: SpaceView;
+  private mode: Mode = 'place';
   private readonly time: () => number;
   private readonly choose: (craft: Craft, timeMs: number | null) => void;
   private readonly panel = $('panel-watch');
   private crafts: Craft[] = [];
-  private alertKm = 1000;
+  private alertSetting = 1000; // the button chosen (place scale); alertKm is it in the current mode
   private grid = false;
   private lastScreen = -1;
   private scanFor = ''; // what the 24-hour list was worked out for, so it is redone only when that changes
@@ -56,7 +69,7 @@ export class PlaceWatch {
     const choices = $('watch-km');
     for (const button of choices.querySelectorAll<HTMLButtonElement>('button')) {
       button.addEventListener('click', () => {
-        this.alertKm = Number(button.dataset.value);
+        this.alertSetting = Number(button.dataset.value);
         for (const other of choices.querySelectorAll('button')) other.classList.toggle('is-on', other === button);
         this.lastScreen = -1;
         this.scan();
@@ -65,9 +78,13 @@ export class PlaceWatch {
     this.refreshUnits();
   }
 
+  private get alertKm(): number {
+    return this.alertSetting * SCALE[this.mode];
+  }
+
   /** The alert distances are written in the chosen unit. */
   refreshUnits(): void {
-    for (const button of $('watch-km').querySelectorAll<HTMLButtonElement>('button')) button.textContent = fmtKm(Number(button.dataset.value));
+    for (const button of $('watch-km').querySelectorAll<HTMLButtonElement>('button')) button.textContent = compactKm(Number(button.dataset.value) * SCALE[this.mode]);
     this.lastScreen = -1;
     this.scanFor = '';
     if (this.isOpen) this.scan();
@@ -77,11 +94,23 @@ export class PlaceWatch {
     return !this.panel.classList.contains('is-hidden');
   }
 
-  /** The craft in flight at the place being visited (nothing standing on the ground). */
-  setCraft(crafts: Craft[]): void {
+  /**
+   * What to watch: the craft in flight at the place being visited (nothing standing on the
+   * ground), or on the solar system the craft round the Sun; and the view that draws its cells.
+   */
+  setCraft(crafts: Craft[], view: SpaceView = this.view, mode: Mode = 'place'): void {
+    if (view !== this.view) this.view.setCells(null);
+    this.view = view;
+    if (mode !== this.mode) {
+      this.mode = mode;
+      this.refreshUnits();
+    }
     this.crafts = crafts.filter((craft) => craft.motion.type !== 'surface');
     this.lastScreen = -1;
     this.scanFor = '';
+    $('watch-where').textContent = mode === 'map'
+      ? 'Spacecraft between the planets, screened with the same hash grid as the Earth’s 19,000 objects; out here the cells are millions of kilometres wide.'
+      : 'Spacecraft in flight here, screened with the same hash grid as the Earth’s 19,000 objects.';
     if (this.isOpen) this.scan();
   }
 
@@ -96,6 +125,7 @@ export class PlaceWatch {
     this.grid = on;
     this.lastScreen = -1;
     if (!on) this.view.setCells(null);
+    $('watch-focus').textContent = '';
   }
 
   /** Call every frame at a place: screens once a second while there is someone to show it to. */
@@ -115,10 +145,27 @@ export class PlaceWatch {
       const inPair = new Set<number>();
       for (const pair of result.pairs) inPair.add(pair.a).add(pair.b);
       const cells: number[] = [];
+      // (forEachCell hands back cell coordinates with SpatialHash's 2^16 offset already taken
+      // off. It used to be taken off again here, which put every cell 65 million km away.)
+      const centre = (i: number) => (i + 0.5) * this.alertKm;
       result.grid.forEachCell((ix, iy, iz, bucket) => {
-        const centre = (i: number) => (i - 65536 + 0.5) * this.alertKm; // SpatialHash: cell = floor(v / d) + 2^16
-        cells.push(centre(ix), centre(iy), centre(iz), bucket.some((id) => inPair.has(id)) ? 1 : 0);
+        cells.push(centre(ix), centre(iy), centre(iz), bucket.some((id) => inPair.has(id)) ? CELL.hot : CELL.plain);
       });
+      // The craft being looked at: its own cell, and the 27-cell block the search looks through.
+      const focus = this.view.focus?.kind === 'craft' ? crafts.indexOf(this.view.focus.craft) : -1;
+      const note = $('watch-focus');
+      if (focus >= 0) {
+        const cell = [0, 1, 2].map((k) => Math.floor(positions[focus * 3 + k] / this.alertKm));
+        cells.push(...cell.map(centre), CELL.own);
+        cells.push(...cell.map(centre), CELL.block);
+        const near = crafts.filter((_, j) => j !== focus && [0, 1, 2].every((k) => Math.abs(Math.floor(positions[j * 3 + k] / this.alertKm) - cell[k]) <= 1));
+        const name = crafts[focus].short;
+        note.textContent = near.length === 0
+          ? `${name}: nothing else in its block of 27 cells, so the search does not even measure a distance from it.`
+          : `${name} shares its block of 27 cells with ${near.map((craft) => craft.short).join(', ')}: only ${near.length === 1 ? 'that distance is' : 'those distances are'} measured.`;
+      } else {
+        note.textContent = 'Select a craft to see its cell and the 27 cells searched round it.';
+      }
       this.view.setCells(new Float64Array(cells), this.alertKm);
     }
     if (!this.isOpen) return;
@@ -209,4 +256,13 @@ export class PlaceWatch {
     for (const pass of passes) list.append(this.row(pass.a, pass.b, `${fmtKm(pass.km)} · in ${duration(pass.timeMs - start)}`, pass.timeMs));
     note.textContent = passes.length === 0 ? `No two craft here come within ${fmtKm(this.alertKm)} of each other in the next 24 hours.` : '';
   }
+}
+
+/** What each cell handed to SpaceView.setCells is (the fourth number of each). */
+export const CELL = { plain: 0, hot: 1, own: 2, block: 3 } as const;
+
+/** A distance in few characters, in the chosen unit: "100 km", "1 million km", "6.2 million mi". */
+function compactKm(km: number): string {
+  const value = lengthValue(km);
+  return value >= 1e6 ? `${fmt(value / 1e6, value < 1e7 && value % 1e6 !== 0 ? 1 : 0)} million ${lengthUnit()}` : fmtKm(km);
 }

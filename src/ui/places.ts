@@ -246,10 +246,10 @@ export class Places {
     this.place = new SpaceView(host.kit, host.backdrop(), side(() => this.place));
     this.map = new SpaceView(host.kit, host.backdrop(), side(() => this.map));
     $('pc-close').addEventListener('click', () => this.closeCard());
-    // The close-approach monitor of a place: choosing a pair looks at its first craft, at that moment.
+    // The close-approach monitor of a place (or of the solar system): choosing a pair looks at its first craft, at that moment.
     this.watcher = new PlaceWatch(this.place, host.time, (craft, timeMs) => {
       if (timeMs !== null) host.jumpTo(timeMs - 30000);
-      this.pick(this.place, { kind: 'craft', craft });
+      if (this.spot !== 'tracker') this.pick(this.view(this.spot), { kind: 'craft', craft });
     });
     $<HTMLInputElement>('watch-grid').addEventListener('change', () => host.setGrid($<HTMLInputElement>('watch-grid').checked));
     $('ph-enter').addEventListener('click', () => this.enter());
@@ -352,7 +352,7 @@ export class Places {
       if (pose && mix.to === 'tracker') this.host.holdTracker(pose);
       else if (pose) this.view(mix.to).update(dt, tMs, realSeconds, { key: mix.keyTo, pose });
     }
-    if (this.spot === 'place' && !mix) this.watcher.frame(realSeconds);
+    if (this.spot !== 'tracker' && !mix) this.watcher.frame(realSeconds);
     if (this.live && realSeconds - this.liveAt > 0.5) {
       this.liveAt = realSeconds;
       this.live();
@@ -382,7 +382,7 @@ export class Places {
 
   /** The rail's "Monitor" button at a place: the close-approach monitor for the craft there. */
   toggleWatch(open: boolean): void {
-    this.watcher.toggle(open && this.spot === 'place');
+    this.watcher.toggle(open && this.spot !== 'tracker');
   }
 
   /** The Layers switches that apply away from the tracker (see SpaceOptions). */
@@ -494,7 +494,10 @@ export class Places {
     if (this.spot === 'place') {
       this.fillHere();
       const body = this.hereBody;
-      this.watcher.setCraft(this.crafts.filter((craft) => craft.centre === body && !craft.site));
+      this.watcher.setCraft(this.crafts.filter((craft) => craft.centre === body && !craft.site), this.place, 'place');
+    } else if (this.spot === 'map') {
+      // On the solar system: the craft out between the planets, with cells millions of km wide.
+      this.watcher.setCraft(this.crafts.filter((craft) => craft.centre === 'sun' && !craft.site && !craft.passing), this.map, 'map');
     } else {
       this.watcher.toggle(false);
     }

@@ -1368,34 +1368,46 @@ export class SpaceView {
       (this.cells.material as THREE.Material).dispose();
       this.cells = null;
     }
-    if (!cells || cells.length === 0 || this.where?.kind !== 'place') return;
+    if (!cells || cells.length === 0 || !this.where) return;
+    const map = this.where.kind === 'system';
     const count = cells.length / 4;
-    const half = (sizeKm * this.unitsPerKm) / 2;
     const position = new Float32Array(count * 24 * 3), color = new Float32Array(count * 24 * 3);
     // The twelve edges of a cube, as pairs of corners (each corner a sign for x, y, z).
     const corners = [[-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1], [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]];
     const edges = [0, 1, 1, 2, 2, 3, 3, 0, 4, 5, 5, 6, 6, 7, 7, 4, 0, 4, 1, 5, 2, 6, 3, 7];
+    // Colours: a plain cell cyan, one holding a pair inside the alert distance red, the selected
+    // craft's own cell amber, and the faint outline of the 27 cells searched round it.
+    const COLOURS = [[0.5, 0.89, 1], [1, 0.3, 0.37], [1, 0.71, 0.33], [0.35, 0.55, 0.7]];
+    const corner = new THREE.Vector3();
+    const v: Vec = [0, 0, 0];
     for (let c = 0; c < count; c++) {
-      // ICRF (x, y, z) → star axes (x, z, −y); the group below turns star axes into this view's.
-      const cx = cells[c * 4] * this.unitsPerKm, cy = cells[c * 4 + 2] * this.unitsPerKm, cz = -cells[c * 4 + 1] * this.unitsPerKm;
-      const hot = cells[c * 4 + 3] > 0;
-      edges.forEach((corner, k) => {
+      const kind = cells[c * 4 + 3];
+      const half = (sizeKm / 2) * (kind === 3 ? 3 : 1); // the 27-cell block is three cells wide
+      const rgb = COLOURS[kind] ?? COLOURS[0];
+      edges.forEach((index, k) => {
         const at = (c * 24 + k) * 3;
-        // In star axes a cube stays a cube with its y and z edges swapped, so the same signs serve.
-        position[at] = cx + corners[corner][0] * half;
-        position[at + 1] = cy + corners[corner][1] * half;
-        position[at + 2] = cz + corners[corner][2] * half;
-        color[at] = hot ? 1 : 0.5;
-        color[at + 1] = hot ? 0.3 : 0.89;
-        color[at + 2] = hot ? 0.37 : 1;
+        if (map) {
+          // On the solar system distance from the Sun is squeezed (mapRadius): each corner goes
+          // through the same squeeze as everything else, so a cell is drawn where its craft is.
+          for (let d = 0; d < 3; d++) v[d] = cells[c * 4 + d] + corners[index][d] * half;
+          this.mapPoint(v, corner).toArray(position, at);
+        } else {
+          // ICRF (x, y, z) → star axes (x, z, −y); the group's turn (below) makes them this view's.
+          // In star axes a cube stays a cube with its y and z edges swapped, so the same signs serve.
+          position[at] = (cells[c * 4] + corners[index][0] * half) * this.unitsPerKm;
+          position[at + 1] = (cells[c * 4 + 2] + corners[index][1] * half) * this.unitsPerKm;
+          position[at + 2] = -(cells[c * 4 + 1] - corners[index][2] * half) * this.unitsPerKm;
+        }
+        color.set(rgb, at);
       });
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
     geometry.setAttribute('color', new THREE.BufferAttribute(color, 3));
-    this.cells = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55, depthWrite: false }));
-    this.cells.quaternion.copy(this.frame);
+    this.cells = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.7, depthWrite: false }));
+    if (!map) this.cells.quaternion.copy(this.frame); // mapPoint already gives this view's axes
     this.cells.frustumCulled = false;
+    this.cells.renderOrder = 6;
     this.content.add(this.cells);
   }
 

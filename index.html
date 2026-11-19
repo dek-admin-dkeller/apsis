@@ -461,6 +461,7 @@
         <section class="panel is-hidden" id="panel-watch">
           <header class="panel-head"><h2>Close-approach monitor</h2><button class="icon-btn" data-close-panel aria-label="Close panel">×</button></header>
           <div class="panel-body">
+            <p class="note" id="watch-where"></p>
             <p class="field-label">Alert distance</p>
             <div class="segmented" id="watch-km">
               <button data-value="100">100 km</button><button data-value="1000" class="is-on">1,000 km</button><button data-value="10000">10,000 km</button>
@@ -477,6 +478,7 @@
             <ol id="watch-ahead" class="pc-list"></ol>
             <p class="note" id="watch-ahead-note"></p>
             <label class="row-toggle" title="Draw the cells of the hash grid that hold a craft (G)"><span>Screening cells</span><input type="checkbox" id="watch-grid" /></label>
+            <p class="note" id="watch-focus"></p>
           </div>
         </section>
         <!-- Objects -->
@@ -837,6 +839,7 @@
             <label class="row-toggle" title="Blur what is behind the panels. Off is faster on older machines."><span>Frosted panels</span><input type="checkbox" data-setting="glass" /></label>
             <label class="row-toggle d-only" title="A small card with a picture and a few facts when you point at an object"><span>Hover card</span><input type="checkbox" data-setting="hoverCard" /></label>
             <label class="row-toggle d-only" title="Shrink and fade the time bar while it is not in use"><span>Quiet time bar</span><input type="checkbox" data-setting="quietUi" /></label>
+            <label class="row-toggle" title="Parts of Pluto, Charon, Triton and Uranus's moons were never photographed. On: filled in with an educated guess made from each world's own photographed terrain. Off: one plain tone. (The same switch as Layers → Unseen sides.)"><span>Fill in unseen sides of worlds</span><input type="checkbox" data-setting="guessUnseen" /></label>
             <label class="row-toggle" title="Show the home page first when the site opens"><span>Home page on arrival</span><input type="checkbox" data-setting="landing" /></label>
 
             <h3 class="group-label">Camera</h3>

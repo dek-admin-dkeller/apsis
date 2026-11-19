@@ -444,8 +444,11 @@ How the pieces fit:
 - **Views at every world** (`data-place-view` / `data-map-view` buttons in the rail's View
   group, keys 1–4, `SpaceView.goView`): whole, close, night, moons; on the solar system
   whole, inner, above.
-- **A close-approach monitor at every world** (`ui/placeWatch.ts`, `#panel-watch`, the rail's
-  Monitor button): the craft in flight there go through the SAME `hashedPairs`, once a second,
+- **A close-approach monitor at every world AND on the solar system** (`ui/placeWatch.ts`,
+  `#panel-watch`, the rail's Monitor button, G for the cells): the craft in flight there (on the
+  solar system: the craft round the Sun, with cells 10,000 times wider, 1–100 million km, each
+  cell's corners put through `mapPoint` so it bends with the map's squeeze) go through the SAME
+  `hashedPairs`, once a second,
   with a cell as wide as the alert distance; a 24-hour look-ahead hashes every 30 s with
   cells widened by what two craft can close in one step and narrows each candidate by thirds;
   "Screening cells" (the tracker's own switch, `G`) draws the occupied cells
@@ -793,9 +796,14 @@ it is used. So:
   (with "Source: NASA DSN Now"); "Coming up" as a timeline with a date column; one line per note.
   The menu is inside the top bar, so `updateRest()` must treat it as open (it faded with the idle
   dimming, to 0.28 on a phone).
-- **Browsing a searched type** (`ui/searchBrowse.ts`): choosing a Types row also opens a bar where
-  the filter banner sits, stepping through the objects (working craft first, then oldest first):
+- **Browsing a searched type** (`ui/searchBrowse.ts`): choosing a Types row also opens a bar at the
+  bottom, just above the resting time pill (raised over the open bar; under the search pill on a
+  phone), stepping through the objects (working craft first, then oldest first):
   ‹ ›, ← →, a swipe on the bar. "Done" / Escape clears the filter and keeps the object selected.
+- **The screening grid away from the Earth** was never on screen: `SpatialHash.forEachCell` hands
+  back cell coordinates with the 2^16 offset already removed and `placeWatch.ts` removed it again,
+  putting every cell 65 million km away. With a craft selected its own cell is amber and the
+  27-cell block is outlined (`CELL` kinds), and `#watch-focus` says what shares that block.
 - **The time bar's offset is short** (`shortSpan` in `timeControls.ts`: "−3.0 d", "+8.4 mo",
   "+82 yr") and the words "… behind" are hidden while the bar is open (the date line already says
   it): far from the present they ran over the transport buttons.

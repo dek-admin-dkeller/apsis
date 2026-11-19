@@ -22,7 +22,7 @@ body:not(.away) :is([data-place-view], .m-views-place), body.on-map :is([data-pl
 body:not(.on-map) :is([data-map-view], .m-views-map) { display: none; }
 body.no-moons [data-place-view='moons'] { display: none; }
 /* On the solar system the picture is the list of what is there. */
-body.on-map .rail :is([data-panel='objects'], [data-panel='conj']) { display: none; }
+body.on-map .rail [data-panel='objects'] { display: none; } /* the Monitor stays: the solar system is screened too */
 body.away #panel-conj { display: none !important; } /* at another world the monitor is #panel-watch */
 #panel-watch .pc-list { margin-top: 2px; }
 #panel-watch .pc-list:empty { display: none; }

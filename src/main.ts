@@ -572,7 +572,7 @@ function openPanel(name: PanelName | null): void {
     // At another world "Objects" is the list of what is there, not the Earth's catalogue.
     // At another world "Objects" is the list of what is there, and "Monitor" screens the craft there.
     if (button.dataset.panel === 'objects' && places.atPlace) places.toggleHere(on);
-    else if (button.dataset.panel === 'conj' && places.atPlace) places.toggleWatch(on);
+    else if (button.dataset.panel === 'conj' && places.elsewhere) places.toggleWatch(on);
     else $(`panel-${button.dataset.panel}`).classList.toggle('is-hidden', !on);
   }
 }
@@ -1867,7 +1867,7 @@ window.addEventListener('keydown', (event) => {
     else places.goView(places.atPlace ? (['whole', 'close', 'night', 'moons'] as const)[Number(event.key) - 1] : (['whole', 'inner', 'above', 'whole'] as const)[Number(event.key) - 1]);
     return;
   }
-  if (places.atPlace && event.key.toLowerCase() === 'g') return setGrid(!gridOn);
+  if (places.elsewhere && event.key.toLowerCase() === 'g') return setGrid(!gridOn); // the screening cells of any world, and of the solar system
   if (places.elsewhere && !['0', 'r', '[', ']', 'n', 'p', 'a', 'm', 'f', 'h', '/', ' ', 'escape', '?'].includes(event.key.toLowerCase())) return;
   switch (event.key.toLowerCase()) {
     case '0': goHome(); break;
