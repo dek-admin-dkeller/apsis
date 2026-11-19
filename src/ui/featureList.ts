@@ -82,6 +82,17 @@ export const FEATURES: FeatureGroup[] = [
     ],
   },
   {
+    title: 'Go beyond Earth orbit',
+    summary: 'Zoom out of the Earth into the solar system, and into any other world in it.',
+    items: [
+      { name: 'The solar system', text: 'Zoom out and the satellites fade away, leaving the Earth among the planets, each on the right side of the Sun for today’s date.', fresh: true },
+      { name: 'Other worlds', text: 'Click a planet or a moon, then go in: the Moon, Mars, Jupiter and its four big moons, Saturn and its rings, out to Pluto, each lit and turning as it is right now.', fresh: true },
+      { name: 'Spacecraft out there', text: 'The Webb telescope, the orbiters and rovers at Mars, Juno, the Voyagers: fifty craft placed from NASA’s own trajectory data, with how far away each is and how long its signal takes.', fresh: true },
+      { name: 'In contact now', text: 'A green mark on any craft that one of NASA’s deep-space dishes is talking to this minute.', fresh: true },
+      { name: 'Asteroids passing', text: 'Follow a near-Earth asteroid along its real path as it goes past.', fresh: true },
+    ],
+  },
+  {
     title: 'Explore',
     summary: 'Whole constellations, what was launched lately, your own satellite, and ways to show others.',
     items: [

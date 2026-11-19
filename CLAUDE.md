@@ -97,7 +97,11 @@ worker/lookahead.worker.ts: started on demand for the "Coming hours" scan (hashi
   (what is drawn). Exact single-object maths (selected object, close-approach view, passes)
   uses SGP4 directly on the main thread via `src/data/ephemeris.ts`.
 - `clock` in `main.ts` is `{ time (Unix ms), speed, paused }`; any jump in time must go
-  through `jumpTo()` (it calls `sim.reset()`).
+  through `jumpTo()` (it calls `sim.reset()`). At normal speed `advanceClock()` follows the
+  COMPUTER'S clock rather than summing frame times: a background tab or a locked phone draws
+  no frames, and the sum used to come back minutes behind the present (the owner saw the clock
+  "off"). Times are shown in the browser's local time unless Settings says UTC (the default
+  was UTC and read as a wrong local time; `Settings.defaults` moves old saves over once).
 - A user-designed satellite is appended to the snapshot (`customRecord`) and the catalogue
   is rebuilt with `rebuildCatalog()`; its NORAD id is 99001.
 
@@ -141,7 +145,8 @@ src/data/                   catalog, categorize, describe (operator/purpose/mode
                             (bright passes), approachData (report numbers), places (cities the search can fly to)
 src/hashing/                SpatialHash, conjunction, lookahead, benchmark, groups (union–find)
 src/worker/                 sim.worker (+ SimClient, protocol, propagate), lookahead.worker, tonight.worker (visible passes)
-src/render/                 scene (renderer, bloom, quality presets), globe (Earth shader), tiles (close-up ground:
+src/render/                 space/spaceView + space/bodyMesh (the scenes away from the tracker; see "Places"),
+                            scene (renderer, bloom, quality presets, the dissolve between scenes), globe (Earth shader), tiles (close-up ground:
                             NASA GIBS map tiles streamed in below ~6,000 km), geoOverlay (borders, grid, terminator), sky (Milky Way, stars, constellations, planets, Sun, Moon), aurora, satellites
                             (the point cloud, colour modes, highlighting, picking), satModels + modelParts + observatoryModels +
                             deepModels + planetaryModels (49 procedural models: see "3D models"; satModels also holds the
@@ -154,7 +159,8 @@ src/space/                  beyond Earth orbit (see "Beyond Earth orbit"): types
 src/features/               optional modules installed through the App interface (see "Feature modules"): radio, changes,
                             weather, launches, tonight (+ tonightWords), report (+ reportPage), growth, commands (+ commandParse),
                             flybys, fireballs, showers, dsn (the four share beyond.css)
-src/ui/                     app (the App interface), featureList (every feature, drawn on the home page), objectTabs (the
+src/ui/                     places (+ space.css: the moves between the tracker, another world and the solar system; see "Places"),
+                            app (the App interface), featureList (every feature, drawn on the home page), objectTabs (the
                             Objects panel's three tabs), inspector (+ charts), monitor (live pairs), ahead (prediction), encounterPanel, howto
                             (walkthrough), hashTrace, benchmarkModal, filters, search (+ searchMatch, searchIndex,
                             searchObjects: see "The search field"), settings, timeControls, labels,
@@ -329,6 +335,69 @@ location (and, on iOS, the motion sensors) straight from the tap, then enters th
 with `sky-immersive` on `<body>`: `firstPerson.css` hides the whole interface and leaves only
 a faint close button (the banner's own Exit button, restyled), any message, and "Set north"
 when the phone has no compass. Taps do not select objects in that mode.
+
+## Places: the tracker, another world, the solar system (`ui/places.ts`, `render/space/`)
+
+The tracker is one of three kinds of picture, and the visitor moves between them by zooming:
+the tracker (the Earth and everything round it), **a place** (another body, close up, at true
+scale, with its moons and spacecraft), and **the solar system** (every planet on its orbit;
+the camera either beside one body's dot or drawn back to the whole of it). Each is a scene of
+its own: the tracker's, and two `SpaceView`s (`render/space/spaceView.ts`; read its header)
+drawn through the same renderer and bloom with `SceneKit.show()`. `Places` (`ui/places.ts`)
+owns the two views and every move between the three.
+
+**The owner's rules for this (each one was asked for in so many words):**
+- **No cut and no fade to black between scenes.** For the half second of a change two scenes
+  are drawn at once and dissolved (`SceneKit.blend`, the `Dissolve` pass in `scene.ts`), and
+  the incoming scene's camera is held in the same position RELATIVE TO THE BODY as the outgoing
+  one's (`Pose`: position in body radii and orientation, both in star axes;
+  `SpaceView.update(…, slave)`, `holdCamera()` in `main.ts` for the tracker). A body is drawn
+  identically in a place and as its dot on the solar system (same shader, same map — the maps
+  are shared by all views —, same sunlight, same turn), so the body does not change at all:
+  only what surrounds it fades in or out. An earlier version dipped to black; it was rejected.
+- **The sky must not change.** Every scene has the same Milky Way, stars and constellation
+  figures (`Sky.backdrop()`, sharing the tracker's buffers), turned by each view's `frame`, and
+  the pose carries the camera's tilt across, so the stars do not jump; the view then comes
+  upright gently (`moveCamera` eases `camera.up`).
+- **Three steps, in this order.** Out of a world you arrive BESIDE ITS DOT on the solar
+  system, not at the whole picture; one step further out (the card's ×, Escape, a click on
+  empty space, zooming out) is the whole system. In: click a planet (the camera goes up to its
+  dot), then go on — click it again, zoom in, or the card's button — and the camera carries on
+  in while that world's surroundings appear. `Places.travel()` chains these for a search hit
+  or a button; `Places.jump()` (share links only) is the one place a scene simply appears.
+- **No menu of planets.** The picture is the menu on the solar system (no rail there at all;
+  a list of planets down the side was built and rejected). Moons that can be visited are drawn
+  beside their planet. At another world the ORDINARY tool rail is shown with what applies
+  there: Objects (the list of what is at that world, `#panel-here`), Layers (only the sky
+  tiles, marked `data-everywhere`), Settings, and the way out. `space.css` hides the rest with
+  `body.away` / `body.on-map`.
+
+How the pieces fit:
+- A place puts its body at the origin, always 6.371 scene units in radius (the Earth's size
+  in the tracker), so camera limits and close-up ground behave the same everywhere and GPU
+  precision is never asked to hold a Mars orbiter's position measured from the Sun. The
+  solar system squeezes distance from the Sun with a logarithm (`mapRadius`) and draws bodies
+  large; directions, lighting and turn are true. A dot the camera is near but not looking at
+  is shrunk (`place()`), or a neighbour would loom like a second world next door.
+- `bodyMesh.ts` is one shader for every body: a few numbers per body (`LOOKS`) for haze, limb
+  and rim; shadows worked out per pixel from geometry (a moon's shadow on its planet, a planet's
+  on its moon, rings on Saturn and Saturn on its rings) rather than from a shadow map, so they
+  cost a few dot products on any machine; the Sun has its own. The Earth as a place borrows
+  the tracker's night-lights and cloud pictures.
+- `main.ts` asks `places.away` (the tracker is not being drawn at all: its simulation,
+  screening and globe do not run) and `places.elsewhere` (the visitor is not in the tracker:
+  its shortcuts and picking are off). `step()` calls `places.lead()` before the tracker's
+  camera moves and `places.follow()` after, because in a dissolve one camera follows another.
+- "The Earth as a place" is only the far view that holds what is beyond Earth orbit (Webb, the
+  L1 craft, a passing asteroid); the tracker and it are the same world in the same position,
+  so going between them is a dissolve with no move. An asteroid of the fly-by list is given to
+  the views as a `Craft` with `passing` set (`rockCraft` in `places.ts`).
+- The solar system names only a dozen well-known craft (`HEADLINE`) and draws only the paths
+  of the five leaving for good (`LEAVING`): with every dead probe named and ringed, the inner
+  planets were buried.
+- Share links: `#place=mars`, `#place=system&at=jupiter`, `#craft=webb`.
+
+Never verified on real hardware: how the dissolve and the long zooms feel on a phone's GPU.
 
 ## Beyond Earth orbit (`src/space/`): data and maths
 
@@ -667,6 +736,10 @@ cancelled by a push that arrived seconds later, and the data stayed two days old
 so the site works from any sub-path.
 
 ## Ideas not built yet
+
+Beyond Earth orbit: pinch-zooming past the edge of a view on a phone (the wheel does it on a
+computer), constellation names in the views away from the tracker, landing sites as marks on
+the ground, Saturn's other moons.
 
 Multiplayer games on a separate `/play` page (needs a small real-time service such as
 Firebase or Supabase; Pages cannot provide one; the home page has a placeholder "Games" row),
