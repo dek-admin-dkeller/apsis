@@ -86,7 +86,7 @@ status line sit along the bottom.
 | Launch and re-entry feed | Objects panel: **Newest in orbit** (grouped by launch), **Satellite trains** (recent batches still flying in a line; click to light one up) and **Lowest orbits** (next to come down) |
 | Constellations | Objects panel: pick GPS, Starlink, Iridium and so on to draw all its orbits and a live map of how many of its satellites can see each point on the ground |
 | Aurora | Layers → Earth: tonight's aurora oval from NOAA's forecast, with the current geomagnetic activity |
-| Sharp ground | zoom in and the ground under the camera is redrawn from detailed NASA imagery, about sixteen times finer than the globe's own picture (Layers → Earth → *Sharp ground*) |
+| Sharp ground | zoom in and the ground under the camera is redrawn from detailed NASA imagery, about sixteen times finer than the globe's own picture (Layers → *Sharp ground*). The same at the Moon, Mars and Mercury: come close and craters a few hundred metres across appear |
 | Spacecraft catalogue | Objects panel → Tools → **Spacecraft** (also in About): every 3D model on one page, grouped by where the craft work. Pick one to see it large and turn it round with the mouse or a finger (`←` `→` step through them); **Show one in orbit** selects an object of that kind in the tracker |
 | Hover card | point at any dot for a small card: a photo or a 3D picture of it, what it is, who runs it, its height and speed now |
 | People in space | who is aboard the ISS and Tiangong right now, in those stations' Record tab |
@@ -241,7 +241,7 @@ src/
   render/
     scene.ts             renderer, camera, bloom, quality presets
     globe.ts             Earth shader: relief, clouds and their shadows, city lights, atmosphere, close-up detail
-    tiles.ts             close-up ground: map tiles streamed from NASA GIBS, kept in a Map keyed "z/x/y"
+    tiles.ts             close-up ground: map tiles streamed from NASA GIBS (Earth) and NASA Trek (Moon, Mars, Mercury), kept in a Map keyed "z/x/y"
     geoOverlay.ts        coastlines and borders, latitude / longitude grid, day / night line
     sky.ts               Milky Way, real bright stars, constellation figures, planets, Sun, Moon
     satellites.ts        all objects as one THREE.Points draw call; GPU-side interpolation; picking
@@ -377,6 +377,12 @@ a `Map<catalogue name, full name>` for "Hubble Space Telescope (HST)".
   A coarser layer is loaded first and the sharp one fades in over it, the edges of the detailed
   area fade into the globe, and tiles are fetched ahead of a moving camera, so the loading is
   rarely seen.
+- **Close-up ground at the Moon, Mars and Mercury** comes the same way from NASA's Solar
+  System Treks: the Lunar Reconnaissance Orbiter's wide-angle mosaic (about 100 m per pixel),
+  the Viking orbiters' colour mosaic of Mars (232 m) and MESSENGER's of Mercury (166 m). These
+  are photographs taken with the Sun low, so their shadows do not move with the clock, and
+  their tone is adjusted to match the globe they are laid over. Near the Moon's poles the
+  mosaic is coarse.
 - **Name tags appear as you zoom.** The whole-Earth view names only the ISS, Tiangong, Hubble
   and your watchlist; closer in, well-known spacecraft and then the nearest objects are named
   (Layers → Names: Off / Well-known / As you zoom).

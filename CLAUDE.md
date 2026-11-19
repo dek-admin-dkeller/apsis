@@ -538,7 +538,9 @@ graphics context).
 CelesTrak (manual refresh; scheduled in CI), Wikipedia (REST summary for photos and descriptions,
 and the query API when an object's own name is tried as a title; cached per article), NOAA SWPC (aurora grid, Kp, solar flux), a public people-in-space list
 (`src/data/crew.ts`), NASA GIBS map tiles (`src/render/tiles.ts`, only while zoomed in and
-only with the `sharpGround` setting on), Launch Library 2 from The Space Devs (only when the
+only with the `sharpGround` setting on) and, at the Moon, Mars and Mercury, NASA Solar System
+Treks map tiles under the same two conditions (plus eight coarse tiles once per visit, to match
+their tone to the body's map), Launch Library 2 from The Space Devs (only when the
 launches section is opened; about 15 requests an hour are allowed, the answer is kept for an
 hour), NASA's DSN Now feed (`src/space/dsn.ts`: one read shortly after start, then once a
 minute only while the Deep Space Network section is on screen), NASA Solar System Treks map
@@ -563,6 +565,8 @@ an in-app yes plus the browser's own prompt, and stays in `localStorage`.
   recorded problem — ask a user to read that out when they report something odd.
 
 ## Close-up ground (`render/tiles.ts`)
+
+(The rules below were learned on the Earth and hold at every world.)
 
 - The globe texture is ~10 km per pixel. Below ~6,000 km altitude detailed map tiles (NASA
   GIBS, zoom 2–8) are drawn as curved patches, children of `globe.earth`, lifted a few km
@@ -595,6 +599,47 @@ an in-app yes plus the browser's own prompt, and stays in `localStorage`.
   downloads are aborted, `tiles.prewarm()` compiles the shader behind the loading screen, and
   `tiles.status` feeds About → "This device". Cache: `Map<"z/x/y", Tile>`, least recently used
   evicted beyond 260, at most 16 downloads in flight, 30 s back-off if the service is down.
+
+### The same machinery at other worlds
+
+- `tiles.ts` is `GroundTiles(globe, options)`; `EarthTiles` is that class with the Earth's
+  options and must keep behaving EXACTLY as before (check: same camera, same paused clock, a
+  screenshot with the old file and with the new, compared pixel for pixel; the day side came
+  out identical). What is handed in:
+  - **the source** (`TileSource`): address template with `{z}/{y}/{x}`, level range, and the
+    grid. GIBS is `'mercator'` (2^z × 2^z web-map squares); NASA Trek is `'degrees'` (a plain
+    latitude / longitude map, 2^(z+1) × 2^z squares, rows evenly spaced in latitude). Both
+    count rows from the north and columns from longitude −180°. Everything that differs
+    between the two is in the `Grid` objects (`MERCATOR`, `DEGREES`).
+  - **the lighting**: `'earth'` (the globe's day and night, its city lights) or `'body'`: the
+    shader REPEATS `bodyMesh.ts`'s lighting and shares that body's uniform objects (Sun,
+    haze, gain, shadow-casters). Change the lighting in one file and change it in the other.
+  - **the tone** (`matchTone`): a body's tiles and its whole-globe map are different products
+    (the Moon's tiles are a grey survey mosaic nearly four times darker than its painted map).
+    `measure()` fetches the eight level-1 tiles once, compares their brightness percentiles
+    with the map's (`setReference`) and gives every tile the curve `gain × colour^gamma`
+    that matches them; a shoulder in the shader stops sunlit slopes burning out. No tile is
+    shown until that is settled. Without a map (a body in plain colour) tiles show as they come.
+- Heights are in scene units (every body is drawn 6.371 units in radius); only pixel sizes
+  use the body's real radius.
+- `SpaceView.buildPlace` creates the tiles for a body with `IMAGERY[id].tiles`, as children
+  of the centre body's mesh; `update` feeds them that view's camera and the clock's rate (the
+  body turns under a camera fixed among the stars); `clear` disposes of them. Places apply
+  `Settings.sharpGround` through `places.setSharpGround`; the Layers tile carries
+  `data-everywhere`.
+- The camera may come down to 1.025–1.0375 radii where there are tiles (`lowest` in
+  `spaceView.ts`: until the finest level is about three times life size), 1.06 elsewhere. Not
+  lower than 1.025: the camera looks at the body's centre and SceneKit's near plane is 2 % of
+  that distance. Drag and idle drift are scaled down with altitude.
+- **True finest levels** (from each layer's WMTSCapabilities.xml, and by asking): Moon
+  `LRO_WAC_Mosaic_Global_303ppd_v02` 8, Mars `Mars_Viking_MDIM21_ClrMosaic_global_232m` 7,
+  Mercury `Mercury_MESSENGER_MDIS_Basemap_BDR_Mosaic_Global_166m` 7. Trek answers a missing
+  tile with a 404 that has no CORS header, which a page cannot tell from being offline; with
+  `quietWhenMissing` a level that turns out not to exist is dropped (`forget`) instead of
+  stopping all downloads for 30 s, but a wrong `maxZoom` still fills the console with errors.
+- Known limits of the data, not of the code: the Moon's mosaic is coarse and blocky beyond
+  about 75° of latitude (no tiles are drawn beyond 86°); the Viking mosaic of Mars shows its
+  own seams.
 
 ## Close-approach view details
 

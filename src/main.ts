@@ -368,6 +368,7 @@ function applySettings(s: Settings, changed: keyof Settings | null): void {
   sky.setConstellations(s.constellations);
   aurora.setVisible(s.aurora);
   tiles.enabled = s.sharpGround;
+  places.setSharpGround(s.sharpGround);
   globe.setClouds(s.clouds);
   globe.setAtmosphere(s.atmosphere);
   overlay.setBorders(s.borders);

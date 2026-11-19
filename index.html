@@ -522,7 +522,7 @@
               <button data-value="off">Off</button><button data-value="notable">Well-known</button><button data-value="nearby">As you zoom</button>
             </div>
             <h3 class="group-label">Earth</h3>
-            <div class="layer-tiles">
+            <div class="layer-tiles" data-everywhere>
               <label class="layer-tile" title="The cloud layer and its shadows">
                 <input type="checkbox" data-setting="clouds" />
                 <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 15.5a3.5 3.5 0 0 1-.5-6.96 4.5 4.5 0 0 1 8.8.96A3 3 0 0 1 14 15.5z" /></svg>
@@ -553,7 +553,7 @@
                 <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 15c.5-5 1.5-8.5 3.5-10M8.5 15.5c.5-5.5 1.5-9 3.5-11M13 15c.5-4.5 1.3-7.5 3-9" /></svg>
                 <span>Aurora</span><small id="aurora-status"></small>
               </label>
-              <label class="layer-tile" title="Detailed NASA imagery under the camera when you zoom in">
+              <label class="layer-tile" data-everywhere title="Detailed NASA imagery under the camera when you zoom in">
                 <input type="checkbox" data-setting="sharpGround" />
                 <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2.5 15.5l4.8-7 3.2 4.2 2.3-2.7 4.7 5.5z" /><circle cx="14.5" cy="5.5" r="1.5" /></svg>
                 <span>Sharp ground</span>
@@ -1110,6 +1110,7 @@
             <div><dt>Orbital elements and catalogue</dt><dd><a href="https://celestrak.org" target="_blank" rel="noopener noreferrer">CelesTrak</a>, from U.S. Space Force tracking</dd></div>
             <div><dt>Photos and descriptions</dt><dd><a href="https://www.wikipedia.org" target="_blank" rel="noopener noreferrer">Wikipedia</a>, CC BY-SA; each photo links to its page and licence</dd></div>
             <div><dt>Earth imagery</dt><dd>NASA Blue Marble, Black Marble and cloud imagery, via three-globe; close-up detail streamed from NASA GIBS</dd></div>
+            <div><dt>Other worlds, close up</dt><dd>Streamed from <a href="https://trek.nasa.gov" target="_blank" rel="noopener noreferrer">NASA Solar System Treks</a>: the Moon from the Lunar Reconnaissance Orbiter's wide-angle camera (NASA / GSFC / Arizona State University), Mars from the Viking orbiters' colour mosaic (NASA / JPL / USGS), Mercury from MESSENGER (NASA / Johns Hopkins APL / Carnegie Institution)</dd></div>
             <div><dt>Operator logos</dt><dd>Loaded from each operator's Wikipedia article; they are trademarks of their owners, shown only to identify who runs an object</dd></div>
             <div><dt>Coastlines and borders</dt><dd>Natural Earth, public domain, via world-atlas</dd></div>
             <div><dt>Radio records</dt><dd><a href="https://satnogs.org" target="_blank" rel="noopener noreferrer">SatNOGS</a>, a volunteer ground-station network of the Libre Space Foundation, CC BY-SA</dd></div>

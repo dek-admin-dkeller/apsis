@@ -261,6 +261,11 @@ export class Places {
     this.map.setSky(stars, figures);
   }
 
+  /** So does "Sharp ground", at the worlds that have close-up imagery. */
+  setSharpGround(on: boolean): void {
+    this.place.setSharpGround(on);
+  }
+
   // ---- changing scene --------------------------------------------------------------------------
 
   /**
