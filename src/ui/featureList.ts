@@ -35,8 +35,6 @@ export const SHOTS: Shot[] = [
   { file: 'object', tab: 'One object', text: 'Select anything to follow it: live readings, a 3D model beside a real photo, its path over the ground, and when its radio was last heard.' },
   { file: 'approach', tab: 'Close approaches', text: 'Two objects passing within kilometres of each other, each in its cell of the grid that makes the search fast.' },
   { file: 'ground', tab: 'Down to the ground', text: 'Zoom in and the surface sharpens from NASA imagery, with everything overhead still moving above it.' },
-  { file: 'system', tab: 'The solar system', text: 'Zoom out and the satellites fade away, leaving the Earth among the planets, each where it is today. The spacecraft out there are placed from NASA’s own trajectory data.' },
-  { file: 'world', tab: 'Other worlds', text: 'Click a planet and go in: Mars with its orbiters and rovers, lit and turning as it is right now.' },
   { file: 'phone', tab: 'On a phone', text: 'The same tracker in your hand. Hold it up and it shows what is overhead.', phone: true },
 ];
 
