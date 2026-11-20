@@ -15,8 +15,8 @@
  * Every number in a caption is read from the data loaded at that moment (`OverviewHost.facts`).
  *
  * It does nothing a visitor could not do by hand: every move is a journey `Places` already
- * makes, or a selection, or one of the Earth's views. The interface stays on screen (the cards
- * are the point of several stops). For presenting: → goes on to the next stop at once, ← back
+ * makes, or a selection, or one of the Earth's views. The menus fade out as the Earth's autopilot's
+ * do (`body.touring`), but the cards stay on screen: they are the point of several stops. For presenting: → goes on to the next stop at once, ← back
  * to the one before; any other key, a click, a touch or a wheel turn stops it where it is.
  * The Earth's own autopilot (ui/cinema.ts) is unchanged.
  */
@@ -47,6 +47,9 @@ export interface SpaceTourHost {
   clear(): void;
   /** The tour started or stopped (the button shows it as pressed). */
   onChange(): void;
+  /** Fade the menus out (true) or back (false): the top bar, rail, time bar and status line. The
+   *  cards stay, because several stops are about what a card says. */
+  hideMenus(on: boolean): void;
 }
 
 interface Stop {
@@ -173,6 +176,7 @@ export class SpaceTour {
     this.startedAt = performance.now();
     this.index = 0;
     this.host.clear();
+    this.host.hideMenus(true);
     this.root!.classList.add('is-playing');
     this.hint!.classList.add('is-on');
     window.setTimeout(() => this.hint?.classList.remove('is-on'), 6000);
@@ -194,6 +198,7 @@ export class SpaceTour {
     this.root?.classList.remove('is-playing');
     this.caption?.classList.remove('is-on');
     this.hint?.classList.remove('is-on');
+    this.host.hideMenus(false);
     this.host.onChange();
   }
 
@@ -265,7 +270,10 @@ export class SpaceTour {
     caption.append(count, title, text);
     const hint = document.createElement('div');
     hint.className = 'cinema-hint';
-    hint.textContent = 'Guided overview — → next stop · ← back · any other key stops';
+    // A phone has no arrow keys: the tour can only be stopped there, by a tap.
+    hint.textContent = window.matchMedia('(pointer: coarse)').matches
+      ? 'Guided overview — tap anywhere to stop'
+      : 'Guided overview — → next stop · ← back · any other key stops';
     root.append(caption, hint);
     document.body.append(root);
     this.root = root;

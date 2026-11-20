@@ -29,6 +29,21 @@ function sliderToKm(v: number): number {
   return Math.round(km / step) * step;
 }
 
+/** The Browse tab's names for the types and orbits: plain words, with a line each on hover. */
+const TYPE_NAME: Partial<Record<Category, string>> = { GNSS: 'Navigation', 'Weather / Earth-obs': 'Weather', 'Space Stations': 'Stations' };
+const TYPE_HINT: Partial<Record<Category, string>> = {
+  Starlink: 'SpaceX’s broadband satellites', OneWeb: 'OneWeb’s broadband satellites', GNSS: 'GPS, Galileo, GLONASS and BeiDou',
+  'Space Stations': 'The stations and the craft that visit them', 'Weather / Earth-obs': 'Weather and Earth-imaging satellites',
+  Debris: 'Fragments, old rocket stages and other dead objects', Other: 'Every other satellite',
+};
+const ORBIT_NAME: Record<OrbitClass, string> = { LEO: 'Low', MEO: 'Middle', GEO: 'Geostationary', HEO: 'Elliptical' };
+const ORBIT_HINT: Record<OrbitClass, string> = {
+  LEO: 'Below 2,000 km: most satellites',
+  MEO: 'Navigation satellites',
+  GEO: 'Hangs over one spot',
+  HEO: 'Stretched orbits',
+};
+
 export class Filters {
   private catalog: Catalog | null = null;
   private visible: Uint8Array = new Uint8Array(0);
@@ -55,7 +70,8 @@ export class Filters {
 
     const categoryBox = $('category-chips');
     for (const category of CATEGORIES) {
-      const chip = this.chip(category, CATEGORY_COLORS[category]);
+      const chip = this.chip(TYPE_NAME[category] ?? category, CATEGORY_COLORS[category]);
+      chip.title = TYPE_HINT[category] ?? '';
       this.chips.category.set(category, chip);
       this.counts.set(category, chip.querySelector('.count') as HTMLElement);
       chip.addEventListener('click', () => {
@@ -70,7 +86,9 @@ export class Filters {
 
     const orbitBox = $('orbit-chips');
     for (const orbit of ORBIT_CLASSES) {
-      const chip = this.chip(orbit, ORBIT_COLORS[orbit], false);
+      const chip = this.chip(ORBIT_NAME[orbit], ORBIT_COLORS[orbit], false);
+      chip.title = ORBIT_HINT[orbit];
+      chip.append(Object.assign(document.createElement('small'), { className: 'chip-sub', textContent: ORBIT_HINT[orbit] }));
       this.chips.orbit.set(orbit, chip);
       chip.addEventListener('click', () => {
         const on = !this.orbitOn.get(orbit);
@@ -98,6 +116,7 @@ export class Filters {
     min.addEventListener('input', () => onRange(min));
     max.addEventListener('input', () => onRange(max));
     $('fb-clear').addEventListener('click', () => this.showAll());
+    document.getElementById('browse-reset')?.addEventListener('click', () => this.showAll());
   }
 
   /** Undo every filter: types, orbits, height, and whatever feature modules registered (a search type, a year). */

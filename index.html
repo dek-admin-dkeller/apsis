@@ -258,9 +258,12 @@
         </dl>
         <nav class="top-actions">
           <!-- Your own objects (the designer's spacecraft, or a simulated collision's fragments): only while there are any (main.ts, updateYoursChip). -->
-          <div id="yours" class="yours is-hidden" role="group" aria-label="Your objects">
-            <button id="yours-go" type="button" title="Go to it"><i class="yours-dot"></i><b id="yours-name"></b><small id="yours-state"></small></button>
-            <button id="yours-clear" type="button" title="Remove your objects" aria-label="Remove your objects">×</button>
+          <div id="yours" class="yours is-hidden" role="group" aria-label="Your spacecraft">
+            <span class="yours-label">Your spacecraft</span>
+            <span class="yours-line">
+              <button id="yours-go" type="button" title="Go to it"><b id="yours-name"></b><span id="yours-state"></span></button>
+              <button id="yours-clear" type="button" title="Remove it from the catalogue">Remove</button>
+            </span>
           </div>
           <!-- What is live now and coming up (features/bell.ts): a green dot and a count while something is live. -->
           <div class="tool-group" id="bell-group">
@@ -508,44 +511,57 @@
           <div class="panel-body" id="obj-body">
             <div class="obj-grid is-hidden" id="obj-grid"></div>
             <!-- ================= Browse: what is on the globe, and picking things out of it ================= -->
-            <details class="sec" data-tab="browse" data-section="watchlist" open>
-              <summary>Watchlist</summary>
-              <ol class="watch-list" id="watch-list"></ol>
-              <p class="note" id="watch-empty">Star an object in its inspector to keep it here.</p>
-              <button class="btn wide is-hidden" id="contacts-open">Contact timeline</button>
-            </details>
-            <details class="sec" data-tab="browse" data-section="notable" open>
-              <summary>Notable objects</summary>
+            <!-- Browse, in three plain groups (find, show, look): the owner asked for it simpler and clearer.
+                 The sections stay <details> with their data-section names (code opens them by name), but they
+                 are drawn as flat groups that do not fold (objectTabs.css / style.css, .sec.is-flat). -->
+            <details class="sec is-flat" data-tab="browse" data-section="notable" open>
+              <summary>Find</summary>
+              <p class="sec-help">Jump to a well-known object, or search at the top for any other.</p>
               <div class="quick" id="quick-list"></div>
             </details>
-            <details class="sec" data-tab="browse" data-section="type" open>
-              <summary>Type</summary>
+            <details class="sec is-flat" data-tab="browse" data-section="watchlist" open>
+              <summary>Your watchlist</summary>
+              <ol class="watch-list" id="watch-list"></ol>
+              <p class="note" id="watch-empty">Star an object on its card (☆) to keep it here.</p>
+              <button class="btn wide is-hidden" id="contacts-open">Contact timeline</button>
+            </details>
+            <details class="sec is-flat" data-tab="browse" data-section="type" open>
+              <summary>Show</summary>
+              <div class="browse-show-head">
+                <p class="sec-help">Tap a type or an orbit to hide it; tap again to bring it back.</p>
+                <button class="d-link" id="browse-reset" type="button">Show everything</button>
+              </div>
+              <p class="field-label">What they are</p>
               <div class="chip-grid" id="category-chips"></div>
             </details>
-            <details class="sec" data-tab="browse" data-section="orbit" open>
-              <summary>Orbit regime</summary>
-              <div class="chip-row" id="orbit-chips"></div>
+            <details class="sec is-flat" data-tab="browse" data-section="orbit" open>
+              <summary class="is-quiet">Orbits</summary>
+              <p class="field-label">Where they fly</p>
+              <div class="chip-grid orbit-grid" id="orbit-chips"></div>
               <div class="field">
-                <div class="field-head"><span>Altitude band</span><output id="alt-label">any</output></div>
+                <div class="field-head"><span>Height above the ground</span><output id="alt-label">any</output></div>
                 <div class="dual-range">
                   <input type="range" id="alt-min" min="0" max="1000" value="0" aria-label="Minimum altitude" />
                   <input type="range" id="alt-max" min="0" max="1000" value="1000" aria-label="Maximum altitude" />
                 </div>
               </div>
             </details>
-            <details class="sec" data-tab="browse" data-section="appearance" open>
-              <summary>Appearance</summary>
-              <p class="field-label">Colour by</p>
+            <details class="sec is-flat" data-tab="browse" data-section="appearance" open>
+              <summary>Look</summary>
+              <p class="field-label">Colour the dots by</p>
               <div class="segmented grid3" data-setting="colorMode">
-                <button data-value="category">Type</button><button data-value="orbit">Orbit</button><button data-value="altitude">Altitude</button>
+                <button data-value="category">Type</button><button data-value="orbit">Orbit</button><button data-value="altitude">Height</button>
                 <button data-value="owner">Owner</button><button data-value="age">Launch year</button><button data-value="tilt">Tilt</button>
                 <button data-value="fresh" title="How long ago each object’s orbit was last measured">Data age</button>
               </div>
+              <p class="sec-help" id="color-help"></p>
               <div class="legend is-hidden" id="color-legend"></div>
-              <div class="field"><div class="field-head"><span>Marker size</span><output id="size-label"></output></div>
-                <input type="range" data-setting="pointSize" min="0.6" max="2.2" step="0.1" aria-label="Marker size" /></div>
-              <div class="field"><div class="field-head"><span>Glow</span><output id="glow-label"></output></div>
-                <input type="range" data-setting="glow" min="0" max="1.4" step="0.05" aria-label="Glow strength" /></div>
+              <div class="browse-sliders">
+                <div class="field"><div class="field-head"><span>Dot size</span><output id="size-label"></output></div>
+                  <input type="range" data-setting="pointSize" min="0.6" max="2.2" step="0.1" aria-label="Dot size" /></div>
+                <div class="field"><div class="field-head"><span>Glow</span><output id="glow-label"></output></div>
+                  <input type="range" data-setting="glow" min="0" max="1.4" step="0.05" aria-label="Glow strength" /></div>
+              </div>
             </details>
 
             <!-- ================= Activity: what is happening up there =================
@@ -909,6 +925,12 @@
             <label class="act" title="Path over the ground"><input type="checkbox" data-setting="groundTrack" /><span>Track</span></label>
             <label class="act" title="Area that can see the object"><input type="checkbox" data-setting="footprint" /><span>Footprint</span></label>
           </div>
+          <!-- Only while the designer's spacecraft is in orbit: one quiet line, never a button bar (main.ts, updateAim). -->
+          <button type="button" class="insp-aim is-hidden" id="insp-aim" title="Open the designer's collision course with this object as the target">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5" /><circle cx="8" cy="8" r="1.6" /><path d="M8 0.5v3M8 12.5v3M0.5 8h3M12.5 8h3" /></svg>
+            <span>Aim <b id="insp-aim-name"></b> at this</span>
+            <i aria-hidden="true">›</i>
+          </button>
           <div class="tabs" id="insp-tabs" role="tablist">
             <button role="tab" data-tab="live" class="is-on">Live</button>
             <button role="tab" data-tab="orbit">Orbit</button>

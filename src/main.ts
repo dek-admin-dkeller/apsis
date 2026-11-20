@@ -422,8 +422,21 @@ function applySettings(s: Settings, changed: keyof Settings | null): void {
   document.body.classList.toggle('no-glass', !s.glass || kit.quality === 'fast');
   for (const run of settingsHooks) run(s, changed);
 }
+/** What each way of colouring the dots shows, in a line. */
+const COLOR_HELP: Partial<Record<Settings['colorMode'], string>> = {
+  category: 'Each kind of object its own colour: Starlink, navigation, stations, debris…',
+  orbit: 'Low, middle, geostationary and elliptical orbits in four colours.',
+  altitude: 'How high it flies: the key below runs from 300 km to geostationary height.',
+  owner: 'Who runs it: the country or company.',
+  age: 'When it was launched: the oldest glow red, this year’s cyan.',
+  tilt: 'How steeply its orbit crosses the equator.',
+  fresh: 'How long ago its orbit was last measured: stale ones stand out.',
+};
 /** The key under the colour picker: a gradient with tick labels, or a list of swatches. */
 function renderLegend(mode: Settings['colorMode']): void {
+  // One line under the choice saying what the colours mean (the Browse tab: "easier to see what does what").
+  const help = document.getElementById('color-help');
+  if (help) help.textContent = COLOR_HELP[mode] ?? '';
   const legend = legendFor(mode);
   const box = $('color-legend');
   box.classList.toggle('is-hidden', legend === null);
@@ -745,6 +758,7 @@ function select(sat: Satellite | null): void {
   haptic();
   inspector.show(sat, facts.get(sat.noradId), true);
   inspector.setStarred(watch.has(sat));
+  updateAim();
   // The two crewed stations also list who is aboard right now.
   $('rc-crew').replaceChildren();
   if (sat.name === 'ISS (ZARYA)') renderCrew($('rc-crew'), 'ISS');
@@ -1135,6 +1149,7 @@ function rebuildCatalog(): void {
  * it, and × to remove the lot (the same as the designer's Remove / Clear simulation).
  */
 function updateYoursChip(): void {
+  updateAim();
   const chip = $('yours');
   if (!customRecord) return void chip.classList.add('is-hidden');
   chip.classList.remove('is-hidden');
@@ -1160,6 +1175,25 @@ $('yours-clear').addEventListener('click', () => {
   if (selected && (selected.noradId === CUSTOM_NORAD_ID || isSimFragment(selected.noradId))) select(null);
   rebuildCatalog();
   toast(`Removed ${what}`);
+});
+
+/**
+ * "Aim <your spacecraft> at this" on another object's card: only while the designer's spacecraft
+ * is in orbit and not already on a course, and only for real catalogue objects. One quiet line
+ * under the switches (the owner: easy to come across, never in the way of someone who just wants
+ * their spacecraft to fly).
+ */
+function updateAim(): void {
+  const sat = selected;
+  const show = !!sat && !!customRecord && designer.free && sat.noradId !== CUSTOM_NORAD_ID && !isSimFragment(sat.noradId);
+  $('insp-aim').classList.toggle('is-hidden', !show);
+  if (show) $('insp-aim-name').textContent = customRecord!.OBJECT_NAME;
+}
+$('insp-aim').addEventListener('click', () => {
+  if (!selected) return;
+  const target = selected;
+  app.openSection('designer');
+  designer.aimAt(target);
 });
 
 // The designer's live orbit preview: a dashed line in the inertial frame (km).
@@ -1976,6 +2010,7 @@ const spaceTour = new SpaceTour({
     setKeys(false);
   },
   onChange: () => $('autopilot').setAttribute('aria-pressed', String(cinema.isPlaying || spaceTour.isPlaying)),
+  hideMenus: (on) => document.body.classList.toggle('touring', on),
 });
 function toggleAutopilot(): void {
   if (spaceTour.isPlaying) return spaceTour.stop();
@@ -2151,9 +2186,13 @@ window.addEventListener('keydown', (event) => {
       else if (fp.mode !== 'off') fp.exit();
       else if (document.body.classList.contains('ui-hidden')) document.body.classList.remove('ui-hidden');
       else if (places.elsewhere) {
-        // Nothing left to step out of (the whole solar system): Escape leaves full screen, as
-        // the browser would have done had the app not kept Escape for itself (toggleFullscreen).
-        if (!places.back() && document.fullscreenElement) void document.exitFullscreen();
+        // The same order as in the tracker (the owner's rule): the card on the right first, then
+        // the panel on the left, and only then a step out. Nothing left to step out of (the whole
+        // solar system): Escape leaves full screen, as the browser would have done had the app not
+        // kept Escape for itself (toggleFullscreen).
+        if (places.carded) places.closeCard();
+        else if (openPanelName) openPanel(null);
+        else if (!places.back() && document.fullscreenElement) void document.exitFullscreen();
       }
       else if (escapeHooks.some((run) => run())) { /* a feature closed its own window (a launch climb's card) */ }
       else if (encPanel.isOpen) closeEncounter();
@@ -2626,17 +2665,20 @@ const app: App = {
   },
   goEarth: () => (places.elsewhere ? places.visit('earth') : Promise.resolve()),
   focusSearch: (text) => search.focus(text),
-  flyToGround: (latDeg, lonDeg, altitudeKm = 2500) => {
+  flyToGround: (latDeg, lonDeg, altitudeKm = 2500, look) => {
     if (fp.mode !== 'off') fp.exit();
     closeEncounter(true);
     if (selected) select(null);
     // The place in the Earth's own frame (see "Coordinate frames" in CLAUDE.md), then wherever
     // the Earth's rotation has carried it by now.
-    const lat = THREE.MathUtils.degToRad(latDeg), lon = THREE.MathUtils.degToRad(lonDeg);
-    const overhead = new THREE.Vector3(Math.cos(lat) * Math.cos(lon), Math.sin(lat), -Math.cos(lat) * Math.sin(lon))
-      .multiplyScalar(6.371 + Math.max(150, altitudeKm) * KM);
+    const ground = (latD: number, lonD: number, heightKm: number) => {
+      const lat = THREE.MathUtils.degToRad(latD), lon = THREE.MathUtils.degToRad(lonD);
+      return globe.earth.localToWorld(new THREE.Vector3(Math.cos(lat) * Math.cos(lon), Math.sin(lat), -Math.cos(lat) * Math.sin(lon))
+        .multiplyScalar(6.371 + heightKm * KM));
+    };
+    const overhead = ground(latDeg, lonDeg, Math.max(150, altitudeKm));
     rig.follow = false;
-    rig.flyToView(globe.earth.localToWorld(overhead), ORIGIN.clone(), 2);
+    rig.flyToView(overhead, look ? ground(look.latDeg, look.lonDeg, look.altitudeKm ?? 0) : ORIGIN.clone(), 2);
     rig.holdStill(); // stay over the place: the idle drift would slide it out of view
   },
   follow: (focus, distance = 0.9) => {

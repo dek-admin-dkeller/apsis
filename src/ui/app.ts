@@ -146,8 +146,12 @@ export interface App {
   addSearch(provider: SearchProvider): void;
   /** Put the cursor in the search field, optionally with `text` already typed in it (the list then shows what it finds). */
   focusSearch(text?: string): void;
-  /** Fly to look straight down at a place from `altitudeKm` up (default 2,500). */
-  flyToGround(latDeg: number, lonDeg: number, altitudeKm?: number): void;
+  /**
+   * Fly to look straight down at a place from `altitudeKm` up (default 2,500), or, with `look`,
+   * from above that place towards another point (a height in km above the ground there): a view
+   * from the side, for something that happens in the air.
+   */
+  flyToGround(latDeg: number, lonDeg: number, altitudeKm?: number, look?: { latDeg: number; lonDeg: number; altitudeKm?: number }): void;
   /**
    * Keep the camera on a moving point (scene units), `distance` scene units away, as it does
    * for a selected satellite; null lets go. (Used for a rocket on its estimated climb.)

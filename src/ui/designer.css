@@ -100,3 +100,8 @@
 .designer .d-live .designer-actions .btn { flex: 1; }
 .designer .d-after { margin-top: 8px; }
 .designer .d-clear { margin-top: 8px; }
+
+/* Arrived from an object's "Aim … at this": the collision course glows once to say where it is. */
+.designer .d-collision.is-lit { animation: d-lit 1.6s ease-out; border-radius: 8px; }
+@keyframes d-lit { 0% { box-shadow: 0 0 0 1px rgba(255, 180, 84, 0.7), 0 0 18px rgba(255, 180, 84, 0.25); } 100% { box-shadow: 0 0 0 1px rgba(255, 180, 84, 0), 0 0 18px rgba(255, 180, 84, 0); } }
+@media (prefers-reduced-motion: reduce) { .designer .d-collision.is-lit { animation: none; } }

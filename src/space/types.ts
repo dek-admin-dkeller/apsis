@@ -195,6 +195,8 @@ export interface Fireball {
   /** Total impact energy, kilotons of TNT. */
   energyKt: number;
   speedKmS: number | null;
+  /** Its velocity before entry, Earth-fixed (x to longitude 0, z north), km/s, when published. */
+  velocity?: [number, number, number];
 }
 
 /** public/data/deep.json, written by scripts/fetch-deep.mjs. */

@@ -37,6 +37,7 @@ import { craftPeriodMs, craftPosition, loadDeep } from '../space/deep.ts';
 import { DSN_NOW_URL, watchDsn } from '../space/dsn.ts';
 import { bodyAxes, bodyPosition, bodyRelative } from '../space/ephem.ts';
 import { IMAGERY, UNSEEN } from '../space/imagery.ts';
+import { globeIcon } from './globeIcon.ts';
 import { loadRovers, onRoversRefresh, roverPath } from '../space/rovers.ts';
 import { SITES } from '../space/sites.ts';
 import type { Body, BodyId, Craft, DeepData, DsnLink, Flyby, Motion, Site, Vec } from '../space/types.ts';
@@ -348,6 +349,24 @@ export class Places {
   private view(spot: Spot): SpaceView {
     return spot === 'map' ? this.map : this.place;
   }
+  /** Is a card open away from the tracker (a world's, a craft's, a site's)? Escape closes it first. */
+  get carded(): boolean {
+    return this.spot !== 'tracker' && (!!this.current?.focus || !this.card.classList.contains('is-hidden'));
+  }
+
+  /**
+   * The card's × and Escape's first step away from the tracker: the card on the right closes, all
+   * of it (a craft's card does not fall back to the world's card as a click on empty space does),
+   * and the camera lets go of what it was on. Escape then closes the panel on the left, and only
+   * then steps out (main.ts).
+   */
+  closeCard(): void {
+    if (this.busy) return;
+    const view = this.current;
+    if (view?.focus) view.setFocus(null, this.host.time());
+    this.show(null);
+    this.drawPath();
+  }
   private get current(): SpaceView | null {
     return this.spot === 'tracker' ? null : this.view(this.spot);
   }
@@ -544,6 +563,13 @@ export class Places {
         picture = el('span', 'tip-orb');
         const [r, g, b] = body.color.map((c) => Math.round(c * 255));
         picture.style.setProperty('--orb', `rgb(${r}, ${g}, ${b})`);
+        // The world itself, rendered from its map (ui/globeIcon.ts), as soon as it is ready (at once after the first time).
+        const orb = picture;
+        void globeIcon(body.id).then((url) => {
+          if (!url) return;
+          orb.style.setProperty('--globe', `url("${url}")`);
+          orb.classList.add('is-rendered');
+        });
         const kind = body.kind === 'star' ? 'Star' : body.kind === 'planet' ? 'Planet' : body.kind === 'dwarf' ? 'Dwarf planet' : `Moon of ${BODIES[body.parent!].name}`;
         const v = bodyRelative(body.id, 'earth', t);
         const km = Math.hypot(v[0], v[1], v[2]);
@@ -997,13 +1023,6 @@ export class Places {
     if (target.kind === 'craft') return;
     if (this.spot === 'place' && target.body.id === this.hereBody) return;
     this.goBody(target.body.id);
-  }
-
-  private closeCard(): void {
-    // Closing the card of something being followed also lets go of it.
-    const view = this.current;
-    if (view?.focus) this.pick(view, null);
-    this.show(null);
   }
 
   /** Craft that a Deep Space Network dish is talking to right now get a small live mark on their tag. */

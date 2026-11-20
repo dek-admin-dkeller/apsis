@@ -74,13 +74,18 @@ export function installFlybys(app: App): void {
       const when = el('span', 'bx-when', clockStamp(flyby.timeMs));
       const miss = el('span', 'bx-fig', missText(flyby));
       const sub = el('span', 'bx-sub', subText(flyby));
-      pick.append(el('span', 'bx-name', flyby.name), el('span', 'bx-fig is-quiet', flyby.timeMs < now ? 'passed' : ''), sub, when, miss);
-      pick.title = `${flyby.name} passes ${far(flyby.distanceKm)} from the Earth's centre, ${moons(flyby.distanceKm)} times the Moon's distance. Click to move the clock to that moment.`;
+      const name = el('span', 'bx-name', flyby.name);
+      // The ones with a real path can be watched going past, the asteroid drawn in 3D: say which.
+      if (flyby.motion) name.append(el('span', 'bx-3d', '3D'));
+      pick.append(name, el('span', 'bx-fig is-quiet', flyby.timeMs < now ? 'passed' : ''), sub, when, miss);
+      pick.title = flyby.motion
+        ? `${flyby.name} passes ${far(flyby.distanceKm)} from the Earth's centre, ${moons(flyby.distanceKm)} times the Moon's distance. Click to watch it go past, drawn in 3D on its real path.`
+        : `${flyby.name} passes ${far(flyby.distanceKm)} from the Earth's centre, ${moons(flyby.distanceKm)} times the Moon's distance. Its path is not in this copy of the data (only the closest are), so the click moves the clock to the moment.`;
       pick.addEventListener('click', () => {
         // The closest few have a real path: go and watch the pass. For the rest, the moment of it.
         if (app.showFlyby(flyby.name)) return;
         app.jumpTo(flyby.timeMs);
-        app.toast(`Clock moved to the closest approach of ${flyby.name}`);
+        app.toast(`Clock moved to the closest approach of ${flyby.name}. Its path is not in the data: the ones marked 3D can be watched going past.`);
       });
       item.append(pick);
       return item;

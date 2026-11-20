@@ -95,7 +95,7 @@ export const FEATURES: FeatureGroup[] = [
     summary: 'Zoom out of the Earth into the solar system, and into any other world in it.',
     items: [
       { name: 'The solar system', text: 'Zoom out, or press Escape, and the satellites fade away, leaving the Earth among the planets, each on the right side of the Sun for today’s date.', fresh: true },
-      { name: 'Guided overview', text: 'Press play on the solar system for a hands-free tour of what Apsis does: the Earth’s tracked objects, a real piece of debris, the geostationary ring, then out to the planets, an orbiter at Mars and the Webb telescope. → and ← move between stops; any other key stops it.', fresh: true },
+      { name: 'Guided overview', text: 'Press play on the solar system for a hands-free tour of what Apsis does: the Earth’s tracked objects, a real piece of debris, the geostationary ring, then out to the planets, an orbiter at Mars and the Webb telescope. → and ← move between stops; any other key stops it. The menus step aside while it plays; the cards it stops at stay.', fresh: true },
       { name: 'Other worlds', text: 'Click a planet or a moon, then go in: the Moon, Mars, Jupiter and its four big moons, Saturn and its rings, out to Pluto, each lit and turning as it is right now.', fresh: true },
       { name: 'Thirty-five moons', text: 'Every moon that is round or well known, from Phobos to Pluto’s Hydra, each where it really is today. Twenty-one are mapped from NASA’s pictures and open to visit.', fresh: true },
       { name: 'Unseen sides', text: 'Parts of Pluto, Charon, Triton and Uranus’s moons have never been photographed. They are filled in with an educated guess made from each world’s own photographed terrain, and each world’s card says what is real; one switch shows them as a plain tone instead.', fresh: true },
@@ -118,7 +118,7 @@ export const FEATURES: FeatureGroup[] = [
     items: [
       { name: 'Constellations', text: 'All of GPS, Starlink or Iridium at once, with a live map of how much of the ground each can see.' },
       { name: 'Launches, trains and re-entries', text: 'The newest objects in orbit; freshly launched batches still flying in a line, shown whole and followed as they fly (Done puts them away); and the lowest orbits, which will come down next.' },
-      { name: 'Designer', text: 'An orbit lab: pick any of the 3D models and a mass, shape the orbit with the preview drawn live, and read the physics (how fast the Earth’s bulge turns it, whether it is sun-synchronous, time in shadow, how long drag leaves it up, the Δv to get there). Launch it among the real objects and see what it passes.', fresh: true },
+      { name: 'Designer', text: 'An orbit lab: pick any of the 3D models and a mass, shape the orbit with the preview drawn live, and read the physics (how fast the Earth’s bulge turns it, whether it is sun-synchronous, time in shadow, how long drag leaves it up, the Δv to get there). Launch it among the real objects and see what it passes; select any other object and its card offers to aim yours at it.', fresh: true },
       { name: 'Collision course', text: 'In the designer, choose any object as a target, when and from which direction: Apsis solves the orbit that meets it, shows the approach in its hash-grid cells, and at the moment of impact a cloud of fragments (NASA’s break-up model) spreads along the orbit while the same screening counts the close approaches it causes. A simulation in your page only.', fresh: true },
       { name: 'Autopilot and recording', text: 'A hands-free tour of the highlights. Save a picture or record a video of what you see.' },
       { name: 'Share', text: 'A link or QR code that reopens exactly what you are looking at.' },
@@ -129,12 +129,12 @@ export const FEATURES: FeatureGroup[] = [
       { name: 'Orbit changes', text: 'Which satellites have raised or lowered their orbits since the data was last refreshed, and what is new or gone.', fresh: true },
       { name: 'Space weather and re-entries', text: 'How active the Sun is today, and roughly how long the lowest objects have left.', fresh: true },
       { name: 'Spacecraft catalogue', text: 'Every 3D model on one page. Pick one to turn it round, read what it is, and go and find one in orbit.', fresh: true },
-      { name: 'Asteroid fly-bys', text: 'The rocks passing the Earth in the coming weeks: when, how far away in kilometres and Moon-distances, how big and how fast. Choose one to move the clock to its closest approach.', fresh: true },
-      { name: 'Fireballs', text: 'The brightest meteors recorded lately, with the energy of each, marked on the globe where they exploded.', fresh: true },
+      { name: 'Asteroid fly-bys', text: 'The rocks passing the Earth in the coming weeks: when, how far away in kilometres and Moon-distances, how big and how fast. The closest two dozen (marked 3D) have their real path from NASA JPL: choose one to fly out and watch the rock go by.', fresh: true },
+      { name: 'Fireballs', text: 'The brightest meteors recorded lately (NASA JPL): choose one and watch it come in on its measured path and burst, with what it was (a rock of roughly so many metres), how fast and the energy it let go.', fresh: true },
       { name: 'Eclipses and transits', text: 'The next solar and lunar eclipses and the shadows of Jupiter’s moons crossing its face, worked out in the app and listed in the bell. During a solar eclipse the Moon’s shadow darkens the Earth and the track of its centre is drawn on the ground. Choose one to go to it.', fresh: true },
       { name: 'The Station over you', text: 'With your location shared, the bell says when the Space Station is about to pass overhead and whether it will be bright to the eye.', fresh: true },
       { name: 'Notifications', text: 'Turn them on in the bell and the browser tells you when something unusual starts: a launch, an eclipse, a close asteroid, the Station overhead. Never for routine things.', fresh: true },
-      { name: 'Meteor showers', text: 'Which annual showers are active now and which come next, with the hour of each peak worked out for this year.', fresh: true },
+      { name: 'Meteor showers', text: 'Which annual showers are active now and which come next, with the hour of each peak worked out for this year. Choose one to see its stream of dust coming at the Earth from the radiant, at the peak.', fresh: true },
       { name: 'Deep Space Network', text: 'Which of NASA’s giant dishes is talking to which spacecraft this minute, how far away it is and how long the signal takes.', fresh: true },
     ],
   },
@@ -230,6 +230,21 @@ export interface Update {
 }
 
 export const WHATS_NEW: Update[] = [
+  {
+    date: '2026-11-20',
+    title: 'Fireballs, fly-bys and showers you can watch; a simpler Browse tab',
+    items: [
+      'Fireballs: choose one to watch it come in on its measured path and burst, with a card that says what it was.',
+      'Asteroid fly-bys: the closest two dozen carry their real path (marked 3D) and can be watched going by.',
+      'Meteor showers: choose one to see its stream coming in from the radiant at the peak.',
+      'The Browse tab is four plain groups (Find, Show, Orbits, Look), with a line on what each colour means.',
+      'With your own spacecraft in orbit, any other object’s card offers to aim it there (a collision course).',
+      'Escape closes the card on the right first, then the panel on the left, and only then steps out, at every world.',
+      'The planets’ hover cards use the same lit globes as the phone’s worlds.',
+      'The guided overview on the solar system hides the menus as the autopilot does; the cards it stops at stay on screen.',
+      'Choosing a fireball now shows it: the camera looks at the streak and the burst from the side.',
+    ],
+  },
   {
     date: '2026-11-20',
     title: 'The designer: an orbit lab, and a collision course',

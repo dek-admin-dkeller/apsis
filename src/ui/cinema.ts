@@ -335,7 +335,7 @@ export class Cinema {
     caption.append(title, text);
     const hint = document.createElement('div');
     hint.className = 'cinema-hint';
-    hint.textContent = 'Autopilot — press any key to stop';
+    hint.textContent = window.matchMedia('(pointer: coarse)').matches ? 'Autopilot — tap anywhere to stop' : 'Autopilot — press any key to stop';
     root.append(caption, hint);
     document.body.append(root);
     this.root = root;

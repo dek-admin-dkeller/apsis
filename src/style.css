@@ -92,6 +92,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #labels { transition: opacity 0.25s ease; }
 body.ui-hidden #hud, body.ui-hidden #labels { opacity: 0; pointer-events: none; transition: opacity 0.25s ease; }
 body.ui-hidden #hud > *, body.ui-hidden .dock > * { pointer-events: none; }
+/* The guided overview (ui/spaceTour.ts): the menus fade like the autopilot's, the cards stay. */
+#hud > .topbar, #hud > .rail, #hud > .timebar, #hud > .statusbar, #hud > .dock-left, #m-stack, #place-hud { transition: opacity 0.4s ease; }
+body.touring #hud > .topbar, body.touring #hud > .rail, body.touring #hud > .timebar, body.touring #hud > .statusbar,
+body.touring #hud > .dock-left, body.touring #m-stack, body.touring #m-views, body.touring #place-hud,
+body.touring #filter-banner { opacity: 0; pointer-events: none; }
 
 .panel {
   background: var(--glass);
@@ -953,6 +958,33 @@ canvas.chart.square { height: auto; aspect-ratio: 1; max-width: 240px; margin: 0
   white-space: nowrap;
 }
 
+/* "Aim <your spacecraft> at this": one quiet line under the switches, only while the designer's
+   spacecraft is in orbit. Muted until pointed at; no box, no fill. */
+.insp-aim {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: calc(100% - 24px);
+  margin: 2px 12px 2px;
+  padding: 5px 2px;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  background: none;
+  color: var(--muted);
+  font: 12px var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--fast);
+}
+.insp-aim svg { width: 13px; height: 13px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.3; opacity: 0.8; }
+.insp-aim span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.insp-aim b { font-weight: 600; color: var(--text); }
+.insp-aim i { font-style: normal; opacity: 0.6; transition: transform var(--fast); }
+.insp-aim:hover, .insp-aim:focus-visible { color: var(--amber); }
+.insp-aim:hover i { transform: translateX(2px); }
+.insp-aim.is-hidden { display: none; }
+
 .acts { flex: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 8px 12px 4px; }
 .act {
   position: relative;
@@ -1774,16 +1806,37 @@ html.intro #landing .ld-top { visibility: hidden; } /* the bar would show throug
 .filter-banner:not(.is-hidden) ~ .train-banner { top: calc(var(--top) + 56px); }
 @media (max-width: 760px) { .train-banner { top: calc(60px + env(safe-area-inset-top, 0px)); } }
 
-/* Your own objects (main.ts, updateYoursChip): a chip in the top bar while there are any. */
-.yours { display: flex; align-items: center; height: 30px; margin-right: 4px; border: 1px solid rgba(127, 227, 255, 0.4); border-radius: 999px; background: rgba(127, 227, 255, 0.07); overflow: hidden; }
+/* Your own spacecraft (main.ts, updateYoursChip): a readout like the others in the top bar
+   (a small label over a value), with a plain Remove, while there is one. */
+.yours { display: grid; align-content: center; gap: 1px; align-self: stretch; margin-right: 8px; padding: 0 14px 0 2px; border-right: 1px solid var(--line); }
 .yours.is-hidden, body.away .yours { display: none; }
-.yours.is-course { border-color: rgba(255, 107, 125, 0.55); background: rgba(255, 107, 125, 0.08); }
-.yours.is-debris { border-color: rgba(255, 138, 92, 0.55); background: rgba(255, 138, 92, 0.08); }
-#yours-go { display: flex; align-items: center; gap: 7px; height: 100%; padding: 0 6px 0 10px; border: 0; background: none; color: var(--text); font: 500 12px var(--font-ui); cursor: pointer; white-space: nowrap; }
-#yours-go b { max-width: 150px; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
-#yours-go small { color: var(--muted); font-size: 11px; }
-.yours-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
-.yours.is-course .yours-dot { background: #ff6b7d; box-shadow: 0 0 6px #ff6b7d; }
-.yours.is-debris .yours-dot { background: #ff8a5c; box-shadow: 0 0 6px #ff8a5c; }
-#yours-clear { height: 100%; padding: 0 10px; border: 0; border-left: 1px solid rgba(127, 227, 255, 0.25); background: none; color: var(--muted); font: 16px/1 var(--font-ui); cursor: pointer; }
-#yours-clear:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); }
+.yours-label { font-size: 10.5px; color: var(--muted); }
+.yours-line { display: flex; align-items: baseline; gap: 10px; white-space: nowrap; }
+#yours-go { display: flex; align-items: baseline; gap: 7px; padding: 0; border: 0; background: none; color: var(--text); font: 500 12.5px var(--font-mono); cursor: pointer; }
+#yours-go:hover b { text-decoration: underline; text-underline-offset: 3px; }
+#yours-go b { max-width: 160px; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+#yours-state { font: 11.5px var(--font-ui); color: var(--muted); }
+.yours.is-course #yours-state { color: #ff8f9c; }
+.yours.is-debris #yours-state { color: var(--amber); }
+#yours-clear { padding: 0; border: 0; background: none; color: var(--muted); font: 11.5px var(--font-ui); cursor: pointer; }
+#yours-clear:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+/* The world itself, rendered from its map (ui/globeIcon.ts), once ready. */
+.tip-orb.is-rendered { background: var(--globe) center / 100% 100% no-repeat; box-shadow: none; }
+
+/* ---- the Browse tab, in three flat groups: Find, Show, Look (index.html) ---- */
+.sec.is-flat > summary { pointer-events: none; margin-bottom: 4px; font: 600 11px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.sec.is-flat > summary::before { display: none; }
+.sec.is-flat > summary.is-quiet { display: none; } /* the orbits continue the Show group */
+.sec.is-flat + .sec.is-flat { margin-top: 6px; }
+.sec-help { margin: 0 0 8px; font-size: 12px; line-height: 1.45; color: var(--muted); }
+.browse-show-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+#browse-reset { flex: none; padding: 0; border: 0; background: none; color: var(--cyan); font: 500 12px var(--font-ui); cursor: pointer; }
+#browse-reset:hover { text-decoration: underline; }
+body:not(.is-filtered) #browse-reset { visibility: hidden; }
+/* Orbit choices: a name and one line under it. */
+.orbit-grid { grid-template-columns: 1fr; }
+.orbit-grid .chip { display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: center; column-gap: 7px; text-align: left; padding: 0 10px; }
+.orbit-grid .chip .chip-sub { grid-column: auto; justify-self: end; font-size: 10.5px; line-height: 1.25; color: var(--muted); white-space: normal; }
+.orbit-grid .chip.is-off .chip-sub { opacity: 0.6; }
+.browse-sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+@media (max-width: 760px) { .browse-sliders { grid-template-columns: 1fr; } }

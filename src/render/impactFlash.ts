@@ -43,8 +43,17 @@ export class ImpactFlash {
   private readonly fire: THREE.Sprite;
   private readonly ring: THREE.Sprite;
   private startedAt = -1;
+  private readonly unitsPerKm: number;
 
-  constructor(parent: THREE.Object3D) {
+  private readonly sizeFactor: number;
+
+  /**
+   * `unitsPerKm`: 1 in the inertial group (km), 0.001 on the turning Earth (scene units).
+   * `sizeFactor`: how large against the view (1 for a collision; a fireball is a smaller flash).
+   */
+  constructor(parent: THREE.Object3D, unitsPerKm = 1, sizeFactor = 1) {
+    this.unitsPerKm = unitsPerKm;
+    this.sizeFactor = sizeFactor;
     const sprite = (map: THREE.Texture) => {
       const s = new THREE.Sprite(new THREE.SpriteMaterial({ map, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, transparent: true }));
       s.renderOrder = 30;
@@ -75,7 +84,7 @@ export class ImpactFlash {
       this.startedAt = -1;
       return;
     }
-    const base = Math.max(8, cameraKm * 0.08); // km: a share of the view, whatever the zoom
+    const base = Math.max(8, cameraKm * 0.08) * this.unitsPerKm * this.sizeFactor; // a share of the view, whatever the zoom
     const k = t / LIFE_S;
     const flash = Math.exp(-t * 6);
     this.core.scale.setScalar(base * (0.6 + 2.4 * flash));

@@ -567,6 +567,30 @@ export class Designer {
 
   // ---------------------------------------------------------------- collision course
 
+  /** Is your spacecraft in orbit and free (not already on a collision course)? */
+  get free(): boolean {
+    return this.launched && !this.plan;
+  }
+
+  /**
+   * From another object's card ("Aim … at this"): that object becomes the target and the
+   * collision course is brought into view, its settings and the launch button left to the visitor.
+   */
+  aimAt(sat: Satellite): void {
+    if (sat.noradId === CUSTOM_NORAD_ID || isSimFragment(sat.noradId)) return;
+    this.target = sat;
+    this.targetKind = this.host.kindOf(sat);
+    this.el('.d-arm-note').textContent = '';
+    this.syncCollision();
+    const block = this.el('.d-collision');
+    requestAnimationFrame(() => {
+      block.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      block.classList.remove('is-lit');
+      void block.offsetWidth;
+      block.classList.add('is-lit');
+    });
+  }
+
   private pickTarget(): void {
     const sat = this.host.selected();
     const note = this.el('.d-arm-note');

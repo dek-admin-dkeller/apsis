@@ -15,7 +15,7 @@
 // (SwiftShader): slower, hence the generous limits.
 
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -43,8 +43,9 @@ if (!CHROME) {
 }
 
 const server = spawn(process.execPath, [new URL('../node_modules/vite/bin/vite.js', import.meta.url).pathname, 'preview', '--port', String(PORT), '--strictPort'], { stdio: 'ignore' });
+const profile = mkdtempSync(join(tmpdir(), 'apsis-smoke-')); // removed at the end: a run's profile is tens of MB
 const chrome = spawn(CHROME, [
-  '--headless=new', `--remote-debugging-port=${DEBUG_PORT}`, `--user-data-dir=${mkdtempSync(join(tmpdir(), 'apsis-smoke-'))}`,
+  '--headless=new', `--remote-debugging-port=${DEBUG_PORT}`, `--user-data-dir=${profile}`,
   '--no-first-run', '--no-sandbox', '--hide-scrollbars', '--mute-audio', '--window-size=1280,800',
   '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist',
   // SMOKE_SOFTWARE=1 draws in software even where there is a GPU: what CI will do.
@@ -147,6 +148,10 @@ try {
 } finally {
   chrome.kill();
   server.kill();
+  await sleep(600);
+  try {
+    rmSync(profile, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 }); // Chrome may still be writing as it exits
+  } catch { /* a leftover temporary folder is harmless */ }
 }
 
 for (const problem of problems) check(false, problem);

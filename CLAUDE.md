@@ -168,7 +168,7 @@ src/features/               optional modules installed through the App interface
                             weather, launches, tonight (+ tonightWords), report (+ reportPage), growth, commands (+ commandParse),
                             flybys, fireballs, showers, dsn (the four share beyond.css)
 src/ui/                     places (+ space.css: the moves between the tracker, another world and the solar system; see "Places"),
-                            placeWatch (the close-approach monitor of another world),
+                            placeWatch (the close-approach monitor of another world), globeIcon (a world drawn as a lit globe, for icons),
                             app (the App interface), featureList (every feature, drawn on the home page), objectTabs (the
                             Objects panel's three tabs), inspector (+ charts), monitor (live pairs), ahead (prediction), encounterPanel, howto
                             (walkthrough), howSlides (the eight scenes), hashTrace, filters, search (+ searchMatch, searchIndex,
@@ -816,8 +816,11 @@ to…", never "we learned in class"). On the branch `claude/presentation-walkthr
 - **The guided overview** (`ui/spaceTour.ts`) replaced the Sun-to-Pluto autoplay (the play
   button and A away from the Earth): Earth → a Cosmos 2251 fragment (selected, card open) →
   the GEO ring → the solar system → MRO → Webb → the question the scenes answer. Captions read
-  live figures (`OverviewFacts`); → / ← move between stops, any other input stops it; the
-  interface stays on screen (the cards are the point). The Earth's autopilot is unchanged.
+  live figures (`OverviewFacts`); → / ← move between stops, any other input stops it. The
+  menus fade out as the Earth's autopilot's do (`body.touring`, through `host.hideMenus`: top
+  bar, rail, time bar, status line, the left dock, the phone's round buttons, `#place-hud`), but
+  the CARDS stay (the inspector, `#place-card`): the debris, MRO and Webb stops are about what a
+  card says. On a touch screen the hints of both tours say "tap anywhere to stop" (no keys there).
   `moving()` must not count the tracker's camera while away (it is not updated there and its
   flight never ends: the tour hung at Mars).
 - **The home page's feature list** is six areas (`FEATURES` groups) as a list, the chosen one's
@@ -932,9 +935,9 @@ to…", never "we learned in class"). On the branch `claude/presentation-walkthr
 - **Escape in the tracker**, with nothing left to close (overlay, selection, panel), goes out to
   the solar system like Escape at any other world. Overlays that close on Escape stop the key
   (`stopImmediatePropagation`) so closing one does not also leave the Earth.
-- **Autoplay** (`ui/spaceTour.ts`): away from the tracker the autopilot button and `A` play a
-  trip from the Sun to Pluto made only of `Places` journeys (`visit`, `visitSystem`); any real
-  input stops it where it is. The tracker's own autopilot (`cinema.ts`) is unchanged.
+- **Autoplay away from the tracker** is the guided overview (`ui/spaceTour.ts`, see
+  "Presentation pass"), made only of `Places` journeys (`visit`, `visitSystem`); any real input
+  stops it where it is. The tracker's own autopilot (`cinema.ts`) is unchanged.
 - **Coming back into the tracker** its name tags wait (`body.arriving`, set in `Places.chrome`,
   removed when the dissolve ends): they used to appear at once over the solar system's dive.
 - **Distances to a focus use `item.base`** (full size), never `item.radius`: on the solar
@@ -1331,6 +1334,44 @@ than cancel each other (`cancel-in-progress: false`): the first scheduled refres
 cancelled by a push that arrived seconds later, and the data stayed two days old. The job has a
 45-minute limit so a hung run cannot hold the queue. `vite.config.ts` uses `base: './'`,
 so the site works from any sub-path.
+
+## Fourth polish pass (Nov 2026): what was added and the rules it brought
+
+- **Escape has one order at every world** (the owner's rule): the card on the right first, then
+  the panel on the left, then a step out. Away from the tracker that is `places.carded` /
+  `places.closeCard()` (a craft's card closes completely and the camera lets go; it does not
+  fall back to the world's card as a click on empty space does), then `openPanel(null)`, then
+  `places.back()`. One press still goes from beside a planet's dot to the whole solar system.
+- **"Aim <your spacecraft> at this"** (`#insp-aim`, `updateAim()` in main.ts): one quiet line under
+  another object's switches, only while the designer's spacecraft is in orbit and not already on
+  a course (`Designer.free`), never on your own spacecraft or its fragments. It opens the
+  designer with that object as the target (`Designer.aimAt`) and outlines the collision block;
+  timing and the launch button stay the visitor's. Called from `select()` and `rebuildCatalog()`.
+- **Fireballs, fly-bys and showers can be watched** (`features/fireballs.ts`, `flybys.ts`,
+  `showers.ts`, their cards `.fb-card` in beyond.css): a fireball is a streak from 110 km down to
+  its burst height and an `ImpactFlash` on the turning Earth (`new ImpactFlash(parent,
+  unitsPerKm, sizeFactor)`); its direction is JPL's Earth-fixed velocity when published
+  (`Fireball.velocity`, `vel-comp=true` in fetch-deep), else straight down, and the card says
+  which. The camera comes from the SIDE and LOOKS AT the burst (`app.flyToGround(lat, lon,
+  alt, look)`): looking straight down from 9° away, as first written, put the whole event off
+  the picture. Fly-bys: the closest 24 within 0.05 AU get a Horizons path (marked 3D). A shower
+  moves the clock to its peak and pours streaks from the radiant (directions real, numbers not).
+- **The Browse tab** is plain groups (Find, Your watchlist, Show, Orbits, Look); types and orbits
+  in plain words with a line each (`TYPE_NAME`, `ORBIT_NAME`, `ORBIT_HINT` in filters.ts), one
+  line under the colour choice saying what the colours mean (`COLOR_HELP` in main.ts,
+  `#color-help`), and "Show everything" (`#browse-reset`).
+- **One lit globe per world** (`ui/globeIcon.ts`: the world's small map projected onto a sphere,
+  drawn once in an idle moment and kept) is shared by the phone's worlds sheet and the planets'
+  hover cards on the solar system.
+- **Phone home page, How it works**: only the scene on show takes room (`.hs-slide:not(.is-on)`
+  is laid over it, out of the flow), so no scene ends in a screen of empty grid; the stage is
+  always that scene's height plus its padding. "A · within 10 km?" is anchored to the right of
+  the picture so it stays inside it.
+- **Cards away from the tracker wrap their figures** (`#place-card .telemetry dd`): "190 million
+  km (1.27 AU)" was cut off at "(…".
+- **Headless Chrome leaves profiles behind**: `smoke.mjs` and `shots.mjs` delete theirs when
+  they finish. Any test script that starts Chrome with `--user-data-dir` must do the same: one
+  afternoon of runs without it filled the owner's disk.
 
 ## Ideas not built yet
 

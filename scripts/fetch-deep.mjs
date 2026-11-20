@@ -9,7 +9,7 @@
 //              ellipse), or as a place on the ground (rovers and landers)
 //   moons      this moment's orbit of every moon the app draws, about its planet
 //   flybys     asteroids passing within 0.05 AU of the Earth, a week back to two months ahead
-//              (JPL CNEOS), with the path past the Earth of the closest dozen
+//              (JPL CNEOS), with the path past the Earth of the closest two dozen
 //   fireballs  the latest bright meteors recorded by US Government sensors (JPL CNEOS)
 //
 // It also writes scripts/fixtures/deep-reference.json: Horizons' own positions for the same
@@ -57,7 +57,7 @@ const CAD_URL = 'https://ssd-api.jpl.nasa.gov/cad.api';
 const FIREBALL_URL = 'https://ssd-api.jpl.nasa.gov/fireball.api';
 const FIREBALLS = 40;
 /** Fly-bys closer than this get a path (the app draws them passing the Earth); at most this many, nearest first. */
-const PATH_WITHIN_AU = 0.02, PATHS = 12;
+const PATH_WITHIN_AU = 0.05, PATHS = 24; // (24 more Horizons requests at most, one at a time: within the run's budget)
 
 const CODE = BODY_CODE;
 const MOONS = Object.values(BODIES).filter((body) => body.kind === 'moon').map((body) => body.id);
@@ -355,7 +355,7 @@ async function allFlybys(epoch) {
 
 async function allFireballs() {
   // Newest first; a few extra in case some rows cannot be read.
-  const reply = await getJson(`${FIREBALL_URL}?limit=${FIREBALLS + 10}&req-loc=true`);
+  const reply = await getJson(`${FIREBALL_URL}?limit=${FIREBALLS + 10}&req-loc=true&vel-comp=true`);
   const col = Object.fromEntries(reply.fields.map((name, i) => [name, i]));
   const number = (value) => (value === null || value === '' || !Number.isFinite(Number(value)) ? null : Number(value));
   const fireballs = [];
@@ -368,6 +368,8 @@ async function allFireballs() {
       latDeg: row[col['lat-dir']] === 'S' ? -lat : lat,
       lonDeg: row[col['lon-dir']] === 'W' ? -lon : lon,
       altitudeKm: number(row[col.alt]), energyKt: energy, speedKmS: number(row[col.vel]),
+      // The direction it came from (Earth-fixed velocity components), when JPL has them.
+      ...(number(row[col.vx]) !== null && number(row[col.vy]) !== null && number(row[col.vz]) !== null ? { velocity: [number(row[col.vx]), number(row[col.vy]), number(row[col.vz])] } : {}),
     });
     if (fireballs.length === FIREBALLS) break;
   }

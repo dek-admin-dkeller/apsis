@@ -244,6 +244,13 @@
   .hs { border-radius: 22px; }
   .hs-stage { padding: 26px 18px 84px; }
   .hs-slide { grid-template-columns: 1fr; align-content: start; gap: 22px; min-height: 0; }
+  /* On a phone the scenes differ in height far more than side by side (the code scene is twice the
+     first), so only the scene on show takes room: the others are laid over it, out of the flow,
+     still rendered so their words can rise in. Otherwise the first scene ended in a screen of
+     empty grid. */
+  .hs-stage { position: relative; }
+  .hs-slide:not(.is-on) { position: absolute; inset: 0 0 auto 0; }
+  .hs-target-label { left: auto; right: 22px; }
   .hs-title { font-size: clamp(26px, 7vw, 36px); }
   .hs-iso-wrap { width: min(100%, 260px); }
   .hs-calc { font-size: 16px; }
