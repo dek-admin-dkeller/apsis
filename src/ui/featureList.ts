@@ -236,6 +236,7 @@ export const WHATS_NEW: Update[] = [
     items: [
       'The designer is an orbit lab: any of the 127 models, a mass, every orbital element with the orbit drawn as you drag, and the physics that follows (plane drift, sun-synchronous, shadow, lifetime, Δv).',
       'Put your spacecraft on a collision course with any object: the approach in its hash-grid cells, then a fragment cloud by NASA’s break-up model, screened like everything else.',
+      'While you have a spacecraft (or a debris cloud) of your own, a chip in the top bar says so: click it to go there, × to remove it.',
       'Satellite trains have a clear way out (a banner with Done; Escape and Home too), and the status bar shows the distance from the Sun away from the Earth.',
     ],
   },

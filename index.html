@@ -257,6 +257,11 @@
           <div id="readout-data" title="How old the orbital data is"><dt>Tracking data</dt><dd id="data-age">–</dd></div>
         </dl>
         <nav class="top-actions">
+          <!-- Your own objects (the designer's spacecraft, or a simulated collision's fragments): only while there are any (main.ts, updateYoursChip). -->
+          <div id="yours" class="yours is-hidden" role="group" aria-label="Your objects">
+            <button id="yours-go" type="button" title="Go to it"><i class="yours-dot"></i><b id="yours-name"></b><small id="yours-state"></small></button>
+            <button id="yours-clear" type="button" title="Remove your objects" aria-label="Remove your objects">×</button>
+          </div>
           <!-- What is live now and coming up (features/bell.ts): a green dot and a count while something is live. -->
           <div class="tool-group" id="bell-group">
             <button id="bell" class="tool" aria-haspopup="dialog" aria-expanded="false" title="What's live and coming up" aria-label="What's live and coming up">

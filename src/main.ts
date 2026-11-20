@@ -1126,7 +1126,41 @@ function rebuildCatalog(): void {
   const snapshot = extra.length > 0 ? { ...baseSnapshot, objects: [...baseSnapshot.objects, ...extra] } : baseSnapshot;
   applyCatalog(buildCatalog(snapshot, baseLive));
   designer.catalogChanged(customRecord !== null);
+  updateYoursChip();
 }
+
+/**
+ * The top bar's chip for your own objects: shown only while the designer's spacecraft (or a
+ * simulated collision's fragments) are in the catalogue — what and how many, a click to go to
+ * it, and × to remove the lot (the same as the designer's Remove / Clear simulation).
+ */
+function updateYoursChip(): void {
+  const chip = $('yours');
+  if (!customRecord) return void chip.classList.add('is-hidden');
+  chip.classList.remove('is-hidden');
+  const debris = !!simPlan && simAfter;
+  $('yours-name').textContent = debris ? 'Impact debris' : customRecord.OBJECT_NAME;
+  $('yours-state').textContent = debris ? `${fmtInt(simRecords.length)} fragments`
+    : simPlan ? 'collision course' : 'in orbit';
+  chip.classList.toggle('is-course', !!simPlan && !debris);
+  chip.classList.toggle('is-debris', debris);
+  $('yours-go').title = debris ? 'Go to the debris cloud' : `Go to ${customRecord.OBJECT_NAME}`;
+}
+$('yours-go').addEventListener('click', () => {
+  if (!catalog) return;
+  if (places.elsewhere) void places.visit('earth');
+  const sat = simPlan && simAfter ? catalog.sats.find((s) => isSimFragment(s.noradId)) : catalog.byNorad.get(CUSTOM_NORAD_ID);
+  if (sat) select(sat);
+});
+$('yours-clear').addEventListener('click', () => {
+  const what = simPlan && simAfter ? 'the debris cloud' : customRecord?.OBJECT_NAME ?? 'your spacecraft';
+  endSimulation();
+  customRecord = null;
+  cloud.setHighlight(null);
+  if (selected && (selected.noradId === CUSTOM_NORAD_ID || isSimFragment(selected.noradId))) select(null);
+  rebuildCatalog();
+  toast(`Removed ${what}`);
+});
 
 // The designer's live orbit preview: a dashed line in the inertial frame (km).
 const designPreview = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineDashedMaterial({ color: 0x7fe3ff, dashSize: 220, gapSize: 140, transparent: true, opacity: 0.8, depthWrite: false }));
@@ -1186,6 +1220,7 @@ function updateSimulation(beforeMs: number): void {
     } else {
       cloud.setHighlight(null);
     }
+    updateYoursChip();
   }
   if (impactFlash.active) {
     const at = kit.eciGroup.localToWorld(new THREE.Vector3(simPlan.at.x, simPlan.at.y, simPlan.at.z));

@@ -774,6 +774,12 @@ like the rest of the product, with no scores or game screens.
   fragments, follows the cloud's middle, and switches screening on without opening the monitor
   (`setConjunction(on, showPanel)`), so the hash grid screens the cloud and
   `Designer.noteScreening` counts its passes (with other objects / inside the cloud).
+- **On the solar system the cells are true cubes** (`setCells`, map branch): the cell's middle goes
+  through `mapPoint`, the cube is drawn at the map's scale there (mapRadius(r)/r). Each corner put
+  through the squeeze separately bent them into skewed slabs ("it looks bugged").
+- **The top bar's "yours" chip** (`#yours`, `updateYoursChip` in main.ts): only while the designer's
+  spacecraft or a collision's fragments exist; its name and state, a click to go to it, × to remove
+  everything. On a phone it sits under the search pill.
 - "Watch the approach" puts the clock a minute before and opens the close-approach view: the two
   closing in their cells of the grid. "Clear simulation" removes it all.
 

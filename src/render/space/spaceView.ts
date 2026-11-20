@@ -1387,8 +1387,8 @@ export class SpaceView {
     // Colours: a plain cell cyan, one holding a pair inside the alert distance red, the selected
     // craft's own cell amber, and the faint outline of the 27 cells searched round it.
     const COLOURS = [[0.5, 0.89, 1], [1, 0.3, 0.37], [1, 0.71, 0.33], [0.35, 0.55, 0.7]];
-    const corner = new THREE.Vector3();
-    const v: Vec = [0, 0, 0];
+    const corner = new THREE.Vector3(), centre = new THREE.Vector3();
+    const v: Vec = [0, 0, 0], mid: Vec = [0, 0, 0];
     for (let c = 0; c < count; c++) {
       const kind = cells[c * 4 + 3];
       const half = (sizeKm / 2) * (kind === 3 ? 3 : 1); // the 27-cell block is three cells wide
@@ -1396,10 +1396,16 @@ export class SpaceView {
       edges.forEach((index, k) => {
         const at = (c * 24 + k) * 3;
         if (map) {
-          // On the solar system distance from the Sun is squeezed (mapRadius): each corner goes
-          // through the same squeeze as everything else, so a cell is drawn where its craft is.
-          for (let d = 0; d < 3; d++) v[d] = cells[c * 4 + d] + corners[index][d] * half;
-          this.mapPoint(v, corner).toArray(position, at);
+          // On the solar system distance from the Sun is squeezed (mapRadius). The cell's middle
+          // goes through that squeeze, so it sits where its craft is; the cell itself is drawn as
+          // a true cube at the map's scale there. Putting each corner through the squeeze bent
+          // the cubes into skewed slabs (the owner: "it looks bugged").
+          mid[0] = cells[c * 4]; mid[1] = cells[c * 4 + 1]; mid[2] = cells[c * 4 + 2];
+          const rc = Math.hypot(mid[0], mid[1], mid[2]);
+          const k = rc > 1 ? mapRadius(rc) / rc : 0;
+          this.mapPoint(mid, centre);
+          for (let d = 0; d < 3; d++) v[d] = corners[index][d] * half;
+          this.toWorld(v, k, corner).add(centre).toArray(position, at);
         } else {
           // ICRF (x, y, z) → star axes (x, z, −y); the group's turn (below) makes them this view's.
           // In star axes a cube stays a cube with its y and z edges swapped, so the same signs serve.
@@ -1583,7 +1589,7 @@ export class SpaceView {
       latDeg: (Math.asin(THREE.MathUtils.clamp(local.y / Math.max(r, 1e-9), -1, 1)) * 180) / Math.PI,
       lonDeg: (Math.atan2(-local.z, local.x) * 180) / Math.PI,
       // At a place the camera is beside its world: the world's own distance from the Sun.
-      sunKm: where.body === 'sun' ? 0 : Math.hypot(...bodyPosition(where.body, tMs, this.vec)),
+      sunKm: where.body === 'sun' ? r * kmPerUnit : Math.hypot(...bodyPosition(where.body, tMs, this.vec)), // at the Sun: the camera's own distance
     };
   }
 

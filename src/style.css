@@ -1773,3 +1773,17 @@ html.intro #landing .ld-top { visibility: hidden; } /* the bar would show throug
 /* Both on at once: the train's banner under the filter's. */
 .filter-banner:not(.is-hidden) ~ .train-banner { top: calc(var(--top) + 56px); }
 @media (max-width: 760px) { .train-banner { top: calc(60px + env(safe-area-inset-top, 0px)); } }
+
+/* Your own objects (main.ts, updateYoursChip): a chip in the top bar while there are any. */
+.yours { display: flex; align-items: center; height: 30px; margin-right: 4px; border: 1px solid rgba(127, 227, 255, 0.4); border-radius: 999px; background: rgba(127, 227, 255, 0.07); overflow: hidden; }
+.yours.is-hidden, body.away .yours { display: none; }
+.yours.is-course { border-color: rgba(255, 107, 125, 0.55); background: rgba(255, 107, 125, 0.08); }
+.yours.is-debris { border-color: rgba(255, 138, 92, 0.55); background: rgba(255, 138, 92, 0.08); }
+#yours-go { display: flex; align-items: center; gap: 7px; height: 100%; padding: 0 6px 0 10px; border: 0; background: none; color: var(--text); font: 500 12px var(--font-ui); cursor: pointer; white-space: nowrap; }
+#yours-go b { max-width: 150px; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+#yours-go small { color: var(--muted); font-size: 11px; }
+.yours-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
+.yours.is-course .yours-dot { background: #ff6b7d; box-shadow: 0 0 6px #ff6b7d; }
+.yours.is-debris .yours-dot { background: #ff8a5c; box-shadow: 0 0 6px #ff8a5c; }
+#yours-clear { height: 100%; padding: 0 10px; border: 0; border-left: 1px solid rgba(127, 227, 255, 0.25); background: none; color: var(--muted); font: 16px/1 var(--font-ui); cursor: pointer; }
+#yours-clear:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); }

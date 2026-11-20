@@ -946,3 +946,8 @@
   #suggestions li[data-row] .note { grid-column: 2; align-self: start; max-width: none; font-size: 12px; line-height: 1.25; }
   .topbar:has(#suggestions.is-open) ~ #m-stack { opacity: 0; pointer-events: none; }
 }
+
+/* Your own objects' chip (main.ts, updateYoursChip): under the search pill on a phone, not squeezing it. */
+@media (max-width: 760px) {
+  .yours { position: fixed; top: calc(62px + var(--safe-top, 0px)); left: 12px; z-index: 30; margin: 0; background: rgba(8, 20, 30, 0.88); }
+}
