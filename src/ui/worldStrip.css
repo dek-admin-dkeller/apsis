@@ -155,3 +155,8 @@
 @media (prefers-reduced-motion: reduce) {
   .world-sheet, .world-scrim { animation: none !important; }
 }
+
+/* The rendered globe (worldStrip.ts, globeIcon): the world's own map on a lit sphere. */
+.ws-orb.is-rendered { background: var(--globe) center / 100% 100% no-repeat; box-shadow: none; }
+.ws-orb.is-rendered.is-sun { box-shadow: 0 0 14px rgba(255, 190, 90, 0.55); }
+.ws-tile.is-here .ws-orb.is-rendered { box-shadow: 0 0 0 2px var(--amber, #ffb454); }
