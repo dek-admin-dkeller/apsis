@@ -1,7 +1,9 @@
 /**
- * The share window: a QR code people can scan from the screen (handy in a classroom) and
- * the link itself with a copy button. "This view" reopens exactly what is on screen;
- * "Home page" is the plain site address.
+ * The share window, made for presenting: a QR code people can scan from the screen, the site's
+ * address short enough to type from a projector ("dek-…github.io/apsis": no "https://", no
+ * trailing slash; GitHub Pages redirects it to the site), and the full link written out in full,
+ * wrapped, never cut off (it used to sit in a one-line field that hid most of it), with a copy
+ * button. "This view" reopens exactly what is on screen; "Home page" is the plain site address.
  */
 
 import { $ } from './dom.ts';
@@ -17,7 +19,8 @@ export const warmShare = (): Promise<QrFactory> => (qrLibrary ??= import('qrcode
 export class ShareDialog {
   private readonly overlay = $('share-dialog');
   private readonly canvas = $<HTMLCanvasElement>('share-qr');
-  private readonly field = $<HTMLInputElement>('share-url');
+  private readonly field = $('share-url');
+  private url = '';
   private viewUrl = '';
   private which: 'view' | 'home' = 'view';
 
@@ -35,12 +38,30 @@ export class ShareDialog {
         copy.textContent = 'Copied';
         setTimeout(() => (copy.textContent = 'Copy link'), 1600);
       };
-      const attempt = navigator.clipboard?.writeText(this.field.value);
-      if (attempt) attempt.then(done, () => this.field.select());
-      else this.field.select(); // no clipboard access: leave the link selected for Ctrl/Cmd+C
+      const attempt = navigator.clipboard?.writeText(this.url);
+      if (attempt) attempt.then(done, () => this.selectLink());
+      else this.selectLink(); // no clipboard access: leave the link selected for Ctrl/Cmd+C
     });
-    this.field.addEventListener('focus', () => this.field.select());
-    this.field.addEventListener('keydown', (event) => event.stopPropagation());
+    // A click on the link selects all of it (to copy by hand).
+    this.field.addEventListener('click', () => this.selectLink());
+    // The address to type: the site without "https://" and without the trailing slash, in two
+    // pieces that never break inside themselves ("dek-…github.io" + "/apsis"), so a projector
+    // shows it either on one line or split at the slash, never mid-word.
+    this.showAddress(location.host, location.pathname.replace(/\/(index\.html)?$/, ''));
+  }
+
+  /** Exported for testing the layout with the published address. */
+  showAddress(host: string, path: string): void {
+    const piece = (text: string) => Object.assign(document.createElement('span'), { className: 'share-piece', textContent: text });
+    $('share-address').replaceChildren(piece(host), ...(path ? [document.createElement('wbr'), piece(path)] : []));
+  }
+
+  private selectLink(): void {
+    const range = document.createRange();
+    range.selectNodeContents(this.field);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
   }
 
   get isOpen(): boolean {
@@ -64,14 +85,15 @@ export class ShareDialog {
       button.classList.toggle('is-on', button.dataset.value === this.which);
     }
     const url = which === 'view' ? this.viewUrl : `${location.origin}${location.pathname}`;
-    this.field.value = url;
+    this.url = url;
+    this.field.textContent = url;
     this.drawQr(url);
   }
 
   /** Dark squares on white, with the quiet margin scanners need. */
   private drawQr(text: string): void {
     void warmShare().then((qrcode) => {
-      if (this.field.value === text) this.paintQr(qrcode, text); // the link may have changed while it loaded
+      if (this.url === text) this.paintQr(qrcode, text); // the link may have changed while it loaded
     });
   }
 

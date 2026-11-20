@@ -1327,17 +1327,26 @@
     </div>
 
     <!-- ============ Share ============ -->
+    <!-- The share window (ui/share.ts), made for presenting: the QR code, the site's address short
+         enough to type from a projector, and the full link written out in full (never cut off). -->
     <div id="share-dialog" class="overlay is-hidden">
       <div class="panel share-card">
         <header class="panel-head"><h2>Share Apsis</h2><button class="icon-btn" id="share-close" aria-label="Close">×</button></header>
         <div class="share-body">
-          <div class="segmented" id="share-which">
-            <button data-value="view">This view</button><button data-value="home">Home page</button>
-          </div>
-          <canvas id="share-qr" width="480" height="480" aria-label="QR code for the link below"></canvas>
-          <p class="note">Point a phone camera at the code, or send the link.</p>
-          <div class="share-row">
-            <input type="text" id="share-url" readonly aria-label="Link" />
+          <figure class="share-qr-box">
+            <canvas id="share-qr" width="480" height="480" aria-label="QR code for the link"></canvas>
+            <figcaption>Scan with a phone camera</figcaption>
+          </figure>
+          <div class="share-text">
+            <p class="share-label">Or type this address</p>
+            <p class="share-address" id="share-address" title="Type this into any browser"></p>
+            <div class="share-link-head">
+              <p class="share-label">Full link</p>
+              <div class="segmented" id="share-which">
+                <button data-value="view">This view</button><button data-value="home">Home page</button>
+              </div>
+            </div>
+            <p class="share-link" id="share-url" aria-label="Link"></p>
             <button class="btn btn-primary" id="share-copy">Copy link</button>
           </div>
         </div>

@@ -1483,13 +1483,31 @@ body.quiet-ui .timebar[data-direction='back']:not(.is-open) #speeds button.is-on
 
 /* ---------- share window ---------- */
 
-.share-card { width: min(380px, 100%); max-height: 100%; overflow: auto; }
-.share-body { display: grid; gap: 12px; padding: 4px 14px 16px; justify-items: center; }
-.share-body .segmented { width: 100%; }
-#share-qr { width: min(260px, 70vw); height: auto; border-radius: 8px; image-rendering: pixelated; }
-.share-row { display: flex; gap: 8px; width: 100%; }
-#share-url { flex: 1; min-width: 0; height: 32px; padding: 0 9px; background: var(--inset); border: 1px solid var(--line); border-radius: var(--radius-s); color: var(--text); font: 11.5px var(--font-mono); }
-#share-url:focus { outline: none; border-color: var(--cyan); }
+.share-card { width: min(760px, 100%); max-height: 100%; overflow: auto; }
+/* Made for presenting: the QR code large on the left, the address to type in big letters on the right. */
+.share-body { display: grid; grid-template-columns: minmax(0, 280px) minmax(0, 1fr); gap: 22px; align-items: center; padding: 8px 20px 22px; }
+.share-qr-box { margin: 0; display: grid; justify-items: center; gap: 8px; }
+.share-qr-box figcaption { font-size: 12px; color: var(--muted); }
+#share-qr { width: 100%; max-width: 280px; height: auto; border-radius: 10px; image-rendering: pixelated; }
+.share-text { display: grid; gap: 8px; min-width: 0; }
+.share-label { margin: 0; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.share-address {
+  margin: 0 0 10px; font: 600 clamp(15px, 1.7vw, 24px) / 1.3 var(--font-mono); color: var(--text);
+  user-select: all;
+}
+.share-piece { white-space: nowrap; }
+.share-link-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.share-link-head .segmented { width: auto; }
+.share-link {
+  margin: 0; padding: 9px 11px; border: 1px solid var(--line); border-radius: var(--radius-s); background: var(--inset);
+  font: 12px / 1.5 var(--font-mono); color: var(--text); overflow-wrap: anywhere; word-break: break-all; user-select: all; cursor: text;
+}
+#share-copy { justify-self: start; }
+@media (max-width: 640px) {
+  .share-body { grid-template-columns: 1fr; justify-items: stretch; }
+  .share-address { font-size: clamp(14px, 5vw, 21px); }
+  .share-qr-box canvas { max-width: 220px; }
+}
 
 /* ---------- colour picker with six choices, its legend, highlighted feed rows ---------- */
 

@@ -1471,6 +1471,13 @@ so the site works from any sub-path.
   they finish. Any test script that starts Chrome with `--user-data-dir` must do the same: one
   afternoon of runs without it filled the owner's disk.
 
+- **The share window is made for presenting** (`ui/share.ts`, `#share-dialog`): the QR code
+  large, the site's address to TYPE in large mono type (no "https://", no trailing slash: GitHub
+  Pages redirects `…github.io/apsis` to the site), in two unbreakable pieces (`.share-piece`:
+  the domain, then `/apsis`) so it wraps only at the slash, and the full link written out in full
+  (a wrapped block, not a one-line field that hid most of it). Measured with the published
+  address at 1280, 1440, 1920 and 390 px wide. A shorter address needs a custom domain.
+
 ## Ideas not built yet
 
 Saved for later at the owner's request (Nov 2026): **offline use and installing as an app**
