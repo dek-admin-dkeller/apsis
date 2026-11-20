@@ -425,10 +425,19 @@ export class Designer {
     this.el('.d-count-label').textContent = left > 0 ? 'Impact' : 'Impact was';
   }
 
+  /** The clock went back before the impact (a rewind): ready to happen again. */
+  rewound(): void {
+    if (!this.plan) return;
+    this.impacted = false;
+    this.el('.d-watch').textContent = 'Watch the approach';
+    this.el('.d-after').textContent = 'Rewound to before the impact: play forward to see it again.';
+  }
+
   /** The impact has happened (the tracker saw the clock pass it). */
   impact(): void {
     if (!this.plan || this.impacted) return;
     this.impacted = true;
+    this.el('.d-watch').textContent = 'Watch it again'; // a minute before, the pair closing in, then the impact
     const f = this.plan.figures;
     this.el('.d-after').textContent = `${f.catastrophic ? 'Catastrophic break-up' : 'Damaging, not catastrophic'}: ${fmtInt(this.plan.fragments.length)} fragments drawn and screened (the model expects ${fmtInt(f.fragments10cm)} of 10 cm or more). Close approaches they cause appear below as the screening runs.`;
   }
@@ -659,6 +668,7 @@ export class Designer {
     MODEL_OVERRIDE.set(CUSTOM_NORAD_ID, this.kind);
     this.plan = { impactor: record, fragments, targetNorad: this.target.noradId, impactMs: states.impactMs, at: states.target.r, figures };
     this.impacted = false;
+    this.el('.d-watch').textContent = 'Watch the approach';
     const sat = this.host.arm(this.plan);
     if (!sat) {
       this.plan = null;

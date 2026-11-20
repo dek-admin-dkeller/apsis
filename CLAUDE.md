@@ -780,6 +780,9 @@ like the rest of the product, with no scores or game screens.
 - **The top bar's "yours" chip** (`#yours`, `updateYoursChip` in main.ts): only while the designer's
   spacecraft or a collision's fragments exist; its name and state, a click to go to it, × to remove
   everything. On a phone it sits under the search pill.
+- **Rewind replays it**: going back across the moment (rewind, a step back, a jump) brings the pair
+  back, hides the fragments and reopens the close-approach view on them (`Designer.rewound`);
+  going forward across it fires the flash again. After an impact the button reads "Watch it again".
 - "Watch the approach" puts the clock a minute before and opens the close-approach view: the two
   closing in their cells of the grid. "Clear simulation" removes it all.
 

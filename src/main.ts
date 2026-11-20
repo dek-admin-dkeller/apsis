@@ -1218,7 +1218,15 @@ function updateSimulation(beforeMs: number): void {
       }
       designer.impact();
     } else {
+      // Back before the moment (the time bar's rewind, a step back, a jump): the two are there
+      // again, and the view goes back to them closing in, so the impact can be watched again.
       cloud.setHighlight(null);
+      designer.rewound();
+      const a = catalog?.byNorad.get(CUSTOM_NORAD_ID), b = catalog?.byNorad.get(simPlan.targetNorad);
+      if (a && b && !encPanel.isOpen && !places.elsewhere) {
+        rig.release();
+        openEncounter(a.index, b.index);
+      }
     }
     updateYoursChip();
   }
