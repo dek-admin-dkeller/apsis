@@ -1887,26 +1887,28 @@ body:not(.is-filtered) #browse-reset { visibility: hidden; }
 
 /* ---- the collision readout (ui/impactHud.ts): over the picture while a collision is watched ---- */
 .impact-hud {
-  position: fixed; left: 50%; bottom: calc(var(--dock-bottom, 64px) + 64px); /* clear of the time bar, open or resting */ z-index: 16; width: min(460px, calc(100vw - 24px)); transform: translateX(-50%);
-  padding: 10px 14px 11px; border: 1px solid var(--line-strong); border-radius: 12px; background: rgba(8, 12, 20, 0.86);
+  /* At the top, under the bar: at the bottom it covered the time bar's slider once that was open. */
+  position: fixed; left: 50%; top: calc(var(--top, 56px) + 12px); z-index: 16; width: min(380px, calc(100vw - 24px)); transform: translateX(-50%);
+  padding: 8px 12px 9px; border: 1px solid var(--line-strong); border-radius: 12px; background: rgba(8, 12, 20, 0.86);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); color: var(--muted); font-size: 11.5px; pointer-events: none;
 }
 .impact-hud.is-hidden { display: none; }
 .ih-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; letter-spacing: 0.02em; }
 .ih-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-top: 2px; }
-.ih-count { font: 600 17px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text); }
+.ih-count { font: 600 15px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text); }
 .impact-hud.is-after .ih-count { color: var(--red); }
 .ih-slow { font: 11px var(--font-mono); color: var(--amber); }
-.ih-track { position: relative; height: 3px; margin: 12px 4px 20px; border-radius: 2px; background: var(--line); }
+.ih-track { position: relative; height: 3px; margin: 10px 4px 18px; border-radius: 2px; background: var(--line); }
 .ih-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px; background: linear-gradient(90deg, rgba(127, 227, 255, 0.5), var(--red)); }
 .ih-marker { position: absolute; top: 50%; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border-radius: 50%; background: var(--text); box-shadow: 0 0 0 3px rgba(255, 77, 94, 0.35); }
 .ih-tick { position: absolute; top: 9px; transform: translateX(-50%); font-size: 9.5px; white-space: nowrap; color: var(--muted); opacity: 0.8; }
 .ih-tick:first-of-type { transform: none; }
 .ih-tick:last-of-type { transform: translateX(-100%); }
-.ih-gap { color: var(--text); font-size: 12px; }
+.ih-gap { color: var(--text); font-size: 11.5px; }
 .ih-facts { margin-top: 2px; }
 @media (max-width: 760px) {
-  .impact-hud { top: calc(62px + var(--safe-top, 0px)); bottom: auto; }
+  .impact-hud { top: calc(62px + var(--safe-top, 0px)); }
+  body.m-time-open .impact-hud { display: none; } /* the time bar takes the top of the screen while a sheet is up */
 }
 
 /* ---- country names on the globe (render/countryLabels.ts; Layers → Country names) ---- */

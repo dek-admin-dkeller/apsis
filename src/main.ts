@@ -740,6 +740,7 @@ function refreshSelected(): void {
 const FOCUS_DISTANCE = 0.1; // scene units (100 km): the 3D model fills about a quarter of the view
 
 function select(sat: Satellite | null): void {
+  followingCloud = false; // the camera is now the visitor's choice, not the debris cloud's
   if (sat && trainOn) endTrain(false); // choosing an object ends the train on show (the camera goes to the object)
   if (encPanel.isOpen && sat) closeEncounter(true);
   if (fp.mode === 'satellite') fp.exit(); // the ride is tied to the object being left
@@ -1252,11 +1253,16 @@ function updateSimulation(beforeMs: number): void {
       if (!conjunctionOn) setConjunction(true, false); // screening on, the designer's panel left where it is
       screenDirty = true;
       // Follow the middle of the cloud from close by, so it is seen spreading along the orbit.
+      // Looked up by catalogue NUMBER each time, never by index: a rebuilt catalogue (Remove, a
+      // newer download) moves the indices, and the "middle" of 250 unrelated satellites round the
+      // world is near the Earth's centre, where the camera then stuck (the owner had to reload).
       const p = { x: 0, y: 0, z: 0 };
+      const numbers = fragments.map((i) => catalog!.sats[i].noradId);
       const middle = (): THREE.Vector3 | null => {
         let n = 0, x = 0, y = 0, z = 0;
-        for (const i of fragments) {
-          if (!sim.getPosition(i, p)) continue;
+        for (const number of numbers) {
+          const sat = catalog?.byNorad.get(number);
+          if (!sat || !sim.getPosition(sat.index, p)) continue;
           x += p.x;
           y += p.y;
           z += p.z;
@@ -1266,6 +1272,7 @@ function updateSimulation(beforeMs: number): void {
       };
       fragmentMiddle = middle;
       if (crossed) {
+        followingCloud = true;
         rig.follow = true;
         // In the slow-motion finish: stay close, where the models met (updateFinale moves out
         // once the clock is back to normal speed).
@@ -1305,6 +1312,12 @@ const FINALE_SLOWEST = 0.012;
 let finale: { speed: number } | null = null; // the speed the finale set last
 function updateFinale(): void {
   if (!simPlan) {
+    // Removed in the middle of the slow-motion finish: the clock must not stay slowed (it looked
+    // as if everything had frozen).
+    if (finale) {
+      clock.speed = 1;
+      timeControls.sync();
+    }
     finale = null;
     return;
   }
@@ -1334,6 +1347,7 @@ function updateFinale(): void {
   }
 }
 let fragmentMiddle: (() => THREE.Vector3 | null) | null = null;
+let followingCloud = false; // the camera is on the debris cloud (released when the simulation ends)
 
 /**
  * The collision readout over the picture (ui/impactHud.ts): while the close-approach view shows the
@@ -1390,6 +1404,13 @@ function endSimulation(): void {
   simRecords = [];
   simAfter = false;
   filters.setQuiet('simulation', null);
+  // The camera was following the debris cloud: let it go (the cloud is about to disappear).
+  if (followingCloud) {
+    rig.follow = false;
+    rig.release();
+  }
+  followingCloud = false;
+  fragmentMiddle = null;
 }
 const designer = new Designer($('designer-body'), {
   launch: (record) => {

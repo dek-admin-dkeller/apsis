@@ -1433,7 +1433,16 @@ so the site works from any sub-path.
   large, the camera square to the approach (`flyToFocus(…, side)`), so the impactor crosses the
   picture; framing both kept the camera tens of km out (dots). `ui/impactHud.ts` adds a readout
   over the picture: countdown, the gap on a LOGARITHMIC track (1,000 km → contact, so the scale
-  of the distances stays honest), closing speed per km, energy, then the fragments.
+  of the distances stays honest), closing speed per km, energy, then the fragments. It sits at the top under the
+  bar (at the bottom it covered the open time bar's slider); on a phone it hides while the time
+  bar is open (that bar moves to the top when a sheet is up).
+- **Removing a simulation (Remove, Clear) must leave nothing behind** (`endSimulation`): the camera
+  following the debris cloud is let go, and the slow-motion finish's clock speed is put back
+  (`updateFinale` with no plan). The cloud's middle is looked up by catalogue NUMBER, never by
+  index: Remove rebuilds the catalogue, and stale indices made the camera follow the middle of 250
+  unrelated satellites, near the Earth's centre, with the clock at 1/80 (the owner had to reload).
+- **Test scripts that start headless Chrome must stop it and delete its profile even when cut
+  short**: an interrupted run left a Chrome and its preview server running in the background.
 - **Country names** (`render/countryLabels.ts`, Layers → Country names, `Settings.countryNames`,
   off by default like Borders): points from `public/data/countries.json` (`npm run
   build-countries`: each country's largest landmass, centred on the sphere so Russia and Fiji

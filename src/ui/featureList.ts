@@ -252,6 +252,7 @@ export const WHATS_NEW: Update[] = [
       'Left alone, the bars around the turning globe dim, then fade away entirely; any touch brings them back.',
       'A launch is an object with its own card: photo, the mission’s goal, time to orbit and a track of the climb, the mission, the record and links. Click the rocket, or choose it in the bell to follow it.',
       'A rocket’s preview shows only when you point at it; Layers → Live launches turns them off.',
+      'Removing a collision’s debris always gives the camera and the clock back.',
       'Country names on the globe (Layers → Country names).',
       'A watched collision is seen from beside the target, its 3D model in view, with a readout of the closing gap on a scale from 1,000 km to contact.',
       'New launches say how new they are, on the globe and on the object’s card.',
