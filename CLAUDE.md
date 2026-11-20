@@ -185,7 +185,7 @@ scripts/                    fetch-data.mjs, fetch-radio.mjs, fetch-deep.mjs (+ d
 public/                     data/ (satellites.json, satcat.json, radio.json, deep.json, borders.bin; changes.json exists only
                             in the published site), shots/, textures/ (space/ = the maps of other bodies), icons/,
                             manifest.webmanifest
-.github/workflows/deploy.yml  build + deploy to Pages; every 3 h it refreshes CelesTrak, SatNOGS and JPL data first (not
+.github/workflows/deploy.yml  build + deploy to Pages; every hour it refreshes whatever its guards allow (CelesTrak at most every 2 h) and publishes only if something is new (not
                             committed back); a push build keeps the data the site already shows (carry-over.mjs)
 ```
 
@@ -340,7 +340,10 @@ the top bar, rail and status line dim slightly (0.62, `style.css`; the owner ask
 subtle there); on a phone the search pill, round buttons and tab bar dim to 0.28 (`mobile.css`
 section 11; the owner asked for it fainter than half). Any `pointerdown`, `pointermove`, wheel
 or key removes it at once. Never while a panel, a menu, an overlay, the command bar, the time
-controls or the tour is open.
+controls or the tour is open. Second step (the owner asked for it): `GONE_AFTER_MS` (the 2.6 s
+dim plus 5 s) after it began, `ui-gone` fades those bars (and the phone's path capsule) to nothing
+over ten seconds, then `visibility: hidden`, so an invisible button cannot be hit by accident;
+the same input brings everything back at once.
 
 Phone menu (`#m-views`, `mobile.css` section 12): the four views side by side as icons, then
 four actions as an icon list. It was nine equal lines of text. (There is no "search" or
@@ -1028,7 +1031,7 @@ an in-app yes plus the browser's own prompt, and stays in `localStorage`.
 
 ## A tab left open (`src/data/freshness.ts`)
 
-A page reads the data files when it loads; the site publishes new ones every 3 hours. So that
+A page reads the data files when it loads; the site publishes new ones about every 2 hours. So that
 a tab opened yesterday does not show yesterday's orbits, the page asks its OWN site (relative
 addresses, never a third party) whether a file has been published again, and takes it.
 
@@ -1299,9 +1302,15 @@ search list above a real on-screen keyboard (it is sized from `visualViewport`).
 ## Deploying
 
 Push to `main` → the workflow builds and publishes `dist/` to GitHub Pages. The scheduled run
-(every 3 h, at 37 minutes past) downloads fresh CelesTrak, SatNOGS and JPL (deep-space) data before building, compares the new
-elements with the published ones (`changes.json`), and re-enables itself so GitHub does not
-pause the schedule after 60 days of inactivity.
+(every hour, at 37 minutes past) downloads whatever is old enough to be downloaded (CelesTrak, SatNOGS,
+JPL: each script's own guard decides), compares the new elements with the published ones
+(`changes.json`), and re-enables itself so GitHub does not pause the schedule after 60 days of
+inactivity. A scheduled run that brought nothing new (the data files' checksums before and after
+are the same: "Anything new?") builds and publishes nothing, because every deployment makes each
+open tab download the data files again (freshness.ts compares validators). It was every 3 hours;
+GitHub's scheduler is best effort and on 20 Nov 2026 started 2 of the 5 runs due in fourteen
+hours, one of which lost its CelesTrak transfer half-way, and the site showed ten-hour-old orbits.
+`fetch-data.mjs` now tries a transfer that breaks off once more after 30 s (never a refusal).
 
 **How often each source is asked, and why that is polite.** The schedule only sets the pace.
 Every run first reads back the data the site is showing (`carry-over.mjs`, our own site), and
@@ -1311,10 +1320,10 @@ scheduled one downloads nothing, and still deploys):
 
 | Source | Asked | Requests | Why that is within bounds |
 | --- | --- | --- | --- |
-| CelesTrak elements | every run, 3 h (guard 2 h) | 5, a second apart | CelesTrak refreshes about every 2 h and asks for no more than one download per update |
+| CelesTrak elements | every 2 h (hourly runs, guard 2 h) | 5, a second apart | CelesTrak refreshes about every 2 h and asks for no more than one download per update |
 | CelesTrak catalogue facts | once a day (guard 23.5 h) | 1 | changes slowly; one file |
-| SatNOGS | every second run, 6 h (guard 5.5 h) | at most 22, 1.5 s apart | 6 h is how far back one download's reports reach, so "last heard" has no gaps; more often would repeat the same pages |
-| JPL Horizons and CNEOS | every second run, 6 h (guard 5.5 h) | about 130, strictly one at a time, 1.1 s apart | JPL asks for no parallel requests; the craft follow paths predicted weeks ahead, so more often would gain nothing |
+| SatNOGS | every 6 h (guard 5.5 h) | at most 22, 1.5 s apart | 6 h is how far back one download's reports reach, so "last heard" has no gaps; more often would repeat the same pages |
+| JPL Horizons and CNEOS | every 6 h (guard 5.5 h) | about 130, strictly one at a time, 1.1 s apart | JPL asks for no parallel requests; the craft follow paths predicted weeks ahead, so more often would gain nothing |
 
 The guards are half an hour short of their round figure on purpose: the run that is due
 starts a few minutes less than 6 h after the last download finished, and an exact 6 would
@@ -1369,6 +1378,41 @@ so the site works from any sub-path.
   the picture so it stays inside it.
 - **Cards away from the tracker wrap their figures** (`#place-card .telemetry dd`): "190 million
   km (1.27 AU)" was cut off at "(…".
+- **A collision being watched ends in slow motion** (`updateFinale()` in main.ts): within
+  `FINALE_S` (1.2 s) of the moment the clock's speed is time-left / FINALE_S (never under
+  `FINALE_SLOWEST`, 0.012), the close-approach camera closes in to five model sizes
+  (`updateEncounter`), the two models meet, and the clock speeds up the same way through the
+  break-up before the camera moves out to the cloud. At 10 km/s the last kilometre takes a
+  tenth of a second, and the framing kept both in view from tens of km: the owner saw dots and a
+  flash. Only while the view shows the designer's pair at 1×; a change of speed, a pause, a
+  replay or a jump ends it. `closeEncounter` resets the clock to 1×, so `updateSimulation` keeps
+  the slow speed across the moment. The fragments are corrected against SGP4 like the impactor
+  (a few rounds each): uncorrected, each started kilometres from the point of impact. The
+  flash's size is a share of the view at any distance (it had an 8 km floor that whited out a
+  close view).
+- **Launches listed only to the hour are drawn once they have flown** (`Ascent.timeApprox`,
+  `planAscent`): Launch Library often gives Chinese launches to the hour even while "In Flight",
+  and the bell then only flew the camera to the pad. The climb is drawn from the listed time and
+  the card says the time is not published to the minute, so the rocket's place along its path
+  is a guess. A launch that has not flown still needs a time to the minute.
+- **Every launch links to its page** ("About this launch ↗", in the list and on the climb card):
+  `Launch.pageUrl`, Space Launch Now (The Space Devs' own reader site for the same Launch Library
+  data) at `spacelaunchnow.app/launch/<slug>/`, built from the service's `slug` only when it is
+  a clean slug (`pageOf` in data/launches.ts); every slug checked had a page. Normal-mode answers
+  carry no other per-launch links. The list's rows wrap (`.launch-list li`): the climb button and
+  the link have a line of their own, and the rocket's picture a column of its own.
+- **Tests must not ask Launch Library**: it allows 15 requests an hour, and each fresh headless
+  browser asks once. Serve a saved answer (CDP `Fetch.requestPaused`) instead.
+- **Worlds are searched like places**: away from the tracker the search lists the Earth with the
+  other worlds (`Places.search`), and the Earth's views ("View the whole Earth", low orbit, the
+  ring, Earth and Moon: `app.view`) travel to the Earth first instead of doing nothing.
+- **Phones: the card of a world or craft is a sheet** like a satellite's (space.css, phones):
+  dragged by its header (`#place-card > .insp-head` in `sheet.ts`), tucked to its grip, opened at
+  the normal height (`PlacesHost.cardOpened` → `sheets.reset()`), and one scrolling page with the
+  name and the tabs pinned (`--pc-head`, measured in places.ts). It was a fixed 46 % box whose
+  photo never scrolled away.
+- **Phones: How it works** has no full-screen button (it covered the next arrow), and the code
+  scenes wrap their lines (hanging indent, a right gutter for the numbered markers).
 - **Headless Chrome leaves profiles behind**: `smoke.mjs` and `shots.mjs` delete theirs when
   they finish. Any test script that starts Chrome with `--user-data-dir` must do the same: one
   afternoon of runs without it filled the owner's disk.

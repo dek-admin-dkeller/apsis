@@ -67,6 +67,8 @@ export interface PlacesHost {
   home(): void;
   /** The hover card setting (Settings.hoverCard): one switch for the tracker and every place. */
   hoverCard(): boolean;
+  /** The card has just been opened (phones: it starts at the sheets' normal height, as the inspector does). */
+  cardOpened(): void;
   /** Switch the screening cells on or off (one switch for the tracker and every place). */
   setGrid(on: boolean): void;
   toast(text: string): void;
@@ -246,6 +248,12 @@ export class Places {
 
   constructor(host: PlacesHost) {
     this.host = host;
+    // Phones: the card scrolls as one page with its name pinned and its tabs pinned under the
+    // name (mobile rules in space.css); the tabs need the name block's real height.
+    const head = this.card.querySelector<HTMLElement>('.insp-head');
+    if (head && typeof ResizeObserver === 'function') {
+      new ResizeObserver(() => this.card.style.setProperty('--pc-head', `${head.offsetHeight}px`)).observe(head);
+    }
     const side = (view: () => SpaceView): SpaceHost => ({
       tags: $('space-tags'),
       onPick: (target) => this.pick(view(), target),
@@ -1098,7 +1106,12 @@ export class Places {
     this.live = null;
     const caption = target?.kind === 'body' && this.spot === 'map';
     this.hud.classList.toggle('is-hidden', !caption);
+    const wasHidden = this.card.classList.contains('is-hidden');
     this.card.classList.toggle('is-hidden', !target || caption);
+    if (wasHidden && !this.card.classList.contains('is-hidden')) {
+      this.card.scrollTop = 0;
+      this.host.cardOpened();
+    }
     document.body.classList.toggle('place-card-open', !!target && !caption); // (a phone's world strip steps aside for the card)
     // Keep what is being looked at clear of the words: above a caption or a phone's card, beside a computer's card.
     const shift: [number, number] = !target ? [0, 0] : caption ? [0, 0.09] : this.host.isPhone() ? [0, 0.17] : [0.07, 0];
@@ -1434,8 +1447,10 @@ export class Places {
     const system = this.host.match(query, 'solar system', 'planets', 'the solar system', 'map of the solar system');
     if (system > 0) hits.push({ title: 'The solar system', note: 'Every planet, where it is now', group: 'Beyond Earth orbit', score: system, run: () => void this.travel({ kind: 'map', focus: null }) });
     for (const body of BODY_LIST) {
-      const score = this.host.match(query, body.name, ...(body.id === 'moon' ? ['the moon', 'luna'] : body.id === 'sun' ? ['the sun'] : []));
-      if (score <= 0 || body.id === 'earth') continue;
+      const score = this.host.match(query, body.name, ...(body.id === 'moon' ? ['the moon', 'luna'] : body.id === 'sun' ? ['the sun'] : body.id === 'earth' ? ['the earth', 'home planet'] : []));
+      // The Earth is a world like the others: from anywhere else, its row goes there (in the
+      // tracker the Earth's own views, "View the whole Earth", answer instead).
+      if (score <= 0 || (body.id === 'earth' && this.spot === 'tracker')) continue;
       const near = local(body.parent) && body.id !== at;
       hits.push({ title: body.name, note: kindText(body), group: near ? here : 'Beyond Earth orbit', score: lift(score, near), run: () => this.goBody(body.id) });
     }

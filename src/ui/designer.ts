@@ -686,9 +686,24 @@ export class Designer {
     };
     const drawn = Math.max(6, Math.min(MAX_DRAWN_FRAGMENTS, figures.fragments10cm));
     const spread = figures.catastrophic ? 0.12 : 0.05; // km/s: the break-up model's typical ejection speeds
-    const fragments = fragmentStates(states.target.r, cm, drawn, spread, this.target.noradId).map((state, k) =>
-      recordFrom(stateToElements(state.r, state.v), states.impactMs, `IMPACT DEB ${k + 1}`, FRAGMENT_NORAD_BASE + k, `2099-002${String.fromCharCode(65 + (k % 26))}`),
-    );
+    // Each one is corrected against SGP4 as the impactor was (a few rounds): taken as they are,
+    // the elements put every fragment kilometres from the point of impact, which the close view of
+    // the slow-motion finish showed as a cloud already spread out at the moment.
+    const fragments = fragmentStates(states.target.r, cm, drawn, spread, this.target.noradId).map((state, k) => {
+      const name = `IMPACT DEB ${k + 1}`, id = FRAGMENT_NORAD_BASE + k, intl = `2099-002${String.fromCharCode(65 + (k % 26))}`;
+      let fr = { ...state.r }, fv = { ...state.v };
+      let fragment = recordFrom(stateToElements(fr, fv), states.impactMs, name, id, intl);
+      for (let round = 0; round < 4; round++) {
+        const got = this.host.propagate(fragment, states.impactMs);
+        if (!got) break;
+        const er = { x: state.r.x - got.r.x, y: state.r.y - got.r.y, z: state.r.z - got.r.z };
+        if (Math.hypot(er.x, er.y, er.z) < 0.01) break;
+        fr = { x: fr.x + er.x, y: fr.y + er.y, z: fr.z + er.z };
+        fv = { x: fv.x + state.v.x - got.v.x, y: fv.y + state.v.y - got.v.y, z: fv.z + state.v.z - got.v.z };
+        fragment = recordFrom(stateToElements(fr, fv), states.impactMs, name, id, intl);
+      }
+      return fragment;
+    });
     MODEL_OVERRIDE.set(CUSTOM_NORAD_ID, this.kind);
     this.plan = { impactor: record, fragments, targetNorad: this.target.noradId, impactMs: states.impactMs, at: states.target.r, figures };
     this.impacted = false;

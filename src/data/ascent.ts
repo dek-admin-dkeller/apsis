@@ -46,6 +46,12 @@ export interface Ascent {
   /** How the inclination was chosen, in words (shown in the card: it is a guess). */
   basis: string;
   /**
+   * The lift-off time is known only to the hour (Launch Library's "net_precision"), drawn from the
+   * listed time anyway because the launch has really happened: the path is close, but where the
+   * rocket is along it is a guess, and the card says so.
+   */
+  timeApprox: boolean;
+  /**
    * The first stage's way down, for rockets whose boosters land (Falcon, New Glenn): a droneship
    * downrange (usual) or back to land near the pad (when the service says "RTLS").
    */
@@ -141,9 +147,15 @@ function gmst(ms: number): number {
   return ((((deg % 360) + 360) % 360) * Math.PI) / 180;
 }
 
-/** The climb of one launch, or null if it cannot be placed (no pad position, or no time to the minute). */
+/**
+ * The climb of one launch, or null if it cannot be placed: no pad position, or no time to the
+ * minute. A launch that has really lifted off (in flight, or flown) but is listed only to the
+ * hour is still drawn, from the listed time, marked `timeApprox` (the owner saw a Long March in
+ * flight in the bell that only flew the camera to its pad: Chinese launches are often listed so).
+ */
 export function planAscent(launch: Launch): Ascent | null {
-  if (launch.latDeg === null || launch.lonDeg === null || launch.precision !== 'exact') return null;
+  const timeApprox = launch.precision === 'hour' && (launch.state === 'flying' || launch.state === 'done');
+  if (launch.latDeg === null || launch.lonDeg === null || (launch.precision !== 'exact' && !timeApprox)) return null;
   const lat = launch.latDeg, lon = launch.lonDeg;
   const site = siteOf(lat, lon);
   const orbit = launch.orbit.toUpperCase();
@@ -188,7 +200,7 @@ export function planAscent(launch: Launch): Ascent | null {
   return {
     booster,
     launch, liftoffMs: launch.netMs, burnS, insertionKm: insertionKm(orbit), inclinationDeg: incl,
-    azimuthDeg: ((az * 180) / Math.PI + 360) % 360, stagingS: f(0.29), basis, u, d,
+    azimuthDeg: ((az * 180) / Math.PI + 360) % 360, stagingS: f(0.29), basis, timeApprox, u, d,
     stages: [
       { t: 0, label: 'Lift-off' },
       { t: f(0.14), label: 'Max-Q: the hardest push of the air' },

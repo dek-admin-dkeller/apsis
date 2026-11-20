@@ -169,13 +169,25 @@ export function installLaunches(app: App): void {
       item.append(pick);
       // Every launch whose pad and minute are known can be watched climbing (an estimated path;
       // features/ascent.ts): live, or ahead of time / again by moving the clock to lift-off.
+      const actions = el('div', 'launch-acts');
       if (canWatch(launch)) {
         const climb = el('button', 'launch-climb', launch.state === 'flying' ? 'Watch it climb' : launch.netMs < now ? 'Replay the climb' : 'Preview the climb');
         climb.type = 'button';
         climb.title = 'An estimated path from the pad to orbit, on the globe';
         climb.addEventListener('click', () => watchLaunch(launch));
-        item.append(climb);
+        actions.append(climb);
       }
+      // Where this comes from, and where to read more: the launch's page for readers (Space Launch
+      // Now, The Space Devs' own site for the Launch Library data shown here).
+      if (launch.pageUrl) {
+        const more = el('a', 'launch-more', 'About this launch ↗');
+        more.href = launch.pageUrl;
+        more.target = '_blank';
+        more.rel = 'noopener noreferrer';
+        more.title = 'This launch on Space Launch Now (The Space Devs), the source of this list: mission, rocket, pad, status and updates';
+        actions.append(more);
+      }
+      if (actions.childElementCount > 0) item.append(actions);
       return { launch, item, when, count, pad };
     });
     listBox.replaceChildren(...rows.map((row) => row.item));
@@ -204,7 +216,7 @@ export function installLaunches(app: App): void {
       link.href = 'https://thespacedevs.com/llapi';
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
-      credit.append('Launch data: ', link, problem ? '.' : `, read ${clockStamp(list.at)}.`);
+      credit.append('Launch data: ', link, problem ? '.' : `, read ${clockStamp(list.at)}.`, ' Each launch’s “About” link opens its page on their Space Launch Now site.');
     }
   }
 

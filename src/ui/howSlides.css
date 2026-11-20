@@ -261,6 +261,18 @@
   .hs-progress { width: 44vw; }
   .hs-nav { bottom: 18px; gap: 10px; }
 }
+@media (max-width: 760px) {
+  /* Phones: long lines wrap inside the box instead of running off its edge (continuation lines
+     hang under the start of the line), with a gutter on the right for the numbered markers, so
+     a marker never sits on the code. */
+  .hs-line { grid-template-columns: 3.4em 1fr; padding-right: 34px; white-space: pre-wrap; }
+  .hs-ln { padding-right: 9px; }
+  .hs-tx { overflow-wrap: anywhere; padding-left: 2ch; text-indent: -2ch; }
+  .hs-line[data-mark]::after { top: 0.81em; right: 8px; }
+  .hs-gap { padding-left: 3.4em; }
+  /* No full-screen button: it sat on top of the next arrow, and a phone's screen is the slide already. */
+  .hs-full { display: none; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .hs *, .hs *::before, .hs *::after { transition-duration: 0.01s !important; transition-delay: 0s !important; animation: none !important; }

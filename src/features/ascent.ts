@@ -28,6 +28,7 @@ import { rocketKind, type ModelKind } from '../data/describe.ts';
 import { loadLaunches, type Launch } from '../data/launches.ts';
 import { buildModel, modelBase } from '../render/satModels.ts';
 import type { App } from '../ui/app.ts';
+import { clockStamp } from '../ui/inspector.ts';
 import { fmtKm, fmtKmS } from '../ui/dom.ts';
 
 const BEFORE_MS = 60 * 60000; // the planned path appears an hour before lift-off
@@ -186,6 +187,16 @@ export function installAscent(app: App): void {
     const lost = lostAt(launch, ascent);
     const failure = launch.failure;
     const note = el('div', 'at-note', `Estimated path, from the pad and ${ascent.basis}. The real orbit arrives with the next tracking data.`);
+    // Listed only to the hour: say so first (the path is close; where the rocket is on it is not).
+    if (launch.pageUrl) {
+      const more = el('a', 'at-more', 'About this launch ↗') as HTMLAnchorElement;
+      more.href = launch.pageUrl;
+      more.target = '_blank';
+      more.rel = 'noopener noreferrer';
+      more.title = 'This launch on Space Launch Now (The Space Devs), the source of the launch data';
+      head.append(more);
+    }
+    if (ascent.timeApprox) note.prepend(`Lift-off time not published to the minute: drawn from the listed ${clockStamp(ascent.liftoffMs)}, so where the rocket is along its path is a guess. `);
     const fail = el('div', 'at-fail');
     if (failure) {
       const what = failure.partial ? 'Partial failure' : 'Launch failure';

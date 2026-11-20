@@ -84,7 +84,9 @@ export class ImpactFlash {
       this.startedAt = -1;
       return;
     }
-    const base = Math.max(8, cameraKm * 0.08) * this.unitsPerKm * this.sizeFactor; // a share of the view, whatever the zoom
+    // A share of the view, whatever the zoom (from close by, as in a collision's slow-motion
+    // finish, it was a fixed 8 km and whited out the screen).
+    const base = Math.max(0.03, cameraKm * 0.08) * this.unitsPerKm * this.sizeFactor;
     const k = t / LIFE_S;
     const flash = Math.exp(-t * 6);
     this.core.scale.setScalar(base * (0.6 + 2.4 * flash));

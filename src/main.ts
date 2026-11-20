@@ -120,6 +120,7 @@ let encModelSize = 0; // scene units
 let encViewDistance = 0; // camera distance that frames both objects
 let encPairDistance = 0; // … before allowing for the screening cells
 let encTogether = false; // the open pair flies together (docked, in formation) rather than crossing
+let encPairNorads: [number, number] = [0, 0]; // the two objects the close-approach view shows
 let encAutoFrame = false; // the camera keeps both objects in view by itself (until the user zooms)
 
 // screening bookkeeping
@@ -231,6 +232,7 @@ const places = new Places({
   isPhone: () => isPhone(),
   drift: () => store.settings.earthDrift || spaceTour.isPlaying, // the autoplay always turns slowly round each world
   hoverCard: () => store.settings.hoverCard,
+  cardOpened: () => sheets.reset(),
   figures: () => sky.constellations,
   match: matchScore,
   jumpTo: (timeMs) => jumpTo(timeMs),
@@ -875,6 +877,7 @@ function openEncounter(aIndex: number, bIndex: number): void {
   }
   if (isPhone()) openPanel(null);
   sheets.reset();
+  encPairNorads = [catalog.sats[aIndex].noradId, catalog.sats[bIndex].noradId];
   const encounter = encPanel.open(catalog.sats[aIndex], catalog.sats[bIndex], clock.time, screeningDistance);
   const { approach, windowS } = encounter;
   encViz.show(encounter.recA, encounter.recB, approach, windowS);
@@ -1226,7 +1229,16 @@ function updateSimulation(beforeMs: number): void {
     if (after && catalog) {
       const crossed = beforeMs < simPlan.impactMs && clock.time - simPlan.impactMs < 10 * 60000;
       if (crossed) impactFlash.start(simPlan.at);
-      if (encPanel.isOpen) closeEncounter(true); // the pair it was showing no longer exists
+      if (encPanel.isOpen) {
+        // The pair it was showing no longer exists. (Closing the view puts the clock back to 1×;
+        // in the slow-motion finish it must stay slow through the break-up.)
+        const speed = clock.speed;
+        closeEncounter(true);
+        if (finale) {
+          clock.speed = speed;
+          timeControls.sync();
+        }
+      }
       if (selected && (selected.noradId === CUSTOM_NORAD_ID || selected.noradId === simPlan.targetNorad)) select(null);
       const fragments: number[] = [];
       for (const sat of catalog.sats) if (isSimFragment(sat.noradId)) fragments.push(sat.index);
@@ -1246,9 +1258,12 @@ function updateSimulation(beforeMs: number): void {
         }
         return n > 0 ? toScene({ x: x / n, y: y / n, z: z / n }) : null;
       };
+      fragmentMiddle = middle;
       if (crossed) {
         rig.follow = true;
-        rig.flyToFocus(middle, 0.12, 0.6);
+        // In the slow-motion finish: stay close, where the models met (updateFinale moves out
+        // once the clock is back to normal speed).
+        rig.flyToFocus(middle, finale ? 0.004 : 0.12, finale ? 0.3 : 0.6);
       }
       designer.impact();
     } else {
@@ -1269,6 +1284,50 @@ function updateSimulation(beforeMs: number): void {
     impactFlash.update(kit.camera.position.distanceTo(at) * 1000);
   }
 }
+/**
+ * The last moments of a collision being watched, in slow motion. At 10 km/s the last kilometre
+ * takes a tenth of a second, and the view framed both objects from tens of km: the owner saw two
+ * dots and a flash. So within FINALE_S of the moment the clock slows smoothly (speed = time
+ * left / FINALE_S, never below FINALE_SLOWEST) while the camera closes in on the pair
+ * (updateEncounter), the two models meet, and the clock speeds up again the same way through
+ * the break-up. Only while the close-approach view shows the designer's pair and the clock runs
+ * at 1×; any change of speed by the visitor, a pause or a jump ends it.
+ */
+const FINALE_S = 1.2;
+const FINALE_SLOWEST = 0.012;
+let finale: { speed: number } | null = null; // the speed the finale set last
+function updateFinale(): void {
+  if (!simPlan) {
+    finale = null;
+    return;
+  }
+  const t = (clock.time - simPlan.impactMs) / 1000; // seconds from the moment, negative before
+  if (finale && (clock.paused || clock.speed !== finale.speed || replay)) {
+    finale = null; // the visitor took the clock
+    return;
+  }
+  if (!finale) {
+    const watching = encPanel.isOpen && encPairNorads.includes(CUSTOM_NORAD_ID) && encPairNorads.includes(simPlan.targetNorad);
+    if (!watching || clock.paused || clock.speed !== 1 || replay || t >= 0 || t < -FINALE_S) return;
+    finale = { speed: 1 };
+  }
+  if (Math.abs(t) > FINALE_S + 0.5) { // jumped away from it
+    clock.speed = 1;
+    finale = null;
+    timeControls.sync();
+    return;
+  }
+  const speed = t > 0 && t >= FINALE_S ? 1 : THREE.MathUtils.clamp(Math.abs(t) / FINALE_S, FINALE_SLOWEST, 1);
+  clock.speed = finale.speed = speed;
+  timeControls.sync();
+  if (speed === 1 && t > 0) {
+    finale = null;
+    // Out to where the whole cloud is seen spreading along the orbit.
+    if (rig.follow && fragmentMiddle) rig.flyToFocus(fragmentMiddle, 0.12, 2.5);
+  }
+}
+let fragmentMiddle: (() => THREE.Vector3 | null) | null = null;
+
 function endSimulation(): void {
   simPlan = null;
   simRecords = [];
@@ -2275,7 +2334,9 @@ function updateEncounter(realSeconds: number, dt: number): void {
   if (encFocus === 'both' && encAutoFrame && !rig.flying) {
     const offset = kit.camera.position.clone().sub(kit.controls.target);
     const have = offset.length();
-    const want = THREE.MathUtils.clamp(Math.max(encViewDistance, encFrame.rangeKm * KM * 1.5), 0.0004, 1.5);
+    // In a collision's slow-motion finish, close in until the two models fill the picture.
+    const far = finale ? encModelSize * 5 : encViewDistance;
+    const want = THREE.MathUtils.clamp(Math.max(far, encFrame.rangeKm * KM * 1.5), 0.0002, 1.5);
     if (have > 1e-9 && Math.abs(want - have) > have * 0.002) {
       const next = have + (want - have) * Math.min(1, dt * 2.5);
       kit.camera.position.copy(kit.controls.target).addScaledVector(offset, next / have);
@@ -2483,11 +2544,25 @@ const noteTouch = () => {
   if (resting) setResting(false); // at once, not a frame later: the tap that wakes the controls may be on one of them
 };
 for (const kind of ['pointerdown', 'pointermove', 'wheel', 'keydown']) window.addEventListener(kind, noteTouch, { capture: true, passive: true });
+/**
+ * The second step of resting (the owner's request): DIM_MS after the bars have dimmed, they fade
+ * out completely over ten seconds (`ui-gone`, the CSS beside `ui-rest`); once gone they cannot be
+ * hit by accident. The same input that ends resting brings them back at once.
+ */
+const DIM_MS = 2600; // the dimming itself (style.css)
+const GONE_AFTER_MS = DIM_MS + 5000;
+let restingSince = 0;
 function setResting(on: boolean): void {
   resting = on;
+  restingSince = performance.now();
   document.body.classList.toggle('ui-rest', on);
+  if (!on) document.body.classList.remove('ui-gone');
 }
 function updateRest(now: number): void {
+  updateCalm(now);
+  if (resting && now - restingSince > GONE_AFTER_MS && !document.body.classList.contains('ui-gone')) document.body.classList.add('ui-gone');
+}
+function updateCalm(now: number): void {
   if (places.elsewhere) {
     const calm = places.drifting && now - lastTouchMs > 4000 && !landing.showing && openPanelName === null && !timeBar.classList.contains('is-open') &&
       viewsMenu.classList.contains('is-hidden') && document.activeElement?.id !== 'search' &&
@@ -2529,6 +2604,7 @@ function step(now: number): void {
   const before = clock.time;
   advanceClock(elapsed);
   updateSimulation(before);
+  updateFinale();
   if (replay && clock.time >= replay.endMs) {
     // A replay ran to its end: go (back) to the closest point and hold there.
     const hold = replay.holdMs;
@@ -2698,9 +2774,15 @@ const app: App = {
   },
   view: (which) => {
     if (which === 'home') return goHome();
-    closeEncounter(true);
-    if (selected) select(null);
-    preset(which === 'earth' ? 1 : which === 'leo' ? 2 : which === 'geo' ? 3 : 5);
+    const show = () => {
+      closeEncounter(true);
+      if (selected) select(null);
+      preset(which === 'earth' ? 1 : which === 'leo' ? 2 : which === 'geo' ? 3 : 5);
+    };
+    // The Earth's views are views OF the Earth: from another world, go there first (they used
+    // to do nothing at all away from it).
+    if (places.elsewhere) void places.visit('earth').then(show);
+    else show();
   },
   openPanel: (name) => openPanel(name),
   toggle: (what, on) => {

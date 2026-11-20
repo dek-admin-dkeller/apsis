@@ -67,6 +67,27 @@ async function fetchTextures() {
   }
 }
 
+/**
+ * One group's elements. A transfer that breaks off part-way ("terminated": the connection dropped
+ * while the 'active' file, ~20 MB, was arriving) is tried ONCE more after a pause; that was the
+ * whole refresh lost on 20 Nov 2026, and the site's data was ten hours old. A refusal from
+ * CelesTrak (any HTTP error: 403 is its "you asked too often") is never retried.
+ */
+async function downloadGroup(group) {
+  for (let attempt = 1; ; attempt++) {
+    let res;
+    try {
+      res = await fetch(groupUrl(group), { signal: AbortSignal.timeout(150000) });
+      if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status}`), { refused: true });
+      return JSON.parse(await res.text()); // throws if CelesTrak sent an error page
+    } catch (err) {
+      if (err.refused || err instanceof SyntaxError || attempt >= 2) throw err;
+      console.warn(`  ${group}: the transfer broke off (${err.message}); trying once more in 30 s`);
+      await new Promise((r) => setTimeout(r, 30000));
+    }
+  }
+}
+
 async function fetchSatellites() {
   const force = process.argv.includes('--force');
   const old = await readSnapshot(SNAPSHOT); // what we have now: the "before" of the comparison below
@@ -83,9 +104,7 @@ async function fetchSatellites() {
   const groupCounts = {};
   for (const group of GROUPS) {
     try {
-      const res = await fetch(groupUrl(group));
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const records = JSON.parse(await res.text()); // throws if CelesTrak sent an error page
+      const records = await downloadGroup(group);
       if (!Array.isArray(records)) throw new Error('response was not a JSON array');
       let added = 0;
       for (const rec of records) {

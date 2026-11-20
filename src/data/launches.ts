@@ -60,6 +60,12 @@ export interface Launch {
   /** A webcast address, if the service lists one. */
   webcast: string | null;
   /**
+   * The launch's own page for readers, on Space Launch Now (The Space Devs' site for the same
+   * Launch Library data: where this information comes from), built from the service's `slug`;
+   * null if there is no usable slug. Every slug checked on 20 Nov 2026 had a page.
+   */
+  pageUrl: string | null;
+  /**
    * Where the first stage is to land, when the service says (its detailed answer: the stage's
    * `landing.type.abbrev` — "ASDS" a droneship, "RTLS" back to land — and the place's name).
    * Absent in the ordinary answer; the climb then assumes what is usual for the rocket.
@@ -153,6 +159,11 @@ function firstUrl(list: unknown): string | null {
   return null;
 }
 
+/** A launch's page on Space Launch Now, from the service's slug (letters, digits and dashes only). */
+function pageOf(slug: string): string | null {
+  return /^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug) && slug.length <= 120 ? `https://spacelaunchnow.app/launch/${slug}/` : null;
+}
+
 function precisionOf(name: string): NetPrecision {
   const lower = name.toLowerCase();
   if (lower === 'second' || lower === 'minute') return 'exact';
@@ -194,6 +205,7 @@ export function parseLaunches(file: unknown): Launch[] {
       orbit: text(field(field(field(entry, 'mission'), 'orbit'), 'abbrev')),
       family: text(field(field(field(entry, 'rocket'), 'configuration'), 'family')),
       webcast: firstUrl(field(field(entry, 'mission'), 'vid_urls')) ?? firstUrl(field(entry, 'vidURLs')),
+      pageUrl: pageOf(text(field(entry, 'slug'))),
       landing: landingOf(field(entry, 'rocket')),
       failure: failureOf(Number(field(status, 'id')), text(field(entry, 'failreason'))),
     });
@@ -219,7 +231,7 @@ function readSaved(): Saved {
     if (saved.at > now + 60000 || saved.tried > now + 60000) return empty; // the clock was wrong when it was written
     // (A copy saved by an older version lacks the newer fields: fill them in rather than throw it away.)
     const launches = saved.launches.filter((launch) => launch && typeof launch.netMs === 'number' && typeof launch.mission === 'string')
-      .map((launch) => ({ ...launch, orbit: launch.orbit ?? '', family: launch.family ?? '', webcast: launch.webcast ?? null }));
+      .map((launch) => ({ ...launch, orbit: launch.orbit ?? '', family: launch.family ?? '', webcast: launch.webcast ?? null, pageUrl: launch.pageUrl ?? null }));
     return { at: saved.at, tried: saved.tried, problem: saved.problem === 'limited' || saved.problem === 'unreachable' ? saved.problem : '', launches };
   } catch {
     return empty; // storage switched off, or something else wrote to the key

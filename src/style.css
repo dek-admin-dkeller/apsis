@@ -311,6 +311,9 @@ body.touring #filter-banner { opacity: 0; pointer-events: none; }
    further: mobile.css section 11.) Moving the pointer brings them back at once. */
 .topbar, .rail, .statusbar { transition: opacity 0.25s ease; }
 body.ui-rest .topbar, body.ui-rest .rail, body.ui-rest .statusbar { opacity: 0.62; transition: opacity 2.6s ease; }
+/* … and five seconds after that, they fade away completely over ten seconds (`ui-gone`, main.ts);
+   once gone (visibility, after the fade) they cannot be clicked by accident. Any input: back at once. */
+body.ui-rest.ui-gone :is(.topbar, .rail, .statusbar, .path, #m-stack) { opacity: 0; visibility: hidden; transition: opacity 10s ease-in, visibility 0s linear 10s; }
 
 .statusbar {
   position: absolute;
@@ -1697,13 +1700,18 @@ details[data-feature]:has(> div:empty) { display: none; }
 .at-head { display: grid; gap: 1px; }
 .at-head b { color: #ffd59c; font: 600 13px var(--font-ui); }
 .at-head span { color: var(--text); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.at-head .at-more { justify-self: start; margin-top: 2px; font-size: 11px; color: rgba(255, 213, 156, 0.75); text-decoration: none; }
+.at-head .at-more:hover { color: #ffd59c; text-decoration: underline; }
 .at-live { margin-top: 6px; font: 12px var(--font-mono); color: var(--amber); }
 .at-stage { margin-top: 2px; color: var(--text); }
 .at-note { margin-top: 6px; font-size: 10.5px; line-height: 1.35; opacity: 0.8; }
 .at-buttons { display: flex; gap: 6px; margin-top: 8px; }
 .at-buttons button, .at-buttons a { flex: 1; padding: 5px 0; border: 1px solid rgba(255, 180, 84, 0.45); border-radius: 7px; background: rgba(255, 180, 84, 0.1); color: #ffd59c; font: 600 11.5px var(--font-ui); text-align: center; text-decoration: none; cursor: pointer; }
 .at-buttons button:hover, .at-buttons a:hover { background: rgba(255, 180, 84, 0.22); }
-.launch-climb { display: block; margin: 2px 0 8px 10px; padding: 3px 9px; border: 1px solid rgba(255, 180, 84, 0.4); border-radius: 999px; background: none; color: var(--amber); font: 500 11px var(--font-ui); cursor: pointer; }
+.launch-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.launch-more { font-size: 11px; color: var(--muted); text-decoration: none; }
+.launch-more:hover { color: var(--cyan); text-decoration: underline; }
+.launch-climb { display: block; margin: 0; padding: 3px 9px; border: 1px solid rgba(255, 180, 84, 0.4); border-radius: 999px; background: none; color: var(--amber); font: 500 11px var(--font-ui); cursor: pointer; }
 .launch-climb:hover { background: rgba(255, 180, 84, 0.14); }
 @media (max-width: 760px) { .ascent-tag { width: 200px; } }
 

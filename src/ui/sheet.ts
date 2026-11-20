@@ -1,5 +1,5 @@
 /**
- * Phones: the tool panels and the inspector are bottom sheets resting on the tab bar. This
+ * Phones: the tool panels, the inspector and the card of a world or craft (#place-card) are bottom sheets resting on the tab bar. This
  * makes them draggable — grab a sheet by its header and slide it to any height, from tucked
  * away (only its grip shows above the tab bar, so the globe and the 3D model have the whole
  * screen) up to nearly full screen. A tap on the grip brings it back.
@@ -18,7 +18,7 @@ export class Sheets {
 
   constructor(onResize: () => void) {
     this.onResize = onResize;
-    for (const head of document.querySelectorAll<HTMLElement>('.dock > .panel > .panel-head, .dock > .panel > .insp-head')) {
+    for (const head of document.querySelectorAll<HTMLElement>('.dock > .panel > .panel-head, .dock > .panel > .insp-head, #place-card > .insp-head')) {
       this.makeDraggable(head);
     }
     window.addEventListener('resize', () => {
