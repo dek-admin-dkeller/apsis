@@ -118,7 +118,8 @@ export const FEATURES: FeatureGroup[] = [
     items: [
       { name: 'Constellations', text: 'All of GPS, Starlink or Iridium at once, with a live map of how much of the ground each can see.' },
       { name: 'Launches, trains and re-entries', text: 'The newest objects in orbit; freshly launched batches still flying in a line, shown whole and followed as they fly (Done puts them away); and the lowest orbits, which will come down next.' },
-      { name: 'Design a satellite', text: 'Choose an orbit, put your own object into the catalogue, and see what it would pass close to.' },
+      { name: 'Designer', text: 'An orbit lab: pick any of the 3D models and a mass, shape the orbit with the preview drawn live, and read the physics (how fast the Earth’s bulge turns it, whether it is sun-synchronous, time in shadow, how long drag leaves it up, the Δv to get there). Launch it among the real objects and see what it passes.', fresh: true },
+      { name: 'Collision course', text: 'In the designer, choose any object as a target, when and from which direction: Apsis solves the orbit that meets it, shows the approach in its hash-grid cells, and at the moment of impact a cloud of fragments (NASA’s break-up model) spreads along the orbit while the same screening counts the close approaches it causes. A simulation in your page only.', fresh: true },
       { name: 'Autopilot and recording', text: 'A hands-free tour of the highlights. Save a picture or record a video of what you see.' },
       { name: 'Share', text: 'A link or QR code that reopens exactly what you are looking at.' },
       { name: 'Visible tonight', text: 'The bright passes you could see with your own eyes in the next 24 hours from where you are, and where to look. On a phone it opens inside the sky view.', fresh: true },
@@ -198,7 +199,8 @@ export const HOW: Record<string, string> = {
   'Your choice of what is drawn': 'Layers',
   'Constellations': 'Objects → Activity',
   'Launches, trains and re-entries': 'Objects → Activity',
-  'Design a satellite': 'Objects → Tools',
+  'Designer': 'Objects → Tools → Designer',
+  'Collision course': 'Designer → Collision course',
   'Autopilot and recording': 'A · capture menu',
   'Share': 'Top bar · share',
   'Visible tonight': 'Objects → Activity',
@@ -228,6 +230,15 @@ export interface Update {
 }
 
 export const WHATS_NEW: Update[] = [
+  {
+    date: '2026-11-20',
+    title: 'The designer: an orbit lab, and a collision course',
+    items: [
+      'The designer is an orbit lab: any of the 127 models, a mass, every orbital element with the orbit drawn as you drag, and the physics that follows (plane drift, sun-synchronous, shadow, lifetime, Δv).',
+      'Put your spacecraft on a collision course with any object: the approach in its hash-grid cells, then a fragment cloud by NASA’s break-up model, screened like everything else.',
+      'Satellite trains have a clear way out (a banner with Done; Escape and Home too), and the status bar shows the distance from the Sun away from the Earth.',
+    ],
+  },
   {
     date: '2026-11-20',
     title: 'How it works in eight scenes, and a guided overview',

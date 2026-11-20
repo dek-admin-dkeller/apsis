@@ -745,6 +745,38 @@ it is used. So:
 - **CI**: actions at checkout@v7, setup-node@v7, configure-pages@v6, upload-pages-artifact@v5
   (it leaves out dotfiles: the site has none), deploy-pages@v5; the smoke test on pushes.
 
+## The designer: an orbit lab and a collision course (Nov 2026)
+
+The owner's brief: deep and nerdy, but a side tool, not a game ("every time I show this to
+someone they say I wish I could crash them"). It stays in Objects → Tools → Designer, worded
+like the rest of the product, with no scores or game screens.
+
+- **The physics is `data/orbitLab.ts`** (no DOM; `scripts/check-orbitlab.mjs` tests it against
+  textbook values): state ↔ elements, J2 node and perigee drift, the sun-synchronous tilt, beta
+  angle and shadow fraction, Δv from a 200 km parking orbit, a drag lifetime on the app's own
+  air-density table (area per mass scaled as mass^−1/3), and NASA's standard break-up model
+  (EMR > 40 J/g is catastrophic; N(≥Lc) = 0.1·M^0.75·Lc^−1.6), with `TYPICAL_MASS` per model kind.
+- **The lab** (`ui/designer.ts`): any of the 127 models (`MODEL_OVERRIDE` in describe.ts makes
+  the custom object drawn as it), mass, perigee / apogee / tilt / node / argument of perigee /
+  start; the orbit is drawn live while the section is open (`designPreview` in main.ts, a dashed
+  line in `eciGroup`); nine readouts. The 24-hour check is unchanged.
+- **The collision course**: target = the selected object (any object); impact in 2–120 min;
+  catch-up / crossing / head-on (the impactor's velocity is the target's turned about the radial
+  by 12° / 90° / 178°). The element set is solved by fixed-point correction against SGP4 itself
+  (state → elements → SGP4 → add the error back, ≤ 8 rounds); the check proves < 10 m on the
+  Station, debris, a Starlink and a GEO satellite from all three directions.
+- **The simulation's objects are catalogue objects**: the impactor (99001) and up to 250
+  fragments (99100–99349; `isSimFragment` is EXACT: real catalogue numbers are past 100,000 and
+  a looser range once counted Soyuz MS-29, #100057, as debris). They are added by
+  `rebuildCatalog()` and hidden by a QUIET filter (`Filters.setQuiet`: no banner, not counted):
+  fragments before the moment, impactor and target after. `updateSimulation()` (each frame)
+  flips that at the moment, fires `render/impactFlash.ts` when crossing it forward, lights the
+  fragments, follows the cloud's middle, and switches screening on without opening the monitor
+  (`setConjunction(on, showPanel)`), so the hash grid screens the cloud and
+  `Designer.noteScreening` counts its passes (with other objects / inside the cloud).
+- "Watch the approach" puts the clock a minute before and opens the close-approach view: the two
+  closing in their cells of the grid. "Clear simulation" removes it all.
+
 ## Presentation pass (Nov 2026): the home page, the overview, and the rules they brought
 
 Made for presenting the project in class, written as a product (the owner: "Apsis uses hashing
@@ -791,6 +823,11 @@ to…", never "we learned in class"). On the branch `claude/presentation-walkthr
 - **Trains** (Objects → Activity) are lit, framed whole and followed (`showTrain` in main.ts),
   not reduced to selecting their first satellite; `#train-banner` (the filter banner's shape, in
   cyan) says which and is the way out: Done, Escape (`escapeHooks`), Home, or selecting any object.
+- **Grounded objects at other worlds**: the camera's turn to a lander's own vertical waits for the
+  flight to land and runs at ≤ 35°/s (a frame-time-scaled step rolled the view 24° in one frame
+  after a click on a rover); the horizon limits apply once aligned. The model's ground height is
+  re-measured ten times a second and RISES at once (falls slowly), counting patches from 25 %
+  faded in: finer, higher patches arriving left a rover partly inside the ground.
 - **Distances in AU**: `farText` (places.ts) adds "(1.61 AU)" from half an AU on (light years
   would be no help: Voyager 1 is 0.003 of one); the status bar shows **From the Sun** away from the
   Earth (`#sb-sun`; `SpaceView.readout(t).sunKm`): a world's own distance at a place or beside

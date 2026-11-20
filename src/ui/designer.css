@@ -1,4 +1,4 @@
-/* "Design a satellite" — lives inside a section of the Objects panel (ui/designer.ts). */
+/* The designer — lives inside a section of the Objects panel (ui/designer.ts). */
 
 .designer { display: grid; gap: 0; min-width: 0; }
 .designer > .note:first-child { margin-bottom: 4px; }
@@ -65,3 +65,38 @@
   .designer-list li { min-height: 44px; }
   .designer-actions .btn, .designer .d-scan { min-height: 40px; }
 }
+
+/* ---- the lab's sections: a quiet heading each ---- */
+.designer .d-h { margin: 18px 0 8px; padding-top: 12px; border-top: 1px solid var(--line); font: 600 11px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.designer .d-h:first-of-type { margin-top: 10px; }
+
+/* the spacecraft: its picture beside its name and model */
+.designer .d-craft { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 12px; align-items: center; }
+.designer .d-thumb { width: 64px; height: 64px; border-radius: 12px; background: var(--inset, rgba(255, 255, 255, 0.03)); border: 1px solid var(--line); object-fit: contain; }
+.designer .d-thumb:not([src]) { visibility: hidden; }
+.designer .d-craft-fields { display: grid; gap: 6px; min-width: 0; }
+.designer .d-model select { width: 100%; min-width: 0; padding: 6px 8px; border: 1px solid var(--line-strong); border-radius: var(--radius-s); background: var(--inset, rgba(6, 10, 19, 0.9)); color: var(--text); font: 12.5px var(--font-ui); }
+.designer .d-argp-field { transition: opacity var(--fast); }
+.designer .d-argp-field.is-off { opacity: 0.4; }
+.designer .d-link { margin-top: 4px; padding: 0; border: 0; background: none; color: var(--cyan); font: 500 11.5px var(--font-ui); cursor: pointer; }
+.designer .d-link:hover { text-decoration: underline; }
+.designer .d-link[hidden] { display: none; }
+.designer .designer-readout dd { white-space: normal; }
+
+/* the collision course */
+.designer .d-target { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 10px; border: 1px solid var(--line); border-radius: var(--radius-s); background: var(--inset, rgba(255, 255, 255, 0.02)); }
+.designer .d-target > div { display: grid; min-width: 0; }
+.designer .d-target-label { font-size: 10.5px; color: var(--muted); }
+.designer .d-target-name { font: 600 12.5px var(--font-ui); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.designer .d-target .btn { flex: none; }
+.designer .d-approach { margin-bottom: 2px; }
+.designer .d-impact-readout { margin-top: 10px; }
+.designer .d-arm:disabled { opacity: 0.45; cursor: not-allowed; }
+.designer .d-live { margin-top: 10px; padding: 10px; border: 1px solid rgba(255, 107, 125, 0.4); border-radius: var(--radius-s); background: rgba(255, 107, 125, 0.06); }
+.designer .d-count { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.designer .d-count-label { font-size: 11px; color: var(--muted); }
+.designer .d-countdown { font: 600 13px var(--font-mono); color: #ff9aa6; font-variant-numeric: tabular-nums; }
+.designer .d-live .designer-actions { margin-top: 8px; }
+.designer .d-live .designer-actions .btn { flex: 1; }
+.designer .d-after { margin-top: 8px; }
+.designer .d-clear { margin-top: 8px; }

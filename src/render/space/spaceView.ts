@@ -263,6 +263,7 @@ export class SpaceView {
   private dots: THREE.Points | null = null;
   private lines: { line: THREE.Line; key: string; anchor: Item | null }[] = [];
   private readonly localUp = new THREE.Vector3();
+  private readonly upAxis = new THREE.Vector3();
   private flight: Flight | null = null;
   private live = false; // on screen and taking input
   private idle = 0;
@@ -1760,12 +1761,22 @@ export class SpaceView {
     // (the owner, at Surveyor: "the camera axis is not aligned", the view swung through the Moon).
     const grounded = this.where?.kind === 'place' && focusItem && !focusItem.centre && focusItem.target.kind === 'craft' && focusItem.target.craft.motion.type === 'surface' && focusItem.pos.lengthSq() > 1e-6;
     const wantUp = grounded ? this.localUp.copy(focusItem!.pos).normalize() : UP;
-    if (camera.up.distanceToSquared(wantUp) > 1e-8) {
-      camera.up.lerp(wantUp, 1 - Math.exp(-dt * (grounded ? 4 : 2.4))).normalize();
-      if (camera.up.distanceToSquared(wantUp) < 1e-6) camera.up.copy(wantUp);
+    // The turn to the new "up" waits for the flight to land and then goes at a steady, limited
+    // rate (at most 35° a second, eased): a step proportional to the frame time rolled the view
+    // 24° in the first frame after a click on a rover (the owner: "jittery and glitchy").
+    const gap = camera.up.angleTo(wantUp);
+    if (gap > 1e-4 && !this.flight) {
+      const step = Math.min(gap, dt * Math.min(0.6, 0.15 + gap * 1.2)); // radians: slow near the end
+      const axis = this.upAxis.crossVectors(camera.up, wantUp);
+      if (axis.lengthSq() > 1e-12) camera.up.applyAxisAngle(axis.normalize(), step).normalize();
+      else camera.up.copy(wantUp);
+      if (camera.up.angleTo(wantUp) < 1e-3) camera.up.copy(wantUp);
     }
-    controls.maxPolarAngle = grounded ? Math.PI / 2 - 0.06 : Math.PI;
-    controls.minPolarAngle = grounded ? 0.08 : 0; // straight overhead the view has no heading and flips (as it did over the Station)
+    // The limits that keep the camera above the ground's horizon apply once "up" IS the ground's
+    // vertical (applied earlier, OrbitControls snapped the camera to them mid-turn).
+    const aligned = grounded && camera.up.angleTo(wantUp) < 0.05;
+    controls.maxPolarAngle = aligned ? Math.PI / 2 - 0.06 : Math.PI;
+    controls.minPolarAngle = aligned ? 0.08 : 0; // straight overhead the view has no heading and flips (as it did over the Station)
     const internals = controls as unknown as { _quat: THREE.Quaternion; _quatInverse: THREE.Quaternion };
     internals._quat.setFromUnitVectors(camera.up, UP);
     internals._quatInverse.copy(internals._quat).invert();
@@ -1863,12 +1874,12 @@ export class SpaceView {
    * drawn with flat facets that lie a little inside the true radius, and close-up patches
    * float up to 0.11 % above it, each level at its own height. Both are more than a lander
    * drawn at its smallest is tall, so it was found hovering. One ray straight down, at most
-   * twice a second (the craft is fixed to the ground, and the patches change only as they load).
+   * ten times a second (the craft is fixed to the ground, and the patches change only as they load).
    */
   private groundRadius(key: string, position: THREE.Vector3, realSeconds: number): number {
     const at = this.groundAt;
     const fresh = at.key !== key;
-    if (fresh || realSeconds - at.checked >= 0.25) {
+    if (fresh || realSeconds - at.checked >= 0.1) {
       at.key = key;
       at.checked = realSeconds;
       at.target = this.groundUnder(position, position.length() / 1.0014); // the true surface, if nothing is hit
@@ -1876,9 +1887,13 @@ export class SpaceView {
     }
     // Ease to a new height rather than jump: the levels of the close-up ground sit at slightly
     // different heights, and while they stream in the rover hopped between them (the owner saw it stutter).
+    // Up at once, down gently: ground rising under it (a finer, higher patch arriving) must never
+    // leave it standing inside the ground, even for a moment (the owner saw a rover "a quarter
+    // inside the ground"); ground falling away is followed slowly so it does not bob.
     const dt = Math.min(0.2, Math.max(0, realSeconds - at.at));
     at.at = realSeconds;
-    at.radius += (at.target - at.radius) * Math.min(1, dt * 4);
+    if (at.target > at.radius) at.radius += (at.target - at.radius) * Math.min(1, dt * 25);
+    else at.radius += (at.target - at.radius) * Math.min(1, dt * 4);
     return at.radius;
   }
 
@@ -1890,7 +1905,7 @@ export class SpaceView {
     this.ray.set(position.clone().multiplyScalar(1.01), down);
     this.ray.far = R * 0.02;
     globe.updateMatrixWorld(true);
-    const hits = this.ray.intersectObjects([globe, ...(this.ground?.enabled ? this.ground.shownPatches(0.6) : [] /* only patches mostly faded in: one still arriving is nearly invisible */)], false);
+    const hits = this.ray.intersectObjects([globe, ...(this.ground?.enabled ? this.ground.shownPatches(0.25) : [] /* a patch a quarter faded in already hides what is under it */)], false);
     return hits.length ? hits[0].point.length() : fallback;
   }
 

@@ -34,6 +34,12 @@ export class Filters {
   private visible: Uint8Array = new Uint8Array(0);
   private readonly extra = new Map<string, (sat: Satellite) => boolean>(); // tests added by feature modules
   private readonly about = new Map<string, FilterAbout>(); // their names in the banner, and how to undo them
+  /**
+   * Tests that hide objects WITHOUT counting as a filter: no banner, no "of 19,572". For a
+   * simulation's own objects (ui/designer.ts): fragments not yet made, a target already destroyed.
+   * What they hide is simply not there, so it is left out of the counts as well.
+   */
+  private readonly quiet = new Map<string, (sat: Satellite) => boolean>();
   private readonly chips: { category: Map<Category, HTMLElement>; orbit: Map<OrbitClass, HTMLElement> } = { category: new Map(), orbit: new Map() };
   private readonly banner = $('filter-banner');
   private pulseTimer = 0;
@@ -187,6 +193,23 @@ export class Filters {
    * An extra test from a feature module (the growth-by-year slider, say): objects must pass
    * every registered test as well as the orbit and altitude filters. null removes a test.
    */
+  /** A quiet test (see `quiet`); null removes it. */
+  setQuiet(key: string, keep: ((sat: Satellite) => boolean) | null): void {
+    if (keep) this.quiet.set(key, keep);
+    else this.quiet.delete(key);
+    this.reapply();
+  }
+
+  /** The quiet tests read something that changed (the clock passed a simulated impact): apply them again. */
+  refreshQuiet(): void {
+    if (this.quiet.size > 0) this.reapply();
+  }
+
+  private exists(sat: Satellite): boolean {
+    for (const keep of this.quiet.values()) if (!keep(sat)) return false;
+    return true;
+  }
+
   setExtra(key: string, keep: ((sat: Satellite) => boolean) | null, about?: FilterAbout): void {
     if (keep) this.extra.set(key, keep);
     else this.extra.delete(key);
@@ -201,26 +224,31 @@ export class Filters {
     if (!catalog) return;
     const update = (index: number) => {
       const sat = catalog.sats[index];
-      this.visible[index] = this.categoryOn.get(sat.category)! && this.passesOrbitAndAltitude(sat) ? 1 : 0;
+      this.visible[index] = this.exists(sat) && this.categoryOn.get(sat.category)! && this.passesOrbitAndAltitude(sat) ? 1 : 0;
     };
     if (indices) for (const index of indices) update(index);
     else for (let index = 0; index < catalog.sats.length; index++) update(index);
 
     // Live counts: how many objects of each category match the orbit + altitude filters.
-    let shown = 0;
+    let shown = 0, total = 0;
     for (const [category, members] of catalog.byCategory) {
       let count = 0;
-      for (const index of members) if (this.passesOrbitAndAltitude(catalog.sats[index])) count++;
+      for (const index of members) {
+        const sat = catalog.sats[index];
+        if (!this.exists(sat)) continue;
+        total++;
+        if (this.passesOrbitAndAltitude(sat)) count++;
+      }
       this.counts.get(category)!.textContent = fmtInt(count);
       if (this.categoryOn.get(category)) shown += count;
     }
     $('visible-count').textContent = fmtInt(shown);
-    $('readout-objects').classList.toggle('is-all', shown === catalog.sats.length); // "of 19,572" only while something is hidden
-    const hiding = shown < catalog.sats.length;
+    $('readout-objects').classList.toggle('is-all', shown === total); // "of 19,572" only while something is hidden
+    const hiding = shown < total;
     this.banner.classList.toggle('is-hidden', !hiding);
     document.body.classList.toggle('is-filtered', hiding);
     if (hiding) {
-      $('fb-count').textContent = `Showing ${fmtInt(shown)} of ${fmtInt(catalog.sats.length)}`;
+      $('fb-count').textContent = `Showing ${fmtInt(shown)} of ${fmtInt(total)}`;
       const why = this.reasons();
       $('fb-why').textContent = why.length ? why.join(' · ') : 'filtered';
     }

@@ -286,3 +286,7 @@ body.away .search.has-filter input { padding-right: 10px !important; }
 
 /* The status bar's "From the Sun" (main.ts, updatePlaceStatus): away from the Earth only. */
 body:not(.away) #sb-sun-wrap { display: none; }
+
+/* Away from the Earth the readouts are hidden, and they were what pushed the tools to the right:
+   keep the bell, capture, full screen and About in the top-right corner at every world. */
+body.away .topbar .top-actions { margin-left: auto; }

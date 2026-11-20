@@ -185,7 +185,12 @@ function fallbackKind(sat: Satellite): ModelKind {
   return 'smallsat';
 }
 
+/** Kinds chosen by hand, by catalogue number: the designer's own spacecraft (ui/designer.ts). */
+export const MODEL_OVERRIDE = new Map<number, ModelKind>();
+
 export function describe(sat: Satellite): Profile {
+  const forced = MODEL_OVERRIDE.get(sat.noradId);
+  if (forced) return { kind: forced, operator: null, purpose: 'Your own design' };
   const name = sat.name.toUpperCase();
 
   // Spent upper stages are catalogued as "<launcher> R/B" (rocket body).

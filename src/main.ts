@@ -20,7 +20,7 @@ import { eciToGeodetic, gstime, type SatRec } from 'satellite.js';
 import { buildCatalog, loadLive, loadSnapshot, searchCatalog, type Catalog } from './data/catalog.ts';
 import { describe, type ModelKind } from './data/describe.ts';
 import { displayName } from './data/names.ts';
-import { makeSatrec, rangeKm, stateAt, wrapLon, type Observer, type Vec3 } from './data/ephemeris.ts';
+import { makeSatrec, rangeKm, stateAt, sunDirection, wrapLon, type Observer, type Vec3 } from './data/ephemeris.ts';
 import { loadRegions } from './data/regions.ts';
 import { loadFacts, type CatalogFacts } from './data/satcat.ts';
 import type { OmmRecord, Satellite, Snapshot } from './data/types.ts';
@@ -52,7 +52,8 @@ import { SpaceTour, type OverviewFacts } from './ui/spaceTour.ts';
 import { ConstellationsPanel } from './ui/constellations.ts';
 import type { Contacts } from './ui/contacts.ts';
 import { renderCrew, renderCrewSummary } from './ui/crew.ts';
-import { CUSTOM_NORAD_ID, Designer } from './ui/designer.ts';
+import { CUSTOM_NORAD_ID, Designer, isSimFragment, type CollisionPlan } from './ui/designer.ts';
+import { ImpactFlash } from './render/impactFlash.ts';
 import { clearTrainChoice, renderFeed } from './ui/feed.ts';
 import { $, fmt, fmtInt, fmtKm, fmtKmS, fmtRange, setClockZone, setUnits } from './ui/dom.ts';
 import { EncounterPanel, type Encounter, type EncounterFocus } from './ui/encounterPanel.ts';
@@ -92,7 +93,10 @@ const clock: SimClock = { time: Date.now(), speed: 1, paused: false };
 let catalog: Catalog | null = null;
 let baseSnapshot: Snapshot | null = null; // the downloaded data, without anything the user designed
 let baseLive = false;
-let customRecord: OmmRecord | null = null; // the user's own satellite (Objects → Design a satellite)
+let customRecord: OmmRecord | null = null; // the user's own spacecraft (Objects → Tools → Designer)
+let simRecords: OmmRecord[] = []; // the fragments of a simulated collision (ui/designer.ts), hidden until the moment
+let simPlan: CollisionPlan | null = null;
+let simAfter = false; // the clock is past the simulated impact (the target and impactor are gone, the fragments are there)
 let facts = new Map<number, CatalogFacts>();
 let conjunctionOn = false;
 let gridOn = false;
@@ -939,7 +943,7 @@ function startReplay(fromMs: number, toMs: number, speed: number, holdMs: number
 
 // ---- monitor + screening cells ------------------------------------------------------------
 
-function setConjunction(on: boolean): void {
+function setConjunction(on: boolean, showPanel = true): void {
   conjunctionOn = on;
   monitor.setEnabled(on);
   markers.setVisible(on && !encPanel.isOpen);
@@ -947,7 +951,7 @@ function setConjunction(on: boolean): void {
   $('sb-screen-wrap').classList.toggle('is-hidden', !on);
   if (on) {
     screenDirty = true;
-    openPanel('conj');
+    if (showPanel) openPanel('conj');
   } else {
     closeEncounter();
     markers.setPairs(new Uint32Array(0), new Uint32Array(0), screeningDistance);
@@ -1118,13 +1122,85 @@ function applyCatalog(next: Catalog): void {
 /** Rebuild the catalogue from the downloaded data plus the user's own satellite, if there is one. */
 function rebuildCatalog(): void {
   if (!baseSnapshot) return;
-  const snapshot = customRecord ? { ...baseSnapshot, objects: [...baseSnapshot.objects, customRecord] } : baseSnapshot;
+  const extra = [...(customRecord ? [customRecord] : []), ...simRecords];
+  const snapshot = extra.length > 0 ? { ...baseSnapshot, objects: [...baseSnapshot.objects, ...extra] } : baseSnapshot;
   applyCatalog(buildCatalog(snapshot, baseLive));
   designer.catalogChanged(customRecord !== null);
 }
 
+// The designer's live orbit preview: a dashed line in the inertial frame (km).
+const designPreview = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineDashedMaterial({ color: 0x7fe3ff, dashSize: 220, gapSize: 140, transparent: true, opacity: 0.8, depthWrite: false }));
+designPreview.visible = false;
+designPreview.frustumCulled = false;
+kit.eciGroup.add(designPreview);
+const impactFlash = new ImpactFlash(kit.eciGroup);
+/** A simulated collision: who exists when (the quiet filter: no banner, not counted). */
+function simulationTest(sat: Satellite): boolean {
+  if (!simPlan) return true;
+  const fragment = isSimFragment(sat.noradId);
+  if (fragment) return simAfter;
+  if (sat.noradId === CUSTOM_NORAD_ID || sat.noradId === simPlan.targetNorad) return !simAfter;
+  return true;
+}
+/**
+ * Each frame, with the clock before this frame's step: the moment of a simulated impact. Going
+ * forward across it the two objects give way to the fragments with a flash (any jump across it
+ * changes who exists, without the flash). The fragments are lit and the screening switched on,
+ * so the monitor, the cells (G) and the designer's count show what the new cloud does.
+ */
+function updateSimulation(beforeMs: number): void {
+  if (!simPlan) return;
+  designer.tick(clock.time);
+  const after = clock.time >= simPlan.impactMs;
+  if (after !== simAfter) {
+    simAfter = after;
+    filters.refreshQuiet();
+    if (after && catalog) {
+      const crossed = beforeMs < simPlan.impactMs && clock.time - simPlan.impactMs < 10 * 60000;
+      if (crossed) impactFlash.start(simPlan.at);
+      if (encPanel.isOpen) closeEncounter(true); // the pair it was showing no longer exists
+      if (selected && (selected.noradId === CUSTOM_NORAD_ID || selected.noradId === simPlan.targetNorad)) select(null);
+      const fragments: number[] = [];
+      for (const sat of catalog.sats) if (isSimFragment(sat.noradId)) fragments.push(sat.index);
+      cloud.setHighlight(fragments);
+      if (!conjunctionOn) setConjunction(true, false); // screening on, the designer's panel left where it is
+      screenDirty = true;
+      // Follow the middle of the cloud from close by, so it is seen spreading along the orbit.
+      const p = { x: 0, y: 0, z: 0 };
+      const middle = (): THREE.Vector3 | null => {
+        let n = 0, x = 0, y = 0, z = 0;
+        for (const i of fragments) {
+          if (!sim.getPosition(i, p)) continue;
+          x += p.x;
+          y += p.y;
+          z += p.z;
+          n++;
+        }
+        return n > 0 ? toScene({ x: x / n, y: y / n, z: z / n }) : null;
+      };
+      if (crossed) {
+        rig.follow = true;
+        rig.flyToFocus(middle, 0.12, 0.6);
+      }
+      designer.impact();
+    } else {
+      cloud.setHighlight(null);
+    }
+  }
+  if (impactFlash.active) {
+    const at = kit.eciGroup.localToWorld(new THREE.Vector3(simPlan.at.x, simPlan.at.y, simPlan.at.z));
+    impactFlash.update(kit.camera.position.distanceTo(at) * 1000);
+  }
+}
+function endSimulation(): void {
+  simPlan = null;
+  simRecords = [];
+  simAfter = false;
+  filters.setQuiet('simulation', null);
+}
 const designer = new Designer($('designer-body'), {
   launch: (record) => {
+    endSimulation();
     customRecord = record;
     rebuildCatalog();
     const sat = catalog?.byNorad.get(CUSTOM_NORAD_ID) ?? null;
@@ -1132,9 +1208,55 @@ const designer = new Designer($('designer-body'), {
     return sat;
   },
   remove: () => {
+    endSimulation();
     customRecord = null;
+    cloud.setHighlight(null);
     rebuildCatalog();
   },
+  preview: (points) => {
+    designPreview.visible = !!points;
+    if (!points) return;
+    designPreview.geometry.dispose();
+    const closed = new Float32Array(points.length + 3);
+    closed.set(points);
+    closed.set(points.subarray(0, 3), points.length); // back to the start
+    designPreview.geometry = new THREE.BufferGeometry();
+    designPreview.geometry.setAttribute('position', new THREE.BufferAttribute(closed, 3));
+    designPreview.computeLineDistances();
+  },
+  selected: () => selected,
+  kindOf: (sat) => describe(sat).kind,
+  stateOf: (noradId, tMs) => {
+    const sat = catalog?.byNorad.get(noradId);
+    const state = sat ? stateAt(makeSatrec(sat), tMs) : null;
+    return state ? { r: state.position, v: state.velocity } : null;
+  },
+  propagate: (record, tMs) => {
+    const state = stateAt(makeSatrec({ omm: record } as Satellite), tMs);
+    return state ? { r: state.position, v: state.velocity } : null;
+  },
+  sun: (tMs) => sunDirection(tMs),
+  arm: (plan) => {
+    simPlan = plan;
+    simRecords = plan.fragments;
+    customRecord = plan.impactor;
+    simAfter = clock.time >= plan.impactMs;
+    filters.setQuiet('simulation', simulationTest);
+    rebuildCatalog();
+    const sat = catalog?.byNorad.get(CUSTOM_NORAD_ID) ?? null;
+    if (sat) select(sat);
+    return sat;
+  },
+  watch: (plan) => {
+    const a = catalog?.byNorad.get(CUSTOM_NORAD_ID), b = catalog?.byNorad.get(plan.targetNorad);
+    if (!a || !b) return;
+    clock.speed = 1;
+    clock.paused = false;
+    jumpTo(plan.impactMs - 60000); // a minute before: the two closing in on each other, in their cells
+    openEncounter(a.index, b.index);
+    timeControls.sync();
+  },
+  setGrid: (on) => setGrid(on),
   context: () => (catalog ? { records: catalog.sats.map((sat) => sat.omm), sats: catalog.sats, mask: cloud.visible.slice(), startMs: clock.time } : null),
   openApproach: (a, b, tcaMs) => {
     jumpTo(tcaMs - 6000);
@@ -1328,6 +1450,7 @@ sim.onMessage = (msg) => {
     markers.setPairs(passA, passB, msg.d);
     lastPairs = { a: passA, b: passB };
     monitor.setResult(msg, catalog);
+    if (simPlan && catalog) designer.noteScreening(Array.from(msg.pairA, (a, k) => [a, msg.pairB[k]] as [number, number]), catalog.sats, msg.d);
     $('sb-screen').textContent = `${fmt(msg.stats.hashMs, 1)} ms`;
   }
 };
@@ -2321,7 +2444,9 @@ function step(now: number): void {
   const dt = Math.min(elapsed, 0.1); // animation step, capped so a hiccup never makes the camera jump
   lastFrame = now;
   realSeconds += dt;
+  const before = clock.time;
   advanceClock(elapsed);
+  updateSimulation(before);
   if (replay && clock.time >= replay.endMs) {
     // A replay ran to its end: go (back) to the closest point and hold there.
     const hold = replay.holdMs;

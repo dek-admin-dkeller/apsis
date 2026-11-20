@@ -21,7 +21,7 @@
     "bench": "node scripts/bench.mjs",
     "check-changes": "node scripts/check-changes.mjs",
     "diff-elements": "node scripts/diff-elements.mjs",
-    "check": "node scripts/check-changes.mjs && node scripts/check-visibility.mjs && node scripts/check-report.mjs && node scripts/decay-check.mjs && node scripts/test-command.mjs && node scripts/check-groups.mjs && node scripts/check-ascent.mjs && node scripts/check-deep.mjs && node scripts/check-sky-events.mjs && node scripts/check-slides.mjs"
+    "check": "node scripts/check-changes.mjs && node scripts/check-visibility.mjs && node scripts/check-report.mjs && node scripts/decay-check.mjs && node scripts/test-command.mjs && node scripts/check-groups.mjs && node scripts/check-ascent.mjs && node scripts/check-deep.mjs && node scripts/check-sky-events.mjs && node scripts/check-slides.mjs && node scripts/check-orbitlab.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
