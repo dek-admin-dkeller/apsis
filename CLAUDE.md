@@ -1395,6 +1395,26 @@ so the site works from any sub-path.
   and the bell then only flew the camera to the pad. The climb is drawn from the listed time and
   the card says the time is not published to the minute, so the rocket's place along its path
   is a guess. A launch that has not flown still needs a time to the minute.
+- **A launch is an object with a card** (`features/launchCard.ts`, `#launch-card` in the right
+  dock, the inspector's parts): photo (Launch Library's `image`, else the rocket's model), Camera
+  lock / Path / Webcast, and Live (the mission's GOAL in a line, mission time, height, speed, "In
+  orbit" counting down to engine cut-off then up since it, a track of the climb's milestones with
+  the next one, "Shown live until" = two orbits after orbit), Mission (description, type, orbit,
+  customer, rocket, provider, window, weather) and Record (the provider's, the pad's and the
+  world's launch counts; every link). It opens from a click or tap on the rocket, the preview's
+  "Details", the bell (which also locks the camera) or "Watch it climb". `App.sideCard(open)` makes
+  it one card among the others: opening it closes a satellite's card and a close approach; a
+  satellite selected closes it; on a phone it is a sheet like the inspector's. `data/launches.ts`
+  parses the extra fields into `Launch.info` (absent in copies saved before it existed).
+- **The rocket's preview is hover only** (`ascent.ts`): never on by itself, never with the rocket
+  behind the Earth (`behindEarth`), placed clear of the rocket so a click reaches the rocket; the
+  satellite hover card steps aside meanwhile (`body.on-rocket`). The old always-on card with a
+  Follow button was "loud and in the way". **Layers → Live launches** (`Settings.liveLaunches`)
+  turns rockets and paths off; a launch chosen to watch is still drawn (`wanted`), and switching
+  the layer off forgets all but the one being followed.
+- **The upcoming launches rows** are four short lines (mission + status, rocket · provider, site,
+  time + a compact countdown: "T−12:43:40", "T+1 h 49 m", "≈ 14 h") with the picture in a column of
+  its own: "lifted off 1 h 49 min ago" squeezed the other lines into single words.
 - **Every launch links to its page** ("About this launch ↗", in the list and on the climb card):
   `Launch.pageUrl`, Space Launch Now (The Space Devs' own reader site for the same Launch Library
   data) at `spacelaunchnow.app/launch/<slug>/`, built from the service's `slug` only when it is

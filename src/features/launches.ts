@@ -41,7 +41,7 @@ const two = (n: number): string => String(n).padStart(2, '0');
 /** The launch time, written no more exactly than it is known. */
 function whenText(launch: Launch): string {
   if (launch.precision === 'exact') return clockStamp(launch.netMs);
-  if (launch.precision === 'hour') return `around ${clockStamp(launch.netMs)}`;
+  if (launch.precision === 'hour') return `≈ ${clockStamp(launch.netMs)}`;
   // Known only to the day (or less): the service's midnight UTC is a placeholder, so show the
   // published date itself rather than a clock time shifted into another zone.
   const date = new Date(launch.netMs);
@@ -49,22 +49,35 @@ function whenText(launch: Launch): string {
   return `${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()} at the earliest`;
 }
 
-/** Time to go (or since), again no more exactly than the launch time is known. */
+/** "1 h 49 m", "3 d 4 h", "12 m": a span in at most two short units (the row's right column is narrow). */
+function shortSpan(ms: number): string {
+  const m = Math.max(0, Math.round(Math.abs(ms) / 60000));
+  if (m < 60) return `${m} m`;
+  const h = Math.floor(m / 60);
+  if (h < 48) return `${h} h ${m % 60} m`;
+  return `${Math.floor(h / 24)} d ${h % 24} h`;
+}
+
+/**
+ * Time to go (or since), short, and no more exactly than the launch time is known: "T−12:43:40",
+ * "T+1 h 49 m", "≈ 14 h". (It once said "lifted off 1 h 49 min ago" and squeezed the row's other
+ * lines into a column of single words.)
+ */
 function countdownText(launch: Launch, nowMs: number): string {
   const left = launch.netMs - nowMs;
-  if (launch.state === 'flying') return left < 0 ? `lifted off ${duration(left)} ago` : '';
-  if (launch.state === 'done' || launch.state === 'failed') return left < 0 ? `${duration(left)} ago` : '';
-  if (launch.state === 'hold') return 'countdown stopped';
+  if (launch.state === 'flying') return left < 0 ? `T+${shortSpan(left)}` : '';
+  if (launch.state === 'done' || launch.state === 'failed') return left < 0 ? `${shortSpan(left)} ago` : '';
+  if (launch.state === 'hold') return 'on hold';
   if (launch.precision === 'vague') return '';
-  if (left <= 0) return 'due, waiting for news'; // the list is up to an hour old; the service will say what happened
-  if (launch.precision === 'day') return left < 1.5 * DAY_MS ? 'in about a day' : `in about ${Math.round(left / DAY_MS)} days`;
+  if (left <= 0) return 'due'; // the list is up to an hour old; the service will say what happened
+  if (launch.precision === 'day') return left < 1.5 * DAY_MS ? '≈ 1 day' : `≈ ${Math.round(left / DAY_MS)} days`;
   if (launch.precision === 'hour') {
-    if (left < 1.5 * HOUR_MS) return 'in about an hour';
-    return left < 48 * HOUR_MS ? `in about ${Math.round(left / HOUR_MS)} h` : `in about ${Math.round(left / DAY_MS)} days`;
+    if (left < 1.5 * HOUR_MS) return '≈ 1 h';
+    return left < 48 * HOUR_MS ? `≈ ${Math.round(left / HOUR_MS)} h` : `≈ ${Math.round(left / DAY_MS)} days`;
   }
   const s = Math.floor(left / 1000);
   const days = Math.floor(s / 86400), hours = Math.floor((s % 86400) / 3600), minutes = Math.floor((s % 3600) / 60);
-  return `in ${days > 0 ? `${days} d ` : ''}${two(hours)}:${two(minutes)}:${two(s % 60)}`;
+  return `T−${days > 0 ? `${days} d ` : ''}${two(hours)}:${two(minutes)}:${two(s % 60)}`;
 }
 
 interface Row {
@@ -140,10 +153,13 @@ export function installLaunches(app: App): void {
       const item = el('li');
       const pick = el('button', 'watch-pick launch-pick');
       const status = el('span', `launch-status is-${launch.state}`, launch.status);
-      const who = el('span', 'launch-who', [launch.provider, launch.rocket, launch.place].filter(Boolean).join(' · '));
+      // Four short lines: the mission and its status; the rocket and who flies it; where from; when.
+      const who = el('span', 'launch-who', [launch.rocket, launch.provider].filter(Boolean).join(' · '));
+      const where = el('span', 'launch-where', launch.place || launch.pad);
+      where.title = [launch.pad, launch.place].filter(Boolean).join(', ');
       const when = el('span', 'launch-when', whenText(launch));
       const count = el('span', 'launch-count', countdownText(launch, now));
-      pick.append(el('span', 'launch-name', launch.mission), status, who, when, count);
+      pick.append(el('span', 'launch-name', launch.mission), status, who, where, when, count);
       // The rocket itself, as a small picture (drawn in an idle moment: see drawRockets).
       const thumb = el('img', 'launch-rocket') as HTMLImageElement;
       thumb.alt = '';
@@ -172,6 +188,7 @@ export function installLaunches(app: App): void {
       const actions = el('div', 'launch-acts');
       if (canWatch(launch)) {
         const climb = el('button', 'launch-climb', launch.state === 'flying' ? 'Watch it climb' : launch.netMs < now ? 'Replay the climb' : 'Preview the climb');
+        if (launch.state === 'flying') climb.classList.add('is-live');
         climb.type = 'button';
         climb.title = 'An estimated path from the pad to orbit, on the globe';
         climb.addEventListener('click', () => watchLaunch(launch));
@@ -180,7 +197,7 @@ export function installLaunches(app: App): void {
       // Where this comes from, and where to read more: the launch's page for readers (Space Launch
       // Now, The Space Devs' own site for the Launch Library data shown here).
       if (launch.pageUrl) {
-        const more = el('a', 'launch-more', 'About this launch ↗');
+        const more = el('a', 'launch-more', 'Launch page ↗');
         more.href = launch.pageUrl;
         more.target = '_blank';
         more.rel = 'noopener noreferrer';
@@ -216,7 +233,7 @@ export function installLaunches(app: App): void {
       link.href = 'https://thespacedevs.com/llapi';
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
-      credit.append('Launch data: ', link, problem ? '.' : `, read ${clockStamp(list.at)}.`, ' Each launch’s “About” link opens its page on their Space Launch Now site.');
+      credit.append('Launch data: ', link, problem ? '.' : `, read ${clockStamp(list.at)}.`, ' Each launch page is on their Space Launch Now site.');
     }
   }
 

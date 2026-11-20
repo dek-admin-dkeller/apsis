@@ -78,6 +78,65 @@ export interface Launch {
    * the upper stage failed (then it was lost after staging, but exactly when is not known).
    */
   failure?: { partial: boolean; reason: string; atS: number | null; upper: boolean };
+  /** What the launch's card shows (features/launchCard.ts). Absent in a copy saved before it existed. */
+  info?: LaunchInfo;
+}
+
+/** The rest of what the service says about a launch: for its card, never for the drawing. */
+export interface LaunchInfo {
+  /** A photograph (usually the rocket), from The Space Devs' image store; null if none. */
+  image: string | null;
+  description: string;
+  missionType: string; // "Communications", "Government/Top Secret" …
+  orbitName: string; // "Low Earth Orbit"
+  customer: { name: string; url: string | null } | null; // the mission's agency, its Wikipedia page
+  providerType: string; // "Commercial", "Government"
+  rocketFull: string; // "Falcon 9 Block 5"
+  padUrl: string | null; // the pad's Wikipedia page
+  windowStartMs: number | null;
+  windowEndMs: number | null;
+  probability: number | null; // % chance of good weather, when given
+  weather: string;
+  hold: string; // why it is on hold, when it is
+  /** How many launches: the provider's ever and this year, from this pad, worldwide this year. */
+  counts: { provider: number | null; providerYear: number | null; pad: number | null; padYear: number | null; worldYear: number | null };
+}
+
+function infoOf(entry: unknown): LaunchInfo {
+  const mission = field(entry, 'mission'), pad = field(entry, 'pad');
+  const agency = (field(mission, 'agencies') as unknown[] | undefined)?.[0];
+  const count = (name: string): number | null => {
+    const value = Number(field(entry, name));
+    return Number.isFinite(value) && value > 0 ? value : null;
+  };
+  const when = (name: string): number | null => {
+    const ms = Date.parse(text(field(entry, name)));
+    return Number.isFinite(ms) ? ms : null;
+  };
+  const https = (value: string): string | null => (/^https:\/\//.test(value) ? value : null);
+  const probability = Number(field(entry, 'probability'));
+  return {
+    image: https(text(field(entry, 'image'))),
+    description: text(field(mission, 'description')),
+    missionType: text(field(mission, 'type')),
+    orbitName: text(field(field(mission, 'orbit'), 'name')),
+    customer: agency ? { name: text(field(agency, 'name')), url: https(text(field(agency, 'wiki_url'))) } : null,
+    providerType: text(field(field(entry, 'launch_service_provider'), 'type')),
+    rocketFull: text(field(field(field(entry, 'rocket'), 'configuration'), 'full_name')),
+    padUrl: https(text(field(pad, 'wiki_url'))),
+    windowStartMs: when('window_start'),
+    windowEndMs: when('window_end'),
+    probability: field(entry, 'probability') !== null && Number.isFinite(probability) && probability >= 0 ? probability : null,
+    weather: text(field(entry, 'weather_concerns')),
+    hold: text(field(entry, 'holdreason')),
+    counts: {
+      provider: count('agency_launch_attempt_count'),
+      providerYear: count('agency_launch_attempt_count_year'),
+      pad: count('pad_launch_attempt_count'),
+      padYear: count('pad_launch_attempt_count_year'),
+      worldYear: count('orbital_launch_attempt_count_year'),
+    },
+  };
 }
 
 export interface LaunchList {
@@ -208,6 +267,7 @@ export function parseLaunches(file: unknown): Launch[] {
       pageUrl: pageOf(text(field(entry, 'slug'))),
       landing: landingOf(field(entry, 'rocket')),
       failure: failureOf(Number(field(status, 'id')), text(field(entry, 'failreason'))),
+      info: infoOf(entry),
     });
   }
   return launches.sort((a, b) => a.netMs - b.netMs);

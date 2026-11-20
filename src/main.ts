@@ -120,6 +120,7 @@ let encModelSize = 0; // scene units
 let encViewDistance = 0; // camera distance that frames both objects
 let encPairDistance = 0; // … before allowing for the screening cells
 let encTogether = false; // the open pair flies together (docked, in formation) rather than crossing
+let sideCardOpen = false; // a feature's card in the right dock (App.sideCard): the launch card
 let encPairNorads: [number, number] = [0, 0]; // the two objects the close-approach view shows
 let encAutoFrame = false; // the camera keeps both objects in view by itself (until the user zooms)
 
@@ -622,7 +623,7 @@ window.addEventListener('resize', () => (viewKey = ''));
  */
 function updateViewShift(dt: number): void {
   const immersive = document.body.classList.contains('sky-immersive'); // every sheet is put away: the sky gets the whole screen
-  const sheetOpen = isPhone() && !immersive && (inspector.isOpen || encPanel.isOpen || openPanelName !== null);
+  const sheetOpen = isPhone() && !immersive && (inspector.isOpen || encPanel.isOpen || openPanelName !== null || sideCardOpen);
   const sheet = sheetOpen ? sheets.current : 0;
   const target = landing.showing ? 1 : 0;
   heroShift = Math.abs(target - heroShift) < 0.002 ? target : heroShift + (target - heroShift) * Math.min(1, dt * 2.6);
@@ -2756,6 +2757,16 @@ const app: App = {
     rig.follow = false;
     rig.flyToView(overhead, look ? ground(look.latDeg, look.lonDeg, look.altitudeKm ?? 0) : ORIGIN.clone(), 2);
     rig.holdStill(); // stay over the place: the idle drift would slide it out of view
+  },
+  sideCard: (open) => {
+    sideCardOpen = open;
+    if (open) {
+      if (selected) select(null);
+      closeEncounter(true);
+      if (isPhone()) openPanel(null); // one sheet at a time on a phone
+      sheets.reset();
+    }
+    viewKey = '';
   },
   follow: (focus, distance = 0.9) => {
     if (!focus) return rig.release();

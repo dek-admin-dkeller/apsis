@@ -793,6 +793,16 @@
   }
   #inspector > .tabs button { min-height: 40px; }
   #inspector > .insp-body { flex: none; min-height: auto; overflow: visible; padding-top: 10px; }
+  /* A launch's card (features/launchCard.ts) is the same one-page sheet. */
+  #launch-card { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+  #launch-card::-webkit-scrollbar { display: none; }
+  #launch-card > .insp-head { position: sticky; top: 0; z-index: 5; flex: none; min-height: 56px; background: var(--m-solid); backdrop-filter: var(--m-blur); }
+  #launch-card > .insp-hero { flex: none; height: 138px; margin: 2px 12px 0; border-radius: 16px; }
+  #launch-card > .acts { flex: none; padding: 10px 12px 2px; gap: 6px; }
+  #launch-card .act { min-height: 38px; border-radius: 12px; font-size: 12.5px; }
+  #launch-card > .tabs { position: sticky; top: 55px; z-index: 4; flex: none; background: var(--m-solid); backdrop-filter: var(--m-blur); }
+  #launch-card > .tabs button { min-height: 40px; }
+  #launch-card > .insp-body { flex: none; min-height: auto; overflow: visible; padding-top: 10px; }
 
   /* roomy, but not oversized, controls */
   .row-toggle, .sec > summary { min-height: 42px; }

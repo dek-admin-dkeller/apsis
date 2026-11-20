@@ -7,9 +7,15 @@
  *   - from lift-off a rocket model (its own kind where the catalogue of models has one, else a
  *     generic launcher; the upper stage alone after staging) climbs along that path with a
  *     glow while an engine burns, and the part already flown is drawn brighter;
- *   - a card beside it says what it is, T+ time, height, speed and the last event, that the
- *     path is an estimate and why, with "Follow" (the camera stays with it) and, only when the
- *     service lists one, a small link to the webcast (its recording, for a launch in the past);
+ *   - pointing at the rocket shows a small preview beside it (name, T+, height, speed, the last
+ *     event, "Details"); it is never on by itself (the owner found an always-on card loud and in
+ *     the way, even with the rocket on the far side of the Earth), and never while the rocket is
+ *     behind the Earth;
+ *   - clicking or tapping the rocket, or "Details", opens the launch's CARD in the right dock
+ *     (features/launchCard.ts: photo, Live / Mission / Record, links), like any object's card;
+ *     choosing a launch in the bell or "Watch it climb" also locks the camera on it;
+ *   - Layers → "Live launches" (`Settings.liveLaunches`) turns the rockets and paths off; a
+ *     launch the visitor chooses to watch (the list, the bell, a share link) is still drawn;
  *   - a launch that FAILED is drawn as far as it got when the service's words say when it was
  *     lost (then a burst, and nothing beyond); when they do not, the climb is not flown at all
  *     and the card says where it failed is not published. A partial failure flies, and says so.
@@ -29,6 +35,7 @@ import { loadLaunches, type Launch } from '../data/launches.ts';
 import { buildModel, modelBase } from '../render/satModels.ts';
 import type { App } from '../ui/app.ts';
 import { clockStamp } from '../ui/inspector.ts';
+import { LaunchCard } from './launchCard.ts';
 import { fmtKm, fmtKmS } from '../ui/dom.ts';
 
 const BEFORE_MS = 60 * 60000; // the planned path appears an hour before lift-off
@@ -114,15 +121,20 @@ interface Flight {
   /** The first stage on its way down (when it lands), and the spot it comes down on. */
   booster: THREE.Group | null;
   landing: THREE.Sprite | null;
-  /** "Now tracked: …": the real objects of this launch, once they are in the catalogue. */
+  /** "Now tracked: …": the real objects of this launch, once they are in the catalogue (shown on its card). */
   real: HTMLElement;
+  launch: Launch;
+  /** What the card says about the drawing: the estimate, a failure, the booster. */
+  notes: { estimate: string; failure: string; booster: string };
+  /** Its path is drawn (the card's Path switch). */
+  pathOn: boolean;
   realFor: string;
   /** Lost in flight: the seconds after lift-off it was lost (null: not published, so nothing is flown). */
   lostAtS: number | null | undefined;
   failReason: string;
   burst: THREE.Sprite | null;
-  /** Escape closed this card: the rocket stays, its card does not (until it is chosen again). */
-  dismissed: boolean;
+  /** Where the rocket is on screen this frame (px), or null when it is not to be seen (off screen, behind the Earth). */
+  screen: { x: number; y: number } | null;
 }
 
 /** The moment a full failure was lost: from the service's words, else after staging if they say the upper stage. */
@@ -149,6 +161,95 @@ export function installAscent(app: App): void {
   const flights = new Map<string, Flight>();
   let launches: Launch[] = [];
   let following: string | null = null;
+  // The preview: which rocket the pointer is on; and the launches the visitor asked for (drawn
+  // even with the "Live launches" layer off).
+  const wanted = new Set<string>();
+  let hovered: string | null = null;
+  let hoverUntil = 0; // the card lingers a moment after the pointer leaves, so it can be reached
+  const pointerAt = { x: -1e4, y: -1e4, mouse: false };
+  const HIT_PX = 26;
+  /** The launch whose rocket is under a point on screen, if any. */
+  const rocketAt = (x: number, y: number): string | null => {
+    let best: string | null = null, bestD = HIT_PX;
+    for (const [id, flight] of flights) {
+      if (!flight.screen) continue;
+      const d = Math.hypot(flight.screen.x - x, flight.screen.y - y);
+      if (d < bestD) {
+        best = id;
+        bestD = d;
+      }
+    }
+    return best;
+  };
+  window.addEventListener('pointermove', (event) => {
+    pointerAt.x = event.clientX;
+    pointerAt.y = event.clientY;
+    pointerAt.mouse = event.pointerType === 'mouse';
+  }, { passive: true });
+  // A click or tap on a rocket opens its card (and does not also select whatever dot is behind it).
+  let downAt = { x: 0, y: 0 };
+  window.addEventListener('pointerdown', (event) => {
+    downAt = { x: event.clientX, y: event.clientY };
+  }, true);
+  window.addEventListener('pointerup', (event) => {
+    if (app.away() || !(event.target instanceof HTMLCanvasElement)) return;
+    if (Math.hypot(event.clientX - downAt.x, event.clientY - downAt.y) > 8) return; // a drag
+    const id = rocketAt(event.clientX, event.clientY);
+    if (!id) return;
+    event.stopImmediatePropagation();
+    openCard(id);
+  }, true);
+
+  // The launch's card (right dock), and what its switches and × do.
+  const card = new LaunchCard({
+    onClose: () => closeCard(),
+    onLock: (on) => {
+      const id = card.openId;
+      if (!id) return;
+      if (on) startFollowing(id);
+      else if (following === id) {
+        following = null;
+        app.follow(null);
+      }
+      card.setLocked(following === id);
+    },
+    onPath: (on) => {
+      const flight = card.openId ? flights.get(card.openId) : undefined;
+      if (flight) flight.pathOn = on;
+    },
+  });
+  function openCard(id: string): void {
+    const flight = flights.get(id);
+    if (!flight) return;
+    app.sideCard(true); // (closes a satellite's card first: one card at a time)
+    card.open(flight.launch, flight.ascent, flight.kind, { locked: following === id, path: flight.pathOn }, spanEnd(flight));
+    card.setNotes({ ...flight.notes, real: flight.real.childElementCount > 0 ? flight.real : null });
+    hovered = null;
+  }
+  function closeCard(): void {
+    const id = card.openId;
+    if (!id) return;
+    card.close();
+    app.sideCard(false);
+    if (following === id) {
+      following = null;
+      app.follow(null);
+    }
+  }
+  // Another card took the dock (a satellite, a close approach), or Home: this one goes.
+  app.onSelect((sat) => {
+    if (!sat || !card.openId) return;
+    card.close();
+    app.sideCard(false);
+    following = null;
+  });
+  app.onEncounter((encounter) => {
+    if (encounter && card.openId) {
+      card.close();
+      app.sideCard(false);
+      following = null;
+    }
+  });
 
   function make(launch: Launch, ascent: Ascent): Flight {
     const group = new THREE.Group();
@@ -179,47 +280,29 @@ export function installAscent(app: App): void {
     group.add(flown, ahead, holder);
     app.eciGroup.add(group);
 
+    // The preview beside the rocket (only while pointed at): what it is, where it is, and the way to its card.
     const tag = el('div', 'ascent-tag');
     const head = el('div', 'at-head');
-    head.append(el('b', '', `${launch.rocket}`), el('span', '', launch.mission));
+    head.append(el('b', '', launch.mission), el('span', '', launch.rocket));
     const live = el('div', 'at-live');
     const stage = el('div', 'at-stage');
+    const open = el('button', 'at-open', 'Details');
+    open.type = 'button';
+    open.addEventListener('click', () => openCard(launch.id));
     const lost = lostAt(launch, ascent);
     const failure = launch.failure;
-    const note = el('div', 'at-note', `Estimated path, from the pad and ${ascent.basis}. The real orbit arrives with the next tracking data.`);
-    // Listed only to the hour: say so first (the path is close; where the rocket is on it is not).
-    if (launch.pageUrl) {
-      const more = el('a', 'at-more', 'About this launch ↗') as HTMLAnchorElement;
-      more.href = launch.pageUrl;
-      more.target = '_blank';
-      more.rel = 'noopener noreferrer';
-      more.title = 'This launch on Space Launch Now (The Space Devs), the source of the launch data';
-      head.append(more);
-    }
-    if (ascent.timeApprox) note.prepend(`Lift-off time not published to the minute: drawn from the listed ${clockStamp(ascent.liftoffMs)}, so where the rocket is along its path is a guess. `);
-    const fail = el('div', 'at-fail');
+    // What the card says about the drawing.
+    let estimate = `The path is an estimate, from the pad and ${ascent.basis}: no one publishes a rocket's position. The real orbit arrives with the next tracking data.`;
+    if (ascent.timeApprox) estimate = `Lift-off time is published only to the hour, so it is drawn from the listed ${clockStamp(ascent.liftoffMs)} and where the rocket is along its path is a guess. ${estimate}`;
+    let failText = '';
     if (failure) {
       const what = failure.partial ? 'Partial failure' : 'Launch failure';
       // (When it was lost comes from the reason's own words, so it is not said twice.)
       const when = failure.partial || lost != null ? '' : ' Where in the climb it was lost is not published, so the climb is not drawn.';
-      fail.textContent = `${what}.${failure.reason ? ` ${failure.reason.length > 180 ? `${failure.reason.slice(0, 177)}…` : failure.reason}` : ' The cause has not been published yet.'}${when}`;
-      if (!failure.partial) note.textContent = lost != null ? `Estimated path up to the moment it was lost, from the pad and ${ascent.basis}.` : `The planned path (faint), from the pad and ${ascent.basis}.`;
+      failText = `${what}.${failure.reason ? ` ${failure.reason.length > 220 ? `${failure.reason.slice(0, 217)}…` : failure.reason}` : ' The cause has not been published yet.'}${when}`;
+      if (!failure.partial) estimate = lost != null ? `The path up to the moment it was lost is an estimate, from the pad and ${ascent.basis}.` : `The planned path (faint) is an estimate, from the pad and ${ascent.basis}.`;
     }
-    const buttons = el('div', 'at-buttons');
-    const follow = el('button', '', 'Follow');
-    follow.type = 'button';
-    follow.addEventListener('click', () => startFollowing(launch.id));
-    buttons.append(follow);
-    // A webcast only when the service lists one (a recording, once the launch is over): no
-    // made-up search link, and a quiet link rather than a second button.
-    if (launch.webcast) {
-      const cast = el('a', 'at-cast', launch.netMs < Date.now() - 2 * 3600000 ? 'Recording ↗' : 'Webcast ↗');
-      cast.href = launch.webcast;
-      cast.target = '_blank';
-      cast.rel = 'noopener noreferrer';
-      cast.title = 'The webcast Launch Library lists for this launch';
-      buttons.append(cast);
-    }
+    let boosterText = '';
     // The booster's way down (estimated): a small first stage, and a mark where it lands.
     let booster: THREE.Group | null = null;
     let landing: THREE.Sprite | null = null;
@@ -230,7 +313,7 @@ export function installAscent(app: App): void {
       landing = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, color: 0x7fe3ff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
       landing.visible = false;
       group.add(booster, landing);
-      note.textContent += ` Booster: lands on ${ascent.booster.where}${ascent.booster.estimated ? ' (usual for this rocket; not confirmed)' : ''}.`;
+      boosterText = `The first stage lands on ${ascent.booster.where}${ascent.booster.estimated ? ' (usual for this rocket; not confirmed)' : ''}.`;
     }
     const real = el('div', 'at-real');
     // Where it was lost: a burst that flares and fades.
@@ -241,9 +324,12 @@ export function installAscent(app: App): void {
       burst.visible = false;
       group.add(burst);
     }
-    tag.append(head, live, stage, fail, note, real, buttons);
+    tag.append(head, live, stage, open);
     root.append(tag);
-    return { ascent, group, flown, ahead, holder, model, glow: sprite, kind, staged: false, tag, live, stage, world: new THREE.Vector3(), shown: false, booster, landing, real, realFor: '', lostAtS: lost, failReason: failure?.reason ?? '', burst, dismissed: false };
+    return {
+      ascent, group, flown, ahead, holder, model, glow: sprite, kind, staged: false, tag, live, stage, world: new THREE.Vector3(), shown: false, booster, landing, real, realFor: '',
+      lostAtS: lost, failReason: failure?.reason ?? '', burst, screen: null, launch, notes: { estimate, failure: failText, booster: boosterText }, pathOn: true,
+    };
   }
 
   function drop(id: string): void {
@@ -256,6 +342,11 @@ export function installAscent(app: App): void {
     }
     flight.tag.remove();
     flights.delete(id);
+    wanted.delete(id);
+    if (card.openId === id) {
+      card.close();
+      app.sideCard(false);
+    }
     if (following === id) {
       // The clock has left this climb's time (Live, a jump): let the camera go, gently, rather
       // than leave it staring at the spot where the rocket was.
@@ -271,10 +362,13 @@ export function installAscent(app: App): void {
   // Escape closes the card of the climb being followed (or any shown), before anything else.
   app.onEscape(() => {
     if (app.away()) return false;
-    const open = [...flights.values()].filter((flight) => !flight.dismissed && !flight.tag.classList.contains('is-hidden'));
-    if (open.length === 0 && !following) return false;
-    for (const flight of open) flight.dismissed = true;
-    if (following) {
+    if (card.openId) {
+      closeCard();
+      return true;
+    }
+    if (!following) return false;
+    hovered = null;
+    {
       following = null;
       app.follow(null);
     }
@@ -291,7 +385,7 @@ export function installAscent(app: App): void {
       return;
     }
     following = id;
-    flight.dismissed = false;
+    card.setLocked(card.openId === id);
     app.follow(() => (flights.get(id)?.shown ? flights.get(id)!.world.clone() : null), 0.9);
   }
 
@@ -303,8 +397,10 @@ export function installAscent(app: App): void {
       // Not in the window (a launch tomorrow, or one that has been and gone): move the clock to just before lift-off.
       if (t < ascent.liftoffMs - BEFORE_MS || t > ascent.liftoffMs + ascentSpanS(ascent) * 1000) app.jumpTo(ascent.liftoffMs - 30000);
       if (!launches.some((known) => known.id === launch.id)) launches = [...launches, launch];
+      wanted.add(launch.id); // drawn even with the "Live launches" layer off
       window.setTimeout(() => {
         update(app.time());
+        openCard(launch.id); // first: opening it closes a satellite's card, which lets the camera go
         startFollowing(launch.id);
       }, 60);
     };
@@ -333,7 +429,7 @@ export function installAscent(app: App): void {
       if (known && (known.lostAtS !== lostAt(launch, ascent) || (launch.failure?.reason ?? '') !== known.failReason)) drop(launch.id);
       const flight = flights.get(launch.id);
       const end = endOf(ascent, lostAt(launch, ascent)); // the same end the frame loop uses, or the two would fight
-      const inWindow = timeMs > ascent.liftoffMs - BEFORE_MS && timeMs < end;
+      const inWindow = timeMs > ascent.liftoffMs - BEFORE_MS && timeMs < end && (app.settings().liveLaunches || wanted.has(launch.id));
       if (inWindow && !flight) flights.set(launch.id, make(launch, ascent));
       else if (!inWindow && flight) drop(launch.id);
     }
@@ -363,6 +459,7 @@ export function installAscent(app: App): void {
     show.type = 'button';
     show.addEventListener('click', () => app.showLaunchGroup(best.members));
     flight.real.append(line, show);
+    if (card.openId === flight.launch.id) card.setNotes({ ...flight.notes, real: flight.real });
   }
 
   // The catalogue of models: a rocket kind with a launch in the list can be seen climbing.
@@ -401,7 +498,30 @@ export function installAscent(app: App): void {
     },
   });
 
+  /** Is a point (scene units) hidden from the camera by the Earth (radius 6.371, at the origin)? */
+  const ray = new THREE.Vector3();
+  function behindEarth(point: THREE.Vector3): boolean {
+    const camera = app.camera.position;
+    ray.copy(point).sub(camera);
+    const length = ray.length();
+    if (length < 1e-9) return false;
+    ray.divideScalar(length);
+    const t = -camera.dot(ray); // along the ray, the point nearest the Earth's centre
+    if (t <= 0 || t >= length) return false;
+    const nearest = camera.clone().addScaledVector(ray, t);
+    return nearest.length() < 6.371 * 0.999;
+  }
+
+  // The layer switched off (or on): drop the climbs nobody asked for at once, not a second later.
+  app.onSettings((settings, changed) => {
+    if (changed !== 'liveLaunches') return;
+    // Off means off: only a climb being followed right now stays (the others asked for earlier go too).
+    if (!settings.liveLaunches) for (const id of [...wanted]) if (id !== following) wanted.delete(id);
+    update(app.time());
+  });
+
   let checkAt = 0;
+  let cardAt = 0;
   app.onFrame((frame) => {
     if (frame.realSeconds - checkAt > 1) {
       checkAt = frame.realSeconds;
@@ -409,6 +529,17 @@ export function installAscent(app: App): void {
     }
     const away = app.away();
     root.classList.toggle('is-hidden', away || frame.uiHidden);
+    // The pointer on a rocket (last frame's screen places) or on its open card: that card shows.
+    const now = performance.now();
+    const onCard = hovered !== null && !!flights.get(hovered)?.tag.matches(':hover');
+    const under = pointerAt.mouse ? rocketAt(pointerAt.x, pointerAt.y) : null;
+    if (under) {
+      hovered = under;
+      hoverUntil = now + 450;
+    } else if (onCard) hoverUntil = now + 450;
+    else if (now > hoverUntil) hovered = null;
+    // (A satellite's hover card would stack under the preview: it steps aside while the pointer is on a rocket.)
+    document.body.classList.toggle('on-rocket', !!under || onCard);
     for (const [id, flight] of flights) {
       const { ascent } = flight;
       // Out of the climb's time (Live was pressed, or a jump): gone at once, not a second later
@@ -429,7 +560,8 @@ export function installAscent(app: App): void {
       const k = Math.max(1, Math.min(POINTS, Math.round(flownTo * (POINTS - 1)) + 1));
       flight.flown.geometry.setDrawRange(0, k);
       flight.ahead.geometry.setDrawRange(k - 1, POINTS - k + 1);
-      flight.ahead.visible = !(gone && flight.lostAtS != null);
+      flight.ahead.visible = flight.pathOn && !(gone && flight.lostAtS != null);
+      flight.flown.visible = flight.pathOn;
       (flight.ahead.material as THREE.LineBasicMaterial).opacity = flight.lostAtS === null ? 0.14 : before ? 0.22 : 0.3;
       if (flight.burst && flight.lostAtS != null) {
         const since = state.t - flight.lostAtS;
@@ -478,22 +610,37 @@ export function installAscent(app: App): void {
       if (frame.realSeconds - realCheck > 2) matchReal(flight);
       flight.shown = !away;
 
-      // The card, beside the rocket on screen.
+      // Where the rocket is on screen, if it can be seen at all: in front of the camera, on the
+      // screen, the rocket itself drawn (not gone), and not behind the Earth.
       toScreen.copy(flight.world).project(app.camera);
-      const visible = !flight.dismissed && !away && !frame.uiHidden && toScreen.z < 1 && Math.abs(toScreen.x) < 1.05 && Math.abs(toScreen.y) < 1.05;
-      flight.tag.classList.toggle('is-hidden', !visible);
-      if (!visible) continue;
+      const onScreen = !away && !frame.uiHidden && flight.holder.visible && toScreen.z < 1 && Math.abs(toScreen.x) < 1.05 && Math.abs(toScreen.y) < 1.05 && !behindEarth(flight.world);
       const sx = (toScreen.x * 0.5 + 0.5) * window.innerWidth, sy = (0.5 - toScreen.y * 0.5) * window.innerHeight;
-      flight.tag.style.transform = `translate(${Math.round(sx + 18)}px, ${Math.round(sy - 20)}px)`;
-      flight.live.textContent = before ? `${clockText(state.t)} · on the pad`
+      flight.screen = onScreen ? { x: sx, y: sy } : null;
+      // The card: only when asked for (see the top of this file).
+      const liveText = before ? `${clockText(state.t)} · on the pad`
         : flight.lostAtS === null ? `${clockText(state.t)} · failed`
         : gone ? `${clockText(state.t)} · lost at ${clockText(flight.lostAtS!)}`
-        : `${clockText(state.t)} · ${fmtKm(state.altKm)} up · ${fmtKmS(state.speedKmS)}`;
-      flight.stage.textContent = gone ? (flight.lostAtS === null ? 'Failed during the climb' : 'Lost') : state.stage;
-      flight.tag.classList.toggle('is-followed', following === id);
+        : `${clockText(state.t)} · ${fmtKm(state.altKm)} · ${fmtKmS(state.speedKmS)}`;
+      const stageText = gone ? (flight.lostAtS === null ? 'Failed during the climb' : 'Lost') : state.stage;
+      if (card.openId === id && frame.realSeconds - cardAt > 0.2) {
+        cardAt = frame.realSeconds;
+        card.live({ t: state.t, lost: flight.lostAtS !== undefined, clock: clockText(state.t), height: gone || before ? '–' : fmtKm(state.altKm), speed: gone || before ? '–' : fmtKmS(state.speedKmS), stage: before ? 'On the pad' : stageText });
+        card.setLocked(following === id);
+      }
+      // The preview: only while pointed at, and not for the launch whose card is open.
+      const visible = onScreen && hovered === id && card.openId !== id;
+      flight.tag.classList.toggle('is-hidden', !visible);
+      if (!visible) continue;
+      // Beside the rocket, clear of it (the pointer is on the rocket), on whichever side has room.
+      const width = flight.tag.offsetWidth || 220;
+      const left = sx + HIT_PX + 10 + width < window.innerWidth - 8 ? sx + HIT_PX + 10 : sx - HIT_PX - 10 - width;
+      flight.tag.style.transform = `translate(${Math.round(left)}px, ${Math.round(sy - 22)}px)`;
+      flight.live.textContent = liveText;
+      flight.stage.textContent = stageText;
     }
   });
   app.onHome(() => {
     following = null;
+    closeCard();
   });
 }

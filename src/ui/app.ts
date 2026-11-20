@@ -157,6 +157,12 @@ export interface App {
    * for a selected satellite; null lets go. (Used for a rocket on its estimated climb.)
    */
   follow(focus: (() => THREE.Vector3 | null) | null, distance?: number): void;
+  /**
+   * A feature's own card in the right dock (#launch-card) opened (true) or closed: opening it
+   * closes a satellite's card and a close approach (one card at a time, as everywhere), and on a
+   * phone it is a sheet like theirs (normal height, the view makes room for it).
+   */
+  sideCard(open: boolean): void;
   /** The visitor is somewhere other than the Earth's tracker (another world, the solar system). */
   away(): boolean;
   /** Launches of the last three days found in the catalogue (data/fresh.ts), newest first. */

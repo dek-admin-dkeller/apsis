@@ -35,7 +35,8 @@ export interface Settings {
   earthDrift: boolean;
   siteMarker: boolean;
   aurora: boolean;
-  newLaunches: boolean; // mark what was launched in the last three days (data/fresh.ts)
+  newLaunches: boolean;
+  liveLaunches: boolean; // rockets climbing now, on their estimated paths (features/ascent.ts); off: only launches chosen to watch // mark what was launched in the last three days (data/fresh.ts)
   clouds: boolean;
   sharpGround: boolean; // stream detailed imagery when zoomed in
   guessUnseen: boolean; // fill the never-photographed parts of a few worlds with an educated guess (worker/unseen.worker.ts)
@@ -90,6 +91,7 @@ const DEFAULTS: Settings = {
   siteMarker: true,
   aurora: false,
   newLaunches: true,
+  liveLaunches: true,
   clouds: true,
   sharpGround: true,
   guessUnseen: true,
