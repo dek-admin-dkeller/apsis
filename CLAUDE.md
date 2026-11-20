@@ -768,7 +768,10 @@ to…", never "we learned in class"). On the branch `claude/presentation-walkthr
   instead of stale code), real line numbers, lit lines with numbered callouts. The figures are
   the page's live `[data-ld-count]` / `[data-ld-pairs-exact]`. Pictures: `public/slides/`
   (`earth.webp` rendered from the tracker with the interface hidden; `approach.webp` cropped
-  from the close-approach screenshot).
+  from the close-approach screenshot). The scenes say what Apsis IS and does, never what it might do: a
+  "where it could go" scene (finding spacecraft to reach a piece of debris, with fuel, speed and
+  timing "for the future") was replaced at the owner's request by scene 8, the same search
+  running live in the tracker. Do not add speculative or "not yet" scenes.
 - **The guided overview** (`ui/spaceTour.ts`) replaced the Sun-to-Pluto autoplay (the play
   button and A away from the Earth): Earth → a Cosmos 2251 fragment (selected, card open) →
   the GEO ring → the solar system → MRO → Webb → the question the scenes answer. Captions read

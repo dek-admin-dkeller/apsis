@@ -125,7 +125,7 @@
 .hs-slide.is-on .hs-target-label { opacity: 1; transform: none; }
 @keyframes hs-ping { 0% { opacity: 0.9; transform: scale(0.25); } 100% { opacity: 0; transform: scale(1.25); } }
 
-.hs-future-tag { position: absolute; left: 18px; top: 16px; padding: 5px 11px; border-radius: 999px; background: rgba(10, 14, 22, 0.8); border: 1px solid rgba(127, 227, 255, 0.35); color: var(--hs-accent); font: 600 11px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; }
+.hs-photo-tag { position: absolute; left: 18px; top: 16px; padding: 5px 11px; border-radius: 999px; background: rgba(10, 14, 22, 0.8); border: 1px solid rgba(127, 227, 255, 0.35); color: var(--hs-accent); font: 600 11px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; }
 .hs-chips { position: absolute; left: 18px; right: 18px; bottom: 18px; display: flex; flex-wrap: wrap; gap: 8px; }
 .hs-chips span { padding: 8px 14px; border-radius: 999px; background: rgba(10, 14, 22, 0.86); border: 1px solid var(--hs-line); color: var(--hs-ink); font: 500 13px var(--font-ui); opacity: 0; transform: translateY(10px); transition: opacity 0.5s ease var(--d, 0.6s), transform 0.5s ease var(--d, 0.6s); }
 .hs-chips span.is-first { border-color: rgba(127, 227, 255, 0.5); color: var(--hs-accent); }

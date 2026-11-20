@@ -261,23 +261,23 @@ const SCENES: Scene[] = [
     },
   },
   {
-    kicker: 'Where it could go',
-    title: 'From finding to reaching',
-    text: 'Point the same search at one piece of debris and it lists the spacecraft already nearby. The next step would be to check each one’s speed, fuel and timing, to see which could actually reach it. A direction for the future, not a feature yet.',
+    kicker: 'In Apsis',
+    title: 'Every second, the whole catalogue',
+    text: 'With the monitor on, this is the search the tracker runs once a second on all <span data-ld-count>19,572</span> objects; the same search screens the spacecraft at every other world. Each close pair it finds is listed in the monitor, and the close-approach view draws the two objects in their cells: the grid from these scenes, live.',
     visual: () => {
-      const v = el('div', 'hs-photo is-future');
+      const v = el('div', 'hs-photo is-live');
       const img = el('img');
       img.src = './slides/approach.webp';
       img.alt = 'A close approach in the Apsis tracker: two objects inside the screening cells';
       img.decoding = 'async';
       img.loading = 'lazy';
       const chips = el('div', 'hs-chips');
-      ['Nearby — the same search', 'Speed', 'Fuel', 'Timing'].forEach((word, i) => {
+      ['Once a second', 'Every tracked object', 'Every world'].forEach((word, i) => {
         const chip = el('span', i === 0 ? 'is-first' : '', word);
         chip.style.setProperty('--d', `${0.6 + i * 0.25}s`);
         chips.append(chip);
       });
-      v.append(img, chips, el('span', 'hs-future-tag', 'Future direction'));
+      v.append(img, chips, el('span', 'hs-photo-tag', 'Live in the tracker'));
       return v;
     },
   },
