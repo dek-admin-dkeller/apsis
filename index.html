@@ -26,7 +26,9 @@
       try {
         var saved = JSON.parse(localStorage.getItem('orbithash.settings.v2') || '{}');
         if (location.hash.length > 1 || saved.landing === false) document.documentElement.classList.add('no-landing');
-      } catch (error) { /* no storage: show the page */ }
+        // The launch screen comes first on a visit to the home page (ui/intro.ts, the end of main.ts).
+        else document.documentElement.classList.add('intro');
+      } catch (error) { document.documentElement.classList.add('intro'); /* no storage: show the page, launch first */ }
     </script>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23070d18'/%3E%3Cg transform='rotate(-30 16 16)'%3E%3Cpath d='M27.5 16a11.5 7 0 1 1-3.4-4.95' fill='none' stroke='%23e8f1fb' stroke-width='2.2' stroke-linecap='round'/%3E%3Ccircle cx='12.4' cy='16' r='3.5' fill='%23e8f1fb'/%3E%3Ccircle cx='26.7' cy='13.3' r='2.4' fill='%237fe3ff'/%3E%3C/g%3E%3C/svg%3E" />
   </head>
@@ -50,7 +52,7 @@
         <nav class="ld-nav" aria-label="On this page">
           <button data-ld-jump="ld-features">What it does</button>
           <button data-ld-jump="ld-how">How it works</button>
-          <button data-ld-jump="ld-new">What's new</button>
+          <button data-ld-jump="ld-all">Features</button>
         </nav>
         <button class="ld-button ld-small" data-ld-enter>Open the tracker</button>
       </header>
@@ -86,8 +88,14 @@
         <!-- The search, shown rather than described: a live drawing that runs the project's own hash table. -->
         <section class="ld-section" id="ld-how">
           <div class="ld-head">
-            <h2>How it finds what is close to what</h2>
-            <p class="ld-intro">The obvious way is to measure every object against every other one. The grid gets the same answer with a fraction of the work. Switch between them and watch the count.</p>
+            <h2>How Apsis finds what is close</h2>
+            <p class="ld-intro">Eight steps, from the question to the code that answers it. Use the arrows, or ← and → on the keyboard.</p>
+          </div>
+          <!-- Eight scenes (src/ui/howSlides.ts), drawn here when the page starts. -->
+          <div id="ld-slides"></div>
+          <div class="ld-head ld-head-demo">
+            <h3>Try it live</h3>
+            <p class="ld-intro">The obvious way measures every dot against every other one; the grid gets the same answer with a fraction of the work. Switch between them and watch the count.</p>
           </div>
           <div class="ld-demo">
             <div class="ld-demo-stage">
@@ -137,22 +145,13 @@
           <button class="ld-text-button" id="landing-models" hidden>See all models</button>
         </section>
 
-        <!-- The change log, newest first: drawn by src/ui/landing.ts from WHATS_NEW in src/ui/featureList.ts. -->
-        <section class="ld-section" id="ld-new">
-          <div class="ld-head">
-            <h2>What's new</h2>
-            <p class="ld-intro">The latest additions, newest first. Everything it can do is listed below.</p>
-          </div>
-          <div class="ld-updates" id="ld-updates"></div>
-        </section>
-
         <!-- The list itself is drawn by src/ui/landing.ts from src/ui/featureList.ts: edit it there. -->
         <section class="ld-section" id="ld-all">
           <div class="ld-head">
-            <h2>Everything it does</h2>
-            <p class="ld-intro">Choose a name to read about it.</p>
+            <h2>Everything you can do</h2>
+            <p class="ld-intro">Six areas. Choose one: each card says what a feature does and where to find it.</p>
           </div>
-          <div class="ld-index" id="ld-feature-list"></div>
+          <div class="ld-ex" id="ld-feature-list"></div>
           <button class="ld-button" data-ld-enter>Open the tracker</button>
         </section>
 
@@ -243,6 +242,8 @@
              "Solar system / Jupiter / Europa". Drawn by ui/places.ts. The Earth is one place among the
              others; nothing here says "back". -->
         <nav id="path" class="path" aria-label="Where you are"></nav>
+        <!-- Beside the path: Escape is the way out, one level at a time (hidden on the whole solar system, where there is nothing further out). -->
+        <span id="path-esc" class="path-esc" title="Escape steps out one level: from an object to its world, from a world to the solar system"><kbd>Esc</kbd> step out</span>
         <dl class="readouts">
           <!-- One count. "of 19,572" appears only while a filter is hiding something. -->
           <div id="readout-objects" class="is-all"><dt>Objects</dt><dd><span id="visible-count">0</span><span class="readout-of"> of <span id="stat-tracked">0</span></span></dd></div>
@@ -1106,7 +1107,6 @@
           <a href="#hw-trace">Live trace</a>
           <a href="#hw-table">Live hash table</a>
           <a href="#hw-ahead">Looking ahead</a>
-          <a href="#hw-proof">Benchmark</a>
           <a href="#hw-more">Other hash tables</a>
           <a href="#hw-limits">Limits</a>
         </nav>
@@ -1224,12 +1224,6 @@
               <li><code>refine with SGP4</code><span>The few survivors get an exact search for the true closest point.</span></li>
             </ol>
             <p>One hour for every object takes about four seconds: roughly 40 million candidate pairs examined instead of 11 billion pair-checks. The benchmark script confirms it finds every crossing pair that brute-force sampling finds.</p>
-          </section>
-
-          <section id="hw-proof">
-            <h2>Benchmark</h2>
-            <p>Both methods are run on the same positions at growing sizes. The benchmark times each one and confirms they return exactly the same list of pairs.</p>
-            <button id="bench-open" class="btn btn-primary">Run the benchmark</button>
           </section>
 
           <section id="hw-more">
@@ -1352,32 +1346,6 @@
       </div>
     </div>
 
-    <!-- ============ Benchmark ============ -->
-    <div id="bench" class="overlay is-hidden">
-      <div class="panel bench-card">
-        <header class="panel-head">
-          <div>
-            <h2>Measure every pair vs spatial hash</h2>
-            <span class="muted small" id="bench-sub"></span>
-          </div>
-          <button class="icon-btn" id="bench-close" aria-label="Close">×</button>
-        </header>
-        <div class="bench-body">
-          <canvas id="bench-chart" width="560" height="300"></canvas>
-          <table id="bench-table">
-            <thead><tr><th>Objects</th><th>Every pair</th><th>Spatial hash</th><th>Speedup</th><th>Pairs</th><th>Identical</th></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-        <footer class="bench-foot">
-          <span class="muted small" id="bench-status"></span>
-          <div class="bench-actions">
-            <button id="bench-rerun" class="btn">Run again</button>
-            <button id="bench-export" class="btn btn-primary">Export CSV</button>
-          </div>
-        </footer>
-      </div>
-    </div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

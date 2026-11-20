@@ -1,7 +1,7 @@
 /**
  * "How it works": the walkthrough page that explains the screening and shows the hash
  * table's real numbers for the current session (the live trace is filled in by
- * ui/hashTrace.ts, the benchmark by ui/benchmarkModal.ts).
+ * ui/hashTrace.ts). The timing comparison is `npm run bench` (scripts/bench.mjs).
  */
 
 import type { ScreenStats } from '../worker/protocol.ts';
@@ -31,7 +31,7 @@ export class HowTo {
   private readonly main = $('howto-main');
   private readonly links = [...$('howto-nav').querySelectorAll<HTMLAnchorElement>('a')];
 
-  constructor(onGrid: (on: boolean) => void, onBenchmark: () => void) {
+  constructor(onGrid: (on: boolean) => void) {
     // (Opened from the home page, the monitor panel and the About sheet; there is no button of its own.)
     $('howto-close').addEventListener('click', () => this.close());
     this.overlay.addEventListener('pointerdown', (event) => {
@@ -62,7 +62,6 @@ export class HowTo {
       onGrid(grid.checked);
       if (grid.checked) this.close(); // get out of the way so the cubes can be seen
     });
-    $('bench-open').addEventListener('click', onBenchmark);
   }
 
   get isOpen(): boolean {

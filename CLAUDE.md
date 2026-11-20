@@ -171,7 +171,7 @@ src/ui/                     places (+ space.css: the moves between the tracker, 
                             placeWatch (the close-approach monitor of another world),
                             app (the App interface), featureList (every feature, drawn on the home page), objectTabs (the
                             Objects panel's three tabs), inspector (+ charts), monitor (live pairs), ahead (prediction), encounterPanel, howto
-                            (walkthrough), hashTrace, benchmarkModal, filters, search (+ searchMatch, searchIndex,
+                            (walkthrough), howSlides (the eight scenes), hashTrace, filters, search (+ searchMatch, searchIndex,
                             searchObjects, searchBrowse: see "The search field"), settings, timeControls, labels,
                             watchlist, feed (launches, trains, lowest), designer, constellations, contacts, crew,
                             gallery (the spacecraft catalogue), share (QR), tour, cinema (autopilot + recording), sheet (phone sheets), landing (welcome
@@ -240,17 +240,18 @@ it (the owner found a text-only page bland):
   The tabs advance by themselves every 5 s like a slideshow. The timer IS the thin progress
   line on the active tab (a CSS animation, `ld-tab-progress`; its `animationend` moves on), so
   pausing is one class: it runs only while the picture is on screen and the page visible,
-  pauses under the pointer, a finger or keyboard focus, leaves a screen the visitor chose
+  pauses under a finger or keyboard focus (not under the mouse: the picture fills the screen, so a resting pointer stopped it for good), leaves a screen the visitor chose
   alone for 20 s, and never runs with "reduce motion". It must not change the page's length:
   on a wide screen the figure's height is held while the phone picture shows; on a narrow one
   the slideshow passes over the phone picture (its tab still shows it).
-- **How it works:** `src/ui/hashDemo.ts`, a 2D canvas that files dots in the real
-  `SpatialHash` and draws either every pair or only the neighbours the table offers.
+- **How it works:** eight scenes (`src/ui/howSlides.ts`, see "Presentation pass"), then
+  `src/ui/hashDemo.ts`, a 2D canvas that files dots in the real `SpatialHash` and draws either
+  every pair or only the neighbours the table offers.
 - **Spacecraft plate:** `modelThumbnail()` for six kinds (`PLATE` in `landing.ts`; the owner
   asked for "a couple", not all of them), drawn in idle moments once the tracker is ready and
   the plate is near the screen. "See all models" (`#landing-models`) presses `#gallery-open`,
   the button of the catalogue of models, and is hidden while that button is not on the page.
-- **Index:** `FEATURES` (`featureList.ts`) as rows of names with one line of text each.
+- **Index:** `FEATURES` (`featureList.ts`) as six areas; the chosen one's features as cards with `HOW`.
 - **The plate never changes the page's length.** `layPlate()` makes a square and a caption
   for each kind shown at construction; the pictures only fade into place. They are drawn one at a
   time and only while the page is neither being touched nor has just scrolled (each one holds
@@ -278,7 +279,7 @@ Top bar (logo = home/reset, search, readouts, tools; picture and video sit in th
 `#capture` menu so they cannot be hit by accident) · left tool rail opening ONE panel at a
 time (`panel-objects`, `panel-layers`, `panel-conj`, `panel-settings`) · right dock holding
 `#inspector` or `#encounter` · bottom time bar (rests as a small pill, opens on hover) ·
-status line. Overlays: `#howto`, `#keys`, `#about`, `#share-dialog`, `#bench`, `#contacts`, `#gallery`.
+status line. Overlays: `#howto`, `#keys`, `#about`, `#share-dialog`, `#contacts`, `#gallery`.
 
 The Objects panel has three tabs (`src/ui/objectTabs.ts`). **Browse** is a page of controls
 (watchlist, notable objects, type / orbit filters, appearance). **Activity** and **Tools** are
@@ -294,7 +295,7 @@ of description each ("just a list, a lot of text, an AI feel"). Do not go back t
   listen for `toggle` did not change. Sections in one tab share a `name`: one open at a time.
 - A module puts a figure on its tile with `sectionNote(element, text)` (`dom.ts`): it keeps a
   `.sum-note` in the section's `<summary>`, and the tile copies whatever is there.
-- Tiles that are not sections (spacecraft catalogue, contact timeline, benchmark, walkthrough, tour)
+- Tiles that are not sections (spacecraft catalogue, contact timeline, walkthrough, tour)
   are in `SHORTCUTS` in `objectTabs.ts`; each presses a button that already exists.
 - A new feature gets a section in the right tab plus an icon in `ICONS`. Never a fourth tab.
 
@@ -744,6 +745,55 @@ it is used. So:
 - **CI**: actions at checkout@v7, setup-node@v7, configure-pages@v6, upload-pages-artifact@v5
   (it leaves out dotfiles: the site has none), deploy-pages@v5; the smoke test on pushes.
 
+## Presentation pass (Nov 2026): the home page, the overview, and the rules they brought
+
+Made for presenting the project in class, written as a product (the owner: "Apsis uses hashing
+to…", never "we learned in class"). On the branch `claude/presentation-walkthrough`.
+
+- **The launch screen comes first** on a visit to the home page (`html.intro`, set by the inline
+  script in `index.html`; `LoadingScreen.introLiftoff`; the `intro` block at the start of
+  `boot()`). The rocket climbs with the real progress; the progress is an altitude gauge beside
+  it (`.lx-gauge` in launch.css: pad to orbit, filling with `--p`, its marker carrying the
+  percentage; the plain bar is hidden). It lifts off once the globe AND the catalogue are in,
+  never before 1.6 s (an opening, not a flicker), and after at most 7 s on a slow connection,
+  when it steps aside under the page and comes back with its real progress if the visitor goes
+  in early. Measured at 20 Mbit/s: lift-off at 1.8 s, the page at 3.6 s with the globe live.
+- **How it works is eight scenes** (`ui/howSlides.ts`, `howSlides.css`) above the live demo
+  (`hashDemo.ts`, now under "Try it live"). One idea per scene; a grid plane behind them moves
+  with `--slide`; each scene's visual animates in (transform / opacity / SVG stroke only).
+  ← / → work whenever the deck is ≥ 45 % on screen and no text field has the focus; the ‹ ›
+  buttons, the progress segments, a sideways swipe; a full-screen button for presenting. Never
+  advances by itself. Scenes 4 and 6 show the REAL code: `SpatialHash.ts` and `conjunction.ts`
+  imported `?raw`, cut out by name (`EXCERPTS`; a renamed function shows "could not be found"
+  instead of stale code), real line numbers, lit lines with numbered callouts. The figures are
+  the page's live `[data-ld-count]` / `[data-ld-pairs-exact]`. Pictures: `public/slides/`
+  (`earth.webp` rendered from the tracker with the interface hidden; `approach.webp` cropped
+  from the close-approach screenshot).
+- **The guided overview** (`ui/spaceTour.ts`) replaced the Sun-to-Pluto autoplay (the play
+  button and A away from the Earth): Earth → a Cosmos 2251 fragment (selected, card open) →
+  the GEO ring → the solar system → MRO → Webb → the question the scenes answer. Captions read
+  live figures (`OverviewFacts`); → / ← move between stops, any other input stops it; the
+  interface stays on screen (the cards are the point). The Earth's autopilot is unchanged.
+  `moving()` must not count the tracker's camera while away (it is not updated there and its
+  flight never ends: the tour hung at Mars).
+- **The home page's feature list** is six areas (`FEATURES` groups) as a list, the chosen one's
+  features as cards with what each does and where to find it (`HOW` in featureList.ts, keyed by
+  name: every feature needs one). What's new is no longer on the home page (About keeps it).
+- **The spacecraft row glides** by itself while on screen (26 px/s), pausing whenever a picture
+  just ahead still has to be drawn (`plateDrawing`), and while pointed at, dragged, swiped or
+  wheeled (4 s); drag with the mouse; a slim track of its own replaces the scrollbar.
+- **Scrolling** uses CSS scroll-driven animations (`animation-timeline: view()` / `scroll()`):
+  the headline sinks back into the globe, headings rise, the screenshots tilt up, the big pieces
+  lift in. Compositor only; nothing at all where unsupported or with reduce motion.
+- **Trains** (Objects → Activity) are lit, framed whole and followed (`showTrain` in main.ts),
+  not reduced to selecting their first satellite.
+- **Growth by year** is one compact instrument (the chart is the scrubber; a hidden range input
+  keeps the keyboard), not a column of sentences.
+- **The benchmark tool is gone from the interface** (its tile, walkthrough section and overlay);
+  `npm run bench` remains the measurement.
+- **An "Esc step out" hint** sits beside the path in the top bar on a computer (`#path-esc`),
+  hidden on the whole solar system where there is nothing further out.
+
 ## Third polish pass (Nov 2026): what was added and the rules it brought
 
 - **Phones move between worlds with ONE pill** (`ui/worldStrip.ts`, `worldStrip.css`; the class is
@@ -853,8 +903,8 @@ it is used. So:
 - **Search at another world** lifts that world's moons and craft by 0.12 under a heading of
   their own ("At Mars"), and the Earth's catalogue objects score ×0.9 there. Choosing an Earth
   object while away travels back to the Earth first (`app.select`).
-- **What's new**: `WHATS_NEW` in `featureList.ts` is the visitor-facing change log (home page
-  section `#ld-new`, About). Add an entry at the top for every visible change, as well as the
+- **What's new**: `WHATS_NEW` in `featureList.ts` is the visitor-facing change log (About only:
+  the home page no longer shows it). Add an entry at the top for every visible change, as well as the
   feature's own entry in `FEATURES`.
 - **A filter is announced** (`#filter-banner`, `ui/filters.ts`): count, reasons (`FilterAbout`
   labels from `app.setFilter`, plus types / orbits / height), and "Show all", which calls each

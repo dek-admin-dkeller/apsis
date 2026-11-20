@@ -47,9 +47,8 @@ import type { Pose } from './render/space/spaceView.ts';
 import { EarthTiles } from './render/tiles.ts';
 import { TOGETHER_KM_S } from './hashing/conjunction.ts';
 import { AheadPanel } from './ui/ahead.ts';
-import { BenchmarkModal } from './ui/benchmarkModal.ts';
 import { Cinema } from './ui/cinema.ts';
-import { SpaceTour } from './ui/spaceTour.ts';
+import { SpaceTour, type OverviewFacts } from './ui/spaceTour.ts';
 import { ConstellationsPanel } from './ui/constellations.ts';
 import type { Contacts } from './ui/contacts.ts';
 import { renderCrew, renderCrewSummary } from './ui/crew.ts';
@@ -334,7 +333,6 @@ const ahead = new AheadPanel(
     openEncounter(approach.a, approach.b);
   },
 );
-const bench = new BenchmarkModal(() => sim.send({ type: 'benchmark', t: clock.time, d: screeningDistance }));
 const howto = new HowTo((on) => {
   // "Draw the cells on the globe" pressed while reading the walkthrough from the home page:
   // there is no globe to see there, so go into the tracker first.
@@ -343,7 +341,7 @@ const howto = new HowTo((on) => {
     landing.enter();
   }
   setGrid(on);
-}, () => bench.start(screeningDistance));
+});
 landing.setHost({ howItWorks: () => howto.open() });
 $('landing-open').addEventListener('click', () => {
   if (cinema.isPlaying) cinema.stop();
@@ -1204,12 +1202,44 @@ function updateDataNote(): void {
   const all = catalog;
   cloud.setOwners((index) => facts.get(all.sats[index].noradId)?.owner);
   markFresh();
-  renderFeed(catalog, facts, (sat) => select(sat), (members, lead) => {
-    cloud.setHighlight(members); // a satellite train: light up the whole batch
-    if (lead) select(lead);
-  });
+  renderFeed(catalog, facts, (sat) => select(sat), showTrain);
   $('about-data').textContent = `${fmtInt(catalog.sats.length)} objects, elements from ${clockStamp(Date.parse(catalog.fetchedAt))}`;
   showDataAge();
+}
+
+/**
+ * A satellite train (Objects → Activity → Trains): the whole batch lit up, the camera drawn
+ * back to take in all of it and following its middle as it flies. (It used to select the
+ * first object and fly in close to it, so the visitor saw one satellite, not the train.)
+ */
+function showTrain(members: number[] | null, lead: Satellite | null): void {
+  cloud.setHighlight(members);
+  if (!members || !lead || !catalog) {
+    rig.release();
+    return;
+  }
+  closeEncounter(true);
+  if (selected) select(null);
+  const p = { x: 0, y: 0, z: 0 };
+  const middle = (): THREE.Vector3 | null => {
+    let n = 0, x = 0, y = 0, z = 0;
+    for (const i of members) {
+      if (!sim.getPosition(i, p)) continue;
+      x += p.x;
+      y += p.y;
+      z += p.z;
+      n++;
+    }
+    return n > 0 ? toScene({ x: x / n, y: y / n, z: z / n }) : null;
+  };
+  const centre = middle();
+  if (!centre) return;
+  let spread = 0; // the furthest member from the middle, scene units
+  for (const i of members) if (sim.getPosition(i, p)) spread = Math.max(spread, toScene(p).distanceTo(centre));
+  rig.follow = true;
+  rig.flyToFocus(middle, THREE.MathUtils.clamp(spread * 2.6, 0.25, 9), 2);
+  const family = lead.name.replace(/[-\s]?\d+.*$/, '') || lead.name;
+  toast(`${fmtInt(members.length)} ${family} satellites from one launch, still flying in a line`);
 }
 
 /**
@@ -1274,10 +1304,6 @@ sim.onMessage = (msg) => {
     lastPairs = { a: passA, b: passB };
     monitor.setResult(msg, catalog);
     $('sb-screen').textContent = `${fmt(msg.stats.hashMs, 1)} ms`;
-  } else if (msg.type === 'benchRow') {
-    bench.addRow(msg.row, msg.index, msg.total);
-  } else if (msg.type === 'benchDone') {
-    bench.done();
   }
 };
 
@@ -1730,12 +1756,34 @@ const cinema = new Cinema({
   toast: (text) => toast(text, 4000),
 }, canvas);
 // Away from the tracker the same button (and A) plays the solar system's autoplay instead.
+// The guided overview (ui/spaceTour.ts): the play button (and A) away from the Earth.
+let overviewFacts: OverviewFacts | null = null; // worked out once per catalogue
 const spaceTour = new SpaceTour({
-  visit: (body) => places.visit(body),
+  earth: () => places.visit('earth'),
   system: () => places.visitSystem(),
-  moving: () => places.moving,
-  view: (name) => places.goView(name),
-  hideInterface: (on) => document.body.classList.toggle('ui-hidden', on),
+  moving: () => places.moving || (!places.elsewhere && rig.flying), // (the tracker's camera is not updated while away: its flight would never end)
+  earthView: (name) => {
+    if (!places.elsewhere) preset(name === 'geo' ? 3 : 1);
+  },
+  select: (noradId) => {
+    if (places.elsewhere) return;
+    const sat = noradId === null ? null : catalog?.byNorad.get(noradId) ?? null;
+    if (sat || noradId === null) select(sat);
+  },
+  craft: (id) => places.showCraftById(id),
+  facts: () => {
+    if (overviewFacts && overviewFacts.objects === (catalog?.sats.length ?? 0)) return overviewFacts;
+    const sats = catalog?.sats ?? [];
+    const cosmos = sats.filter((sat) => sat.name.startsWith('COSMOS 2251 DEB'));
+    // The fragment shown: the first of them catalogued (the same one every time).
+    const pick = cosmos.slice().sort((a, b) => a.noradId - b.noradId)[0] ?? null;
+    overviewFacts = { objects: sats.length, cosmosDebris: cosmos.length, cosmosPick: pick?.noradId ?? null, geo: sats.filter((sat) => sat.orbitClass === 'GEO').length };
+    return overviewFacts;
+  },
+  clear: () => {
+    openPanel(null);
+    setKeys(false);
+  },
   onChange: () => $('autopilot').setAttribute('aria-pressed', String(cinema.isPlaying || spaceTour.isPlaying)),
 });
 function toggleAutopilot(): void {
@@ -1824,7 +1872,6 @@ function goHome(): void {
   setAbout(false);
   shareDialog.close();
   if (howto.isOpen) howto.close();
-  if (bench.isOpen) bench.close();
   if (gallery.isOpen) gallery.close();
   sheets.reset();
   jumpToNow();
@@ -1906,8 +1953,7 @@ window.addEventListener('keydown', (event) => {
       screenDirty = true;
       break;
     case 'escape':
-      if (bench.isOpen) bench.close();
-      else if (howto.isOpen) howto.close();
+      if (howto.isOpen) howto.close();
       else if (!keysOverlay.classList.contains('is-hidden')) setKeys(false);
       else if (!aboutOverlay.classList.contains('is-hidden')) setAbout(false);
       else if (shareDialog.isOpen) shareDialog.close();
@@ -2648,11 +2694,27 @@ async function boot(): Promise<void> {
 
   const fromHomePage = landing.showing;
   let loaded = false;
+  // The launch screen opens a visit to the home page (html.intro): it lifts off once the globe
+  // and the catalogue are in (or after 7 s on a slow connection, the rest then loading behind the
+  // page), and never before 1.6 s from the start, so it reads as an opening and not a flicker.
+  let markLoaded = (): void => undefined;
+  const loadedSignal = new Promise<void>((resolve) => (markLoaded = resolve));
+  let introOn = fromHomePage && document.documentElement.classList.contains('intro');
+  const intro = introOn
+    ? (async () => {
+        await Promise.race([Promise.all([globeReady, loadedSignal]), new Promise((resolve) => setTimeout(resolve, 7000))]);
+        const left = 1600 - performance.now();
+        if (left > 0) await new Promise((resolve) => setTimeout(resolve, left));
+        await loading.introLiftoff(loaded);
+        introOn = false;
+      })()
+    : Promise.resolve();
+  if (!fromHomePage) document.documentElement.classList.remove('intro');
   if (fromHomePage) {
     void globeReady.then(() => {
       performance.mark('apsis:globe');
       if (loaded || !landing.showing) return; // everything beat the globe, or the visitor has already gone in
-      loading.setAside(true);
+      if (!introOn) loading.setAside(true); // (during the opening launch the screen is the picture; it steps aside itself)
       kit.camera.position.copy(homeView()).setLength(heroDistance());
       landing.goLive();
     });
@@ -2675,6 +2737,7 @@ async function boot(): Promise<void> {
     applyCatalog(first);
     await Promise.all([fromHomePage ? globeReady : texturesReady, positionsReady]);
     loaded = true;
+    markLoaded();
     performance.mark('apsis:loaded');
     landing.ready(first.sats.length);
     warmLater();
@@ -2683,6 +2746,7 @@ async function boot(): Promise<void> {
     // closer than the normal whole-Earth view, until the visitor comes in.
     const waited = landing.showing;
     if (waited) {
+      await intro; // the opening launch lifts off first, if it is still up
       loading.skip();
       if (!landing.isLive) kit.camera.position.copy(home).setLength(heroDistance());
       landing.goLive();

@@ -18,7 +18,7 @@
  *   - a module that wants a figure on its tile keeps a `.sum-note` in its section's <summary>
  *     (dom.ts: sectionNote), and the tile copies it.
  * Some tiles are not sections at all but shortcuts to things that open elsewhere (the contact
- * timeline, the benchmark, the walkthrough): they press the button that already exists.
+ * timeline, the walkthrough): they press the button that already exists.
  */
 
 import { $ } from './dom.ts';
@@ -41,7 +41,6 @@ const ICONS: Record<string, string> = {
   growth: '<path d="M3 16.5h14M5.5 16.5v-3M9 16.5v-6M12.5 16.5V8M16 16.5V4.5"/>',
   designer: '<path d="M12.8 3.8l3.4 3.4-9 9-4 .6.6-4zM11 5.6l3.4 3.4"/>',
   contacts: '<rect x="3" y="4.4" width="7" height="2.6" rx="1"/><rect x="8" y="8.7" width="9" height="2.6" rx="1"/><rect x="5" y="13" width="6" height="2.6" rx="1"/>',
-  benchmark: '<circle cx="10" cy="11.2" r="6"/><path d="M10 11.2V7.6M8 2.8h4M10 2.8v2.4"/>',
   howto: '<rect x="3" y="3" width="14" height="14" rx="1.5"/><path d="M3 10h14M10 3v14"/><circle cx="6.5" cy="6.5" r="0.9"/><circle cx="13.6" cy="13.3" r="0.9"/>',
   tour: '<circle cx="10" cy="10" r="7"/><path d="M12.8 7.2l-1.6 4-4 1.6 1.6-4z"/>',
   spacecraft: '<g transform="rotate(-32 10 10)"><rect x="7.6" y="7.4" width="4.8" height="5.2" rx="0.9"/><rect x="1.6" y="8.1" width="4.2" height="3.8" rx="0.5"/><rect x="14.2" y="8.1" width="4.2" height="3.8" rx="0.5"/><path d="M5.8 10h1.8M12.4 10h1.8M10 7.4V5.6M8.2 4.6a1.8 1.8 0 0 0 3.6 0"/></g>',
@@ -51,7 +50,6 @@ const ICONS: Record<string, string> = {
 const SHORTCUTS: { tab: ObjectTab; icon: string; label: string; hint: string; press: string }[] = [
   { tab: 'tools', icon: 'spacecraft', label: 'Spacecraft', hint: 'Every 3D model, to turn and look at', press: '#gallery-open' },
   { tab: 'tools', icon: 'contacts', label: 'Contact timeline', hint: 'When your ground stations can see your starred objects', press: '#contacts-open' },
-  { tab: 'tools', icon: 'benchmark', label: 'Benchmark', hint: 'Time the hash grid against checking every pair', press: '#bench-open' },
   { tab: 'tools', icon: 'howto', label: 'How it works', hint: 'The walkthrough of the hashing', press: '#conj-how' },
   { tab: 'tools', icon: 'tour', label: 'Take the tour', hint: 'A short guided look around', press: '#tour-start' },
 ];

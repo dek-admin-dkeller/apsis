@@ -1754,3 +1754,10 @@ body.browsing .filter-banner { display: none; } /* the bar says what is shown */
   body.browsing .world-pill { display: none !important; }
 }
 @media (prefers-reduced-motion: reduce) { .browse { animation: none; } }
+
+/* The opening launch (html.intro, ui/intro.ts): the loading screen above the home page. */
+html.intro #loading { z-index: 260; }
+html.intro #landing .ld-top { visibility: hidden; } /* the bar would show through the fade */
+#loading.is-leaving { opacity: 0; pointer-events: none; }
+/* The progress is the gauge beside the rocket (launch.css): the plain bar is not needed. */
+.loading-bar { display: none; }

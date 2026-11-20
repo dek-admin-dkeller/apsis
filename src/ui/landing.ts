@@ -31,7 +31,8 @@ import { KIND_LABEL, type ModelKind } from '../data/describe.ts';
 import { kindGroups } from '../data/spacecraft.ts';
 import { modelThumbnail } from '../render/satModels.ts';
 import { $, fmtInt } from './dom.ts';
-import { FEATURES, SHOTS, WHATS_NEW, type Shot } from './featureList.ts';
+import { FEATURES, HOW, SHOTS, WHATS_NEW, type Shot } from './featureList.ts';
+import { HowSlides } from './howSlides.ts';
 import { HashDemo } from './hashDemo.ts';
 
 export interface LandingHost {
@@ -71,8 +72,8 @@ export class Landing {
 
     this.drawShowcase();
     this.drawIndex();
-    this.drawUpdates();
     this.slots = this.layPlate();
+    new HowSlides($('ld-slides'));
     this.demo = new HashDemo($<HTMLCanvasElement>('ld-demo-canvas'), {
       objects: $('ld-demo-n'), checks: $('ld-demo-checks'), pairs: $('ld-demo-pairs'), mode: $('ld-demo-mode'),
     });
@@ -121,8 +122,9 @@ export class Landing {
    * The timer is the progress line itself: a CSS animation on the active tab (landing.css,
    * `ld-tab-progress`), and its `animationend` is what moves on. So the line and the change
    * cannot drift apart, and pausing is one class. It runs only while the picture is on screen
-   * and the page is visible; it pauses under the pointer, under a finger and while a tab has
-   * the keyboard focus; a screen the visitor chose themselves is left alone for a good while;
+   * and the page is visible; it pauses under a finger and while a tab has the keyboard focus,
+   * but NOT under the mouse pointer (the picture fills the screen, so a resting pointer is
+   * nearly always over it and the slideshow would never run: the owner's catch); a screen the visitor chose themselves is left alone for a good while;
    * and with "reduce motion" set it never runs at all.
    *
    * It never changes the page's length (see also the plate below). On a wide screen the tall
@@ -138,7 +140,7 @@ export class Landing {
     const narrow = () => window.innerWidth <= 860; // where landing.css stacks the phone picture over its words
     let current = 0;
     let shown = false; // the first picture has been fetched
-    let onScreen = false, pointed = false, focused = false, touched = false;
+    let onScreen = false, focused = false, touched = false;
     let heldUntil = 0; // performance.now() until which the slideshow leaves the visitor's own choice alone
     let request = 0;
 
@@ -187,7 +189,7 @@ export class Landing {
       const now = performance.now();
       const running = shown && !still.matches && now >= heldUntil;
       tabs.classList.toggle('is-auto', running);
-      tabs.classList.toggle('is-paused', running && !(this.visible && onScreen && !document.hidden && !pointed && !focused && !touched));
+      tabs.classList.toggle('is-paused', running && !(this.visible && onScreen && !document.hidden && !focused && !touched));
     };
     this.syncSlides = sync;
     const hold = (ms: number) => {
@@ -228,15 +230,6 @@ export class Landing {
       if (event.animationName === 'ld-tab-progress') show(following());
     });
     for (const part of [tabs, screen]) {
-      part.addEventListener('pointerenter', (event) => {
-        if (event.pointerType !== 'mouse') return;
-        pointed = true;
-        sync();
-      });
-      part.addEventListener('pointerleave', () => {
-        pointed = false;
-        sync();
-      });
       part.addEventListener('touchstart', () => {
         touched = true;
         sync();
@@ -297,9 +290,89 @@ export class Landing {
     };
     plate.addEventListener('scroll', () => {
       ends();
-      this.plateMoved = performance.now();
+      bar();
+      if (!this.gliding) this.plateMoved = performance.now(); // the row's own glide is not the visitor moving it
     }, { passive: true });
     requestAnimationFrame(ends);
+
+    // A slim track of the site's own instead of the browser's scrollbar (its thumb can be dragged).
+    const track = document.createElement('div');
+    track.className = 'ld-plate-bar';
+    const thumb = document.createElement('i');
+    track.append(thumb);
+    plate.after(track);
+    const bar = () => {
+      const share = plate.clientWidth / Math.max(1, plate.scrollWidth);
+      thumb.style.width = `${Math.max(6, share * 100)}%`;
+      thumb.style.transform = `translateX(${(plate.scrollLeft / Math.max(1, plate.scrollWidth - plate.clientWidth)) * (1 / share - 1) * 100}%)`;
+    };
+    requestAnimationFrame(bar);
+    new ResizeObserver(bar).observe(plate);
+    thumb.addEventListener('pointerdown', (event) => {
+      const x0 = event.clientX, left0 = plate.scrollLeft;
+      thumb.setPointerCapture(event.pointerId);
+      const move = (e: PointerEvent) => (plate.scrollLeft = left0 + ((e.clientX - x0) / track.clientWidth) * plate.scrollWidth);
+      thumb.addEventListener('pointermove', move);
+      thumb.addEventListener('pointerup', () => thumb.removeEventListener('pointermove', move), { once: true });
+      this.plateHeld = performance.now();
+    });
+
+    // Drag the row with the mouse (a finger already can); a drag is not a click on a model.
+    let drag: { x: number; left: number; moved: boolean } | null = null;
+    plate.addEventListener('pointerdown', (event) => {
+      if (event.pointerType !== 'mouse' || event.button !== 0) return;
+      drag = { x: event.clientX, left: plate.scrollLeft, moved: false };
+      plate.classList.add('is-dragging');
+    });
+    window.addEventListener('pointermove', (event) => {
+      if (!drag) return;
+      const dx = event.clientX - drag.x;
+      if (Math.abs(dx) > 4) drag.moved = true;
+      plate.scrollLeft = drag.left - dx;
+      this.plateHeld = performance.now();
+    });
+    window.addEventListener('pointerup', () => {
+      if (!drag) return;
+      if (drag.moved) plate.addEventListener('click', (event) => event.stopPropagation(), { capture: true, once: true });
+      drag = null;
+      plate.classList.remove('is-dragging');
+    });
+
+    // The glide: slowly along by itself while the row is on screen and nobody is using it.
+    const wrap = plate.parentElement!;
+    let pointing = false, seen = false;
+    wrap.addEventListener('pointerenter', (event) => (pointing = event.pointerType === 'mouse'));
+    wrap.addEventListener('pointerleave', () => (pointing = false));
+    plate.addEventListener('touchstart', () => (this.plateHeld = performance.now()), { passive: true });
+    plate.addEventListener('wheel', () => (this.plateHeld = performance.now()), { passive: true });
+    new IntersectionObserver((entries) => (seen = entries.some((entry) => entry.isIntersecting)), { root: this.scroller, threshold: 0.3 }).observe(plate);
+    const still = matchMedia('(prefers-reduced-motion: reduce)');
+    let last = 0, at = 0, restUntil = 0;
+    const glide = (now: number) => {
+      const dt = last ? Math.min(0.1, (now - last) / 1000) : 0;
+      last = now;
+      const free = this.loaded && seen && !pointing && !drag && !still.matches && !document.hidden && this.visible && now - this.plateHeld > 4000 && now > restUntil && !this.plateDrawing();
+      if (free) {
+        if (Math.abs(at - plate.scrollLeft) > 2) at = plate.scrollLeft; // the visitor moved it meanwhile: carry on from there
+        at += 26 * dt; // pixels a second: slow enough to read the names
+        const end = plate.scrollWidth - plate.clientWidth;
+        if (at >= end) {
+          restUntil = now + 2500; // a pause at the end, then back to the start
+          setTimeout(() => {
+            this.gliding = true;
+            plate.scrollTo({ left: 0, behavior: 'smooth' });
+            setTimeout(() => (this.gliding = false), 1200);
+            at = 0;
+          }, 2400);
+        } else {
+          this.gliding = true;
+          plate.scrollLeft = at;
+          this.gliding = false;
+        }
+      }
+      requestAnimationFrame(glide);
+    };
+    requestAnimationFrame(glide);
     // "See all models" presses the button that opens the catalogue of models. That catalogue is
     // another module's; if its button is not on the page there is nothing to open, and no button here.
     $('landing-models').addEventListener('click', () => document.getElementById('gallery-open')?.click());
@@ -312,7 +385,14 @@ export class Landing {
     $('landing-models').hidden = !document.getElementById('gallery-open');
   }
 
-  private plateMoved = 0; // when the row was last scrolled sideways
+  private plateMoved = 0; // when the row was last scrolled sideways (by the visitor)
+  private plateHeld = 0; // when the visitor last dragged, swiped or wheeled the row: the glide waits a while
+  private gliding = false; // the row is being moved by its own glide (not counted as the visitor's)
+  private platePending: Map<ModelKind, HTMLImageElement> | null = null;
+  /** A picture just ahead in the row still has to be drawn: the glide waits for it (drawing holds the main thread). */
+  private plateDrawing(): boolean {
+    return !!this.platePending && [...this.nearView].some((kind) => this.platePending!.has(kind));
+  }
   private readonly nearView = new Set<ModelKind>(); // squares in or near the row's visible part
 
   /**
@@ -327,6 +407,7 @@ export class Landing {
     this.plateDrawn = true;
     const plate = $('ld-plate');
     const pending = new Map(this.slots);
+    this.platePending = pending;
     const watcher = new IntersectionObserver((entries) => {
       for (const entry of entries) {
         const kind = (entry.target as HTMLElement).dataset.kind as ModelKind;
@@ -356,59 +437,62 @@ export class Landing {
   // ---- what's new: the change log, newest first ----------------------------------------------
 
   /** The three newest updates as rows (date and title, then their points); the rest are in About. */
-  private drawUpdates(): void {
-    $('ld-updates').replaceChildren(...updateRows(WHATS_NEW.slice(0, 3), 'ld'));
-  }
-
   /** Open the page at its list of every feature (About's link). */
   openAtFeatures(): void {
     this.open();
     requestAnimationFrame(() => document.getElementById('ld-all')?.scrollIntoView({ block: 'start' }));
   }
 
-  // ---- everything it does: a compact index ---------------------------------------------------
+  // ---- everything you can do: six areas, one at a time --------------------------------------------
 
   /**
-   * Each group is a row: its name, the names of its features, and one line of text that
-   * shows whichever feature is being pointed at (or the group's own summary). The whole list
-   * stays on the page without becoming a wall of paragraphs.
+   * The areas (FEATURES' groups) as a list to choose from; the chosen one's features as cards,
+   * each with what it does and, in small type, where to find it (HOW). One area at a time keeps
+   * sixty-odd features from becoming a wall of text (the owner found the earlier lists
+   * "overwhelming" and "AI"); the cards come in with a short stagger when an area is chosen.
    */
   private drawIndex(): void {
-    const list = $('ld-feature-list');
-    for (const group of FEATURES) {
-      const row = document.createElement('div');
-      row.className = 'ld-row';
-      const title = Object.assign(document.createElement('h3'), { textContent: group.title });
-      const names = document.createElement('div');
-      names.className = 'ld-names';
-      const line = Object.assign(document.createElement('p'), { className: 'ld-line', textContent: group.summary });
-      let pinned: HTMLElement | null = null; // a tapped name keeps its text until another is tapped
-      for (const feature of group.items) {
-        const name = document.createElement('button');
-        name.textContent = feature.name;
-        if (feature.fresh) name.append(Object.assign(document.createElement('span'), { className: 'ld-fresh', textContent: 'new' }));
-        const point = () => {
-          line.textContent = feature.text;
-          for (const other of names.children) other.classList.toggle('is-on', other === name);
-        };
-        name.addEventListener('pointerenter', point);
-        name.addEventListener('focus', point);
-        name.addEventListener('click', () => {
-          pinned = name;
-          point();
-        });
-        names.append(name);
-      }
-      names.addEventListener('pointerleave', () => {
-        if (pinned) return pinned.dispatchEvent(new Event('focus'));
-        line.textContent = group.summary;
-        for (const other of names.children) other.classList.remove('is-on');
+    const root = $('ld-feature-list');
+    const tabs = document.createElement('div');
+    tabs.className = 'ld-ex-tabs';
+    tabs.setAttribute('role', 'tablist');
+    tabs.setAttribute('aria-label', 'Areas');
+    const panel = document.createElement('div');
+    panel.className = 'ld-ex-panel';
+    panel.setAttribute('role', 'tabpanel');
+    const buttons: HTMLButtonElement[] = [];
+    const show = (index: number) => {
+      const group = FEATURES[index];
+      buttons.forEach((button, i) => {
+        button.classList.toggle('is-on', i === index);
+        button.setAttribute('aria-selected', String(i === index));
       });
-      const body = document.createElement('div');
-      body.append(names, line);
-      row.append(title, body);
-      list.append(row);
-    }
+      const summary = Object.assign(document.createElement('p'), { className: 'ld-ex-sum', textContent: group.summary });
+      const grid = document.createElement('div');
+      grid.className = 'ld-ex-grid';
+      group.items.forEach((feature, i) => {
+        const card = document.createElement('article');
+        card.className = 'ld-ex-card';
+        card.style.setProperty('--i', String(Math.min(i, 12)));
+        card.append(Object.assign(document.createElement('h3'), { textContent: feature.name }), Object.assign(document.createElement('p'), { textContent: feature.text }));
+        const how = HOW[feature.name];
+        if (how) card.append(Object.assign(document.createElement('span'), { className: 'ld-ex-how', textContent: how }));
+        grid.append(card);
+      });
+      panel.replaceChildren(summary, grid);
+    };
+    FEATURES.forEach((group, i) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.setAttribute('role', 'tab');
+      button.className = 'ld-ex-tab';
+      button.append(Object.assign(document.createElement('span'), { textContent: group.title }), Object.assign(document.createElement('small'), { textContent: String(group.items.length) }));
+      button.addEventListener('click', () => show(i));
+      tabs.append(button);
+      buttons.push(button);
+    });
+    root.replaceChildren(tabs, panel);
+    show(0);
   }
 
   // ---- showing, hiding, and what the tracker tells the page ------------------------------------

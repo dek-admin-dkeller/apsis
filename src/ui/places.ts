@@ -628,6 +628,8 @@ export class Places {
     } else if (next) {
       segments.push({ text: next.name, state: 'is-next', run: () => this.open({ kind: 'body', body: next }) });
     }
+    // The Esc hint beside the path: nothing further out than the whole solar system.
+    document.getElementById('path-esc')?.classList.toggle('is-hidden', onMap && !next && !this.map.focus);
     this.pathEl.replaceChildren();
     segments.forEach((segment, i) => {
       if (i > 0) this.pathEl.append(el('span', 'path-sep', '/'));
@@ -922,6 +924,12 @@ export class Places {
   }
 
   /** Go and look at the craft a Deep Space Network dish calls `code` ('JNO', 'JWST'). False if no craft has it. */
+  showCraftById(id: string): boolean {
+    const craft = this.crafts.find((candidate) => candidate.id === id);
+    if (craft) this.showCraft(craft);
+    return craft !== undefined;
+  }
+
   showByDsn(code: string): boolean {
     const craft = this.crafts.find((candidate) => candidate.dsn.some((own) => own.toUpperCase() === code.toUpperCase()));
     if (craft) this.showCraft(craft);

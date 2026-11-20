@@ -1,40 +1,46 @@
-/* "Growth by year" — a section of the Objects panel (features/growth.ts). */
+/* "Growth by year" — a section of the Objects panel (features/growth.ts): one compact instrument. */
 
-.growth { display: grid; gap: 0; min-width: 0; }
+.growth { display: grid; gap: 10px; min-width: 0; padding-top: 4px; }
 
-/* the year, large, with the number of objects on show beside it */
-.growth-readout { display: flex; align-items: flex-end; gap: 12px; margin-top: 10px; }
-.growth-year { flex: none; font: 600 34px/1 var(--font-display); letter-spacing: -0.02em; color: var(--text); font-variant-numeric: tabular-nums; transition: color var(--fast); }
-.growth-count { min-width: 0; padding-bottom: 2px; font-size: 11.5px; line-height: 1.35; color: var(--muted); }
-.growth-count b { font: 600 13px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text); }
-/* amber is the app's colour for "switched on": a year is in force and things are hidden */
+/* the year, large, with play beside it and the count on the right */
+.growth-top { display: flex; align-items: center; gap: 12px; }
+.growth-play {
+  flex: none; position: relative; width: 38px; height: 38px; border: 1px solid var(--line-strong); border-radius: 50%;
+  background: rgba(255, 255, 255, 0.04); color: var(--text); cursor: pointer;
+  transition: background var(--fast), border-color var(--fast), color var(--fast);
+}
+.growth-play:hover { background: rgba(255, 255, 255, 0.09); }
+/* a triangle; two bars while playing */
+.growth-play::before { content: ''; position: absolute; left: 14px; top: 11px; border-style: solid; border-width: 8px 0 8px 12px; border-color: transparent transparent transparent currentColor; }
+.growth-play[aria-pressed='true'] { border-color: var(--amber); color: var(--amber); background: rgba(255, 180, 84, 0.1); }
+.growth-play[aria-pressed='true']::before { left: 13px; top: 12px; width: 4px; height: 13px; border: 0; border-left: 4px solid currentColor; border-right: 4px solid currentColor; box-sizing: content-box; width: 3px; }
+.growth-year { flex: 1; min-width: 0; font: 600 32px/1 var(--font-display); letter-spacing: -0.025em; color: var(--text); font-variant-numeric: tabular-nums; }
+.growth-count { flex: none; font: 12px var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.growth-count b { font-weight: 600; color: var(--text); }
 .growth.is-active .growth-year, .growth.is-active .growth-count b { color: var(--amber); }
 
-.growth-chart { margin-top: 10px; border: 1px solid var(--line); border-radius: var(--radius-s); background: var(--inset); }
-.growth-chart canvas { display: block; width: 100%; height: 104px; cursor: ew-resize; touch-action: pan-y; /* a sideways drag picks a year, an up-down one still scrolls the panel */ }
+/* the chart is the scrubber: no separate slider (the range input under it is for the keyboard) */
+.growth-chart { position: relative; border-radius: 10px; background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0)); }
+.growth-chart canvas { display: block; width: 100%; height: 112px; cursor: ew-resize; touch-action: pan-y; /* a sideways drag picks a year, an up-down one still scrolls the panel */ }
+.growth-slider { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); border: 0; }
+.growth-chart:has(.growth-slider:focus-visible) { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
-.growth-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; font-size: 11px; color: var(--muted); }
-.growth-legend span { display: inline-flex; align-items: center; gap: 5px; }
-.growth-legend i { width: 8px; height: 8px; border-radius: 2px; background: currentColor; }
+/* what is on the globe, by kind (or, pointing at a bar, what dates from that year) */
+.growth-kinds { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11.5px; color: var(--muted); }
+.growth-kinds span { display: inline-flex; align-items: center; gap: 6px; }
+.growth-kinds i { width: 7px; height: 7px; border-radius: 50%; }
+.growth-kinds b { font: 600 12px var(--font-mono); color: var(--text); font-variant-numeric: tabular-nums; }
+.growth.is-pointing .growth-kinds b { color: var(--cyan); }
 
-.growth-slider { margin-top: 8px; }
-/* two lines always, so the buttons below do not jump while Play changes the sentence's length */
-.growth .growth-detail { margin-top: 4px; min-height: 2.9em; font-variant-numeric: tabular-nums; }
-
-.growth-actions { display: flex; gap: 6px; margin-top: 10px; }
-.growth-actions .btn { flex: 1; min-width: 0; }
-.growth-play[aria-pressed='true'] { background: rgba(255, 180, 84, 0.15); border-color: var(--amber); color: var(--amber); }
-.growth.is-active .growth-all { border-color: var(--amber); color: var(--amber); }
-.growth.is-active .growth-all:hover { background: rgba(255, 180, 84, 0.15); }
-
-.growth .growth-state { margin-top: 10px; padding: 7px 9px; border-left: 2px solid var(--amber); border-radius: 0 var(--radius-s) var(--radius-s) 0; background: rgba(255, 180, 84, 0.08); color: var(--text); }
-.growth .growth-honest { margin-top: 10px; }
+.growth-foot { display: flex; align-items: center; gap: 10px; min-height: 26px; }
+.growth-all { flex: none; padding: 4px 10px; border: 1px solid rgba(255, 180, 84, 0.55); border-radius: 999px; background: rgba(255, 180, 84, 0.1); color: var(--amber); font: 600 11.5px var(--font-ui); white-space: pre; cursor: pointer; }
+.growth-all:hover { background: rgba(255, 180, 84, 0.2); }
+.growth-honest { margin: 0; min-width: 0; font-size: 11px; line-height: 1.4; color: var(--muted); opacity: 0.85; }
 
 /* the section's heading says so when a year is in force, so a folded section cannot hide it */
 .growth-badge { color: var(--amber); }
 .sec.growth-on > summary { color: var(--text); }
 
-/* touch: a taller chart to aim at */
 @media (pointer: coarse) {
-  .growth-chart canvas { height: 120px; }
+  .growth-chart canvas { height: 128px; }
 }

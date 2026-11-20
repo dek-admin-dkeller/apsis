@@ -324,8 +324,16 @@ body.home-open :is(#hud, #tooltip, #reticle, #range-tag) { opacity: 0 !important
 /* ---- the plate of spacecraft: laid out like a page from a field guide ---- */
 .ld-plate-wrap { position: relative; margin-top: clamp(26px, 5vh, 52px); }
 /* One row of every model, scrolled sideways; a fixed height, so the page never changes length. */
-.ld-plate { display: flex; gap: clamp(12px, 2vw, 26px); overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-width: thin; padding-bottom: 10px; }
-.ld-plate figure { flex: 0 0 clamp(120px, 14vw, 180px); scroll-snap-align: start; }
+.ld-plate { display: flex; gap: clamp(12px, 2vw, 26px); overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; padding-bottom: 6px; cursor: grab; }
+.ld-plate::-webkit-scrollbar { display: none; }
+.ld-plate.is-dragging { cursor: grabbing; user-select: none; }
+.ld-plate.is-dragging img { pointer-events: none; }
+.ld-plate figure { flex: 0 0 clamp(120px, 14vw, 180px); }
+/* The row's own track (ui/landing.ts): a hairline with a thumb that can be dragged. */
+.ld-plate-bar { position: relative; height: 14px; margin-top: 8px; cursor: pointer; }
+.ld-plate-bar::before { content: ''; position: absolute; left: 0; right: 0; top: 6px; height: 2px; border-radius: 2px; background: var(--ld-faint); }
+.ld-plate-bar i { position: absolute; left: 0; top: 4px; height: 6px; border-radius: 6px; background: rgba(232, 241, 251, 0.45); cursor: grab; transition: background 160ms ease; }
+.ld-plate-bar i:hover, .ld-plate-bar i:active { background: var(--ld-accent); }
 .ld-plate-arrow { position: absolute; top: 34%; z-index: 1; width: 36px; height: 36px; border: 1px solid var(--ld-line); border-radius: 50%; background: rgba(6, 9, 16, 0.85); color: var(--ld-ink); font: 22px/1 var(--font-ui); cursor: pointer; transition: opacity 160ms ease; }
 .ld-plate-arrow:disabled { opacity: 0; pointer-events: none; }
 #ld-plate-back { left: -14px; }
@@ -406,3 +414,68 @@ body.home-open :is(#hud, #tooltip, #reticle, #range-tag) { opacity: 0 !important
 .ld-update ul { margin: 8px 0 0; padding-left: 18px; max-width: 80ch; font-size: 14.5px; line-height: 1.55; color: var(--ld-soft); }
 .ld-update li + li { margin-top: 4px; }
 @media (max-width: 760px) { .ld-update { grid-template-columns: 1fr; } .ld-update time { grid-row: auto; } }
+
+/* "Try it live": the demo under the eight scenes (ui/howSlides.ts). */
+.ld-head-demo { margin-top: 8px; }
+.ld-section .ld-head-demo h3 { margin: 0; font: 600 clamp(22px, 2.2vw, 32px) / 1.1 var(--font-display); letter-spacing: -0.02em; }
+
+/* ---- Everything you can do: the areas on the left, the chosen one's features as cards ---- */
+.ld-ex { display: grid; grid-template-columns: minmax(220px, 280px) minmax(0, 1fr); gap: clamp(20px, 3vw, 48px); margin: 28px 0 36px; align-items: start; }
+.ld-ex-tabs { position: sticky; top: calc(var(--ld-bar) + 20px); display: grid; gap: 2px; }
+.ld-ex-tab {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px; width: 100%;
+  padding: 13px 16px; border: 0; border-left: 2px solid var(--ld-faint); background: none;
+  color: var(--ld-soft); font: 500 16px var(--font-ui); text-align: left; cursor: pointer;
+  transition: color 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+.ld-ex-tab small { font: 500 12px var(--font-mono); color: var(--ld-soft); opacity: 0.7; }
+.ld-ex-tab:hover { color: var(--ld-ink); background: rgba(232, 241, 251, 0.03); }
+.ld-ex-tab.is-on { color: var(--ld-ink); border-left-color: var(--ld-accent); background: linear-gradient(90deg, rgba(127, 227, 255, 0.08), transparent); }
+.ld-ex-tab.is-on small { color: var(--ld-accent); opacity: 1; }
+.ld-ex-sum { margin: 0 0 18px; font-size: clamp(17px, 1.4vw, 20px); color: var(--ld-ink); max-width: 52ch; }
+.ld-ex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.ld-ex-card {
+  display: grid; align-content: start; gap: 8px; padding: 18px 18px 16px;
+  border: 1px solid rgba(232, 241, 251, 0.08); border-radius: 16px; background: rgba(232, 241, 251, 0.025);
+  animation: ld-card-in 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both; animation-delay: calc(var(--i, 0) * 35ms);
+  transition: border-color 180ms ease, background 180ms ease, transform 180ms ease;
+}
+.ld-ex-card:hover { border-color: rgba(127, 227, 255, 0.28); background: rgba(127, 227, 255, 0.04); transform: translateY(-2px); }
+.ld-ex-card h3 { margin: 0; font: 600 15.5px var(--font-ui); color: var(--ld-ink); letter-spacing: -0.005em; }
+.ld-ex-card p { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--ld-soft); }
+.ld-ex-how { justify-self: start; margin-top: 4px; padding: 3px 9px; border-radius: 999px; background: rgba(127, 227, 255, 0.07); color: var(--ld-accent); font: 500 11.5px var(--font-mono); letter-spacing: 0.01em; }
+@keyframes ld-card-in { from { opacity: 0; transform: translateY(12px); } }
+@media (max-width: 860px) {
+  .ld-ex { grid-template-columns: 1fr; }
+  .ld-ex-tabs { position: static; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 calc(-1 * var(--ld-pad)); padding: 0 var(--ld-pad) 4px; }
+  .ld-ex-tabs::-webkit-scrollbar { display: none; }
+  .ld-ex-tab { flex: none; width: auto; padding: 9px 14px; border: 1px solid var(--ld-faint); border-radius: 999px; font-size: 14px; }
+  .ld-ex-tab.is-on { border-color: rgba(127, 227, 255, 0.5); background: rgba(127, 227, 255, 0.1); }
+  .ld-ex-grid { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { .ld-ex-card { animation: none; } }
+
+/* ---- Scrolling: layered, and done by the browser ----
+   Scroll-driven animations (animation-timeline) run on the compositor: no script per frame and
+   no layout, so they cost nothing on a slow machine. Where a browser has no support (or the
+   visitor prefers less motion) the page is simply the page, with everything in place. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    /* The headline lags behind the scroll and fades: it sinks back into the live globe. */
+    .ld-copy { animation: ld-hero-out linear both; animation-timeline: scroll(nearest block); animation-range: 0 75vh; }
+    @keyframes ld-hero-out { to { transform: translateY(16vh); opacity: 0; } }
+    /* Section headings rise into place, the title a beat before its line of text. */
+    .ld-section .ld-head > * { animation: ld-rise linear both; animation-timeline: view(); animation-range: entry 0% entry 75%; }
+    .ld-section .ld-head > :nth-child(2) { animation-range: entry 15% entry 100%; }
+    @keyframes ld-rise { from { opacity: 0; transform: translateY(44px); } }
+    /* The real screens tilt up flat as they arrive, like a display being raised. */
+    .ld-screen img { animation: ld-tilt linear both; animation-timeline: view(); animation-range: entry 0% cover 38%; transform-origin: 50% 100%; }
+    @keyframes ld-tilt { from { transform: perspective(1400px) rotateX(16deg) scale(0.9); opacity: 0.25; } }
+    /* The big pieces lift in: the scenes, the live demo, the areas, the row of models. */
+    :is(.hs, .ld-demo, .ld-ex, .ld-plate-wrap, .ld-scale) { animation: ld-lift linear both; animation-timeline: view(); animation-range: entry 0% entry 65%; }
+    @keyframes ld-lift { from { opacity: 0; transform: translateY(64px) scale(0.97); } }
+    /* The scenes' grid plane drifts as the deck passes through the screen: depth without a frame of script. */
+    .hs-backdrop { animation: ld-plane linear both; animation-timeline: view(); animation-range: cover 0% cover 100%; }
+    @keyframes ld-plane { from { transform: translateY(-4%); } to { transform: translateY(4%); } }
+  }
+}

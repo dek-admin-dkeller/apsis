@@ -275,3 +275,25 @@ html #loading { transition: opacity 1s ease, --p 1.2s cubic-bezier(0.33, 0.1, 0.
   #loading.is-liftoff .lx-plume-wrap { transform: translate(-50%, 0); transition: none; }
   #loading.is-liftoff .lx-boost { opacity: 0; }
 }
+
+/* ---------- the progress gauge: pad to orbit, beside the vehicle, filling with --p ---------- */
+.lx-gauge {
+  --gauge-h: 46vh;
+  left: calc(var(--x) - var(--w) * 0.5 - 64px);
+  bottom: calc(var(--base) + 2vh);
+  z-index: 6;
+  width: 2px;
+  height: var(--gauge-h);
+  border-radius: 2px;
+  background: rgba(150, 185, 230, 0.18);
+}
+.lx-gauge-fill { position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--p) * 100%); border-radius: 2px; background: linear-gradient(to top, rgba(127, 227, 255, 0.25), #7fe3ff); box-shadow: 0 0 10px rgba(127, 227, 255, 0.45); }
+.lx-gauge-mark { position: absolute; left: 50%; bottom: calc(var(--p) * 100%); width: 9px; height: 9px; margin: 0 0 -4.5px -4.5px; border-radius: 50%; background: #e8f9ff; box-shadow: 0 0 0 3px rgba(127, 227, 255, 0.25), 0 0 12px #7fe3ff; }
+.lx-gauge-mark span { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); font: 600 13px/1 var(--font-mono, ui-monospace, monospace); color: #e8f9ff; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.lx-gauge em, .lx-gauge small { position: absolute; right: 12px; font: 500 10px/1 var(--font-ui, system-ui, sans-serif); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted, #8296ae); font-style: normal; white-space: nowrap; }
+.lx-gauge em { top: -4px; }
+.lx-gauge small { bottom: -4px; }
+#loading.is-liftoff .lx-gauge { opacity: 0; transition: opacity 0.4s ease; }
+@media (max-width: 760px) {
+  .lx-gauge { --gauge-h: 34vh; left: calc(var(--x) - var(--w) * 0.5 - 44px); }
+}

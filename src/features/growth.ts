@@ -2,7 +2,14 @@
  * Growth by year: wind today's catalogue back to any year since Sputnik (reserved element:
  * #growth-body in the Objects panel).
  *
- * A slider, a play button and a small chart choose a year; the globe then shows only the
+ * One compact instrument (redesigned at the owner's request: the first version was a column of
+ * sentences, a legend, a slider, two buttons and two notes, and "felt like AI"): the year,
+ * large, with a round play button; the chart of launch years, which IS the scrubber (click or
+ * drag on it; a visually hidden range input under it keeps the keyboard and screen readers);
+ * the chosen year's objects as three coloured figures; a reset chip only while a year is in
+ * force; and one short line of caveat.
+ *
+ * The chart chooses a year; the globe then shows only the
  * objects launched in or before it. Nothing is simulated differently: the module registers
  * one test with `app.setFilter('growth', …)`, and the filter code hides whatever fails it
  * (which also takes those objects out of the close-approach screening).
@@ -40,27 +47,25 @@ type Kind = (typeof KINDS)[number]['key'];
 type Tally = Record<Kind, number> & { total: number };
 
 const kindOf = (sat: Satellite): Kind => (sat.category === 'Debris' ? 'debris' : sat.category === 'Starlink' ? 'starlink' : 'other');
-const plural = (n: number, one: string, many: string): string => `${fmtInt(n)} ${n === 1 ? one : many}`;
 
 export function installGrowth(app: App): void {
   const host = $('growth-body');
   host.classList.add('growth');
   host.innerHTML = `
-    <p class="note">Take later launches out of today's sky: only objects launched by the year you choose stay on the globe.</p>
-    <div class="growth-readout">
+    <div class="growth-top">
+      <button class="growth-play" type="button" aria-pressed="false"></button>
       <output class="growth-year"></output>
-      <p class="growth-count"></p>
+      <span class="growth-count"></span>
     </div>
-    <div class="growth-chart" title="Click or drag to choose a year"><canvas aria-hidden="true"></canvas></div>
-    <p class="growth-legend">${KINDS.map((kind) => `<span><i style="color: ${kind.color}"></i>${kind.label}</span>`).join('')}</p>
-    <input type="range" class="growth-slider" min="${FIRST_YEAR}" step="1" aria-label="Show objects launched up to this year" />
-    <p class="note growth-detail"></p>
-    <div class="growth-actions">
-      <button class="btn growth-play"></button>
-      <button class="btn growth-all">Show everything</button>
+    <div class="growth-chart" title="Click or drag to wind the sky back to a year">
+      <canvas aria-hidden="true"></canvas>
+      <input type="range" class="growth-slider" min="${FIRST_YEAR}" step="1" aria-label="Show objects launched up to this year" />
     </div>
-    <p class="note growth-state"></p>
-    <p class="note growth-honest"></p>`;
+    <div class="growth-kinds">${KINDS.map((kind) => `<span data-kind="${kind.key}"><i style="background: ${kind.color}"></i><b>0</b> ${kind.label}</span>`).join('')}</div>
+    <div class="growth-foot">
+      <button class="growth-all" type="button" hidden></button>
+      <p class="growth-honest"></p>
+    </div>`;
 
   const el = <T extends HTMLElement = HTMLElement>(selector: string) => host.querySelector(selector) as T;
   const slider = el<HTMLInputElement>('.growth-slider');
@@ -139,15 +144,17 @@ export function installGrowth(app: App): void {
   function stop(): void {
     clearInterval(timer);
     timer = 0;
-    playButton.textContent = 'Play';
     playButton.setAttribute('aria-pressed', 'false');
+    playButton.setAttribute('aria-label', 'Play from 1957');
+    playButton.title = 'Play from 1957';
   }
 
   function play(): void {
     if (timer) return stop();
     if (year === null) setYear(FIRST_YEAR); // from the start, unless a year is already chosen: then carry on from it
-    playButton.textContent = 'Stop';
     playButton.setAttribute('aria-pressed', 'true');
+    playButton.setAttribute('aria-label', 'Stop');
+    playButton.title = 'Stop';
     timer = window.setInterval(() => {
       setYear((year ?? lastYear) + 1);
       if (year === null) stop(); // reached the present: everything is showing again
@@ -162,21 +169,19 @@ export function installGrowth(app: App): void {
 
   // ---------------------------------------------------------------- text
 
-  /** "From 1999: 1,997 objects (8 satellites, 1,989 debris fragments)." */
-  function describe(y: number): string {
-    const tally = perYear.get(y);
-    if (!tally) return `From ${y}: nothing in the catalogue.`;
-    const parts: string[] = [];
-    if (tally.starlink) parts.push(`${fmtInt(tally.starlink)} Starlink`);
-    if (tally.other) parts.push(tally.starlink ? plural(tally.other, 'other satellite', 'other satellites') : plural(tally.other, 'satellite', 'satellites'));
-    if (tally.debris) parts.push(plural(tally.debris, 'debris fragment', 'debris fragments'));
-    // Split into kinds only when there is more than one: "22 objects (22 satellites)" would say nothing.
-    return `From ${y}: ${plural(tally.total, 'object', 'objects')}${parts.length > 1 || tally.debris ? ` (${parts.join(', ')})` : ''}.`;
-  }
-
-  /** The line under the chart: the year under the pointer, otherwise the chosen one. */
+  /** The three figures under the chart: what is on the globe (or, pointing at a bar, what dates from that year). */
   function detail(): void {
-    el('.growth-detail').textContent = total === 0 ? '' : describe(hover ?? year ?? lastYear);
+    const pointed = hover !== null ? perYear.get(hover) : null;
+    const sums: Record<Kind, number> = { other: 0, starlink: 0, debris: 0 };
+    if (hover !== null) {
+      for (const kind of KINDS) sums[kind.key] = pointed?.[kind.key] ?? 0;
+    } else {
+      const last = year ?? lastYear;
+      for (const [y, tally] of perYear) if (y <= last) for (const kind of KINDS) sums[kind.key] += tally[kind.key];
+    }
+    for (const kind of KINDS) host.querySelector(`[data-kind="${kind.key}"] b`)!.textContent = fmtInt(sums[kind.key]);
+    host.classList.toggle('is-pointing', hover !== null);
+    el('.growth-kinds').title = hover !== null ? `Launched in ${hover} and still in orbit` : 'On the globe';
   }
 
   function render(): void {
@@ -184,24 +189,20 @@ export function installGrowth(app: App): void {
     const shown = active ? upTo[year! - FIRST_YEAR] ?? 0 : total;
     slider.value = String(year ?? lastYear);
     slider.setAttribute('aria-valuetext', active ? `up to ${year}` : 'everything');
-    el('.growth-year').textContent = String(year ?? lastYear);
-    el('.growth-count').innerHTML = active
-      ? `<b>${fmtInt(shown)}</b> of today's ${fmtInt(total)} objects had been launched`
-      : `<b>${fmtInt(total)}</b> objects: everything tracked today`;
+    el('.growth-year').textContent = active ? String(year) : 'Today';
+    el('.growth-count').innerHTML = `<b>${fmtInt(shown)}</b> / ${fmtInt(total)}`;
+    el('.growth-count').title = active ? `${fmtInt(shown)} of today's ${fmtInt(total)} objects had been launched by ${year}; the rest are hidden, and left out of the close-approach screening` : 'Every object tracked today';
     host.classList.toggle('is-active', active);
     section?.classList.toggle('growth-on', active);
     badge.textContent = active ? `up to ${year}` : '';
-    allButton.disabled = !active;
-    el('.growth-state').textContent = active
-      ? `Only objects launched in ${year} or earlier are on the globe; ${fmtInt(total - shown)} are hidden. Hidden objects are also left out of the close-approach screening.`
-      : '';
+    allButton.hidden = !active;
+    allButton.textContent = active ? `Up to ${year}  ×` : '';
+    allButton.title = 'Show everything again';
     detail();
 
-    // The two break-ups are only worth naming when their debris is in the data being shown.
+    // One line of caveat; the two break-ups are named only when their debris is in the data.
     const spikes = (perYear.get(1993)?.debris ?? 0) > 100 && (perYear.get(1999)?.debris ?? 0) > 100;
-    el('.growth-honest').textContent = 'Only what is still in orbit is counted, not everything ever launched: objects that have come down are gone from the catalogue. '
-      + 'A fragment carries the launch year of the object it came from'
-      + (spikes ? ', which is why 1993 and 1999 jump (the debris of Cosmos 2251 and Fengyun-1C).' : '.');
+    el('.growth-honest').textContent = `Counts what is still in orbit today. Fragments carry their parent's launch year${spikes ? ' (hence 1993 and 1999)' : ''}.`;
     draw();
   }
 
@@ -267,8 +268,8 @@ export function installGrowth(app: App): void {
       g.fillRect(Math.round(centre(y)), base, 1, 3);
       g.fillStyle = MUTED;
     }
-    g.textAlign = 'left';
-    g.fillText(`${fmtInt(peak)} a year at most`, left, 9);
+    g.textAlign = 'right';
+    g.fillText(fmtInt(peak), w - left, 9); // the scale: the tallest bar
 
     // the year under the pointer, then the chosen year on top of it
     if (hover !== null && hover !== (year ?? lastYear)) {

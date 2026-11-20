@@ -9,8 +9,12 @@
  * rates. When loading finishes (#loading.is-liftoff) the camera lets go and the vehicle
  * accelerates out of frame.
  *
- * The only per-frame JavaScript is the small telemetry readout, and it stops as soon as
- * the loading screen is done.
+ * The progress is shown IN the scene: an altitude gauge beside the rocket, from the pad to
+ * orbit, fills with --p and its marker carries the percentage up with it (it replaced a plain
+ * bar under the text).
+ *
+ * The only per-frame JavaScript is the small telemetry readout (and the gauge's percentage),
+ * and it stops as soon as the loading screen is done.
  */
 
 import './launch.css';
@@ -165,6 +169,8 @@ export function mountLaunch(container: HTMLElement): void {
 
     <div class="lx-ground lx-front">${smoke(3, 29, 11, 0.34)}</div>
 
+    <div class="lx-gauge"><i class="lx-gauge-fill"></i><b class="lx-gauge-mark"><span data-lx="percent">0%</span></b><em>Orbit</em><small>Pad</small></div>
+
     <dl class="lx-telemetry">
       <div><dt>Mission clock</dt><dd data-lx="clock">T+ 0:00</dd></div>
       <div><dt>Altitude</dt><dd data-lx="altitude">${fmtKm(0, 1)}</dd></div>
@@ -180,6 +186,7 @@ export function mountLaunch(container: HTMLElement): void {
   const clock = root.querySelector<HTMLElement>('[data-lx="clock"]')!;
   const altitude = root.querySelector<HTMLElement>('[data-lx="altitude"]')!;
   const speed = root.querySelector<HTMLElement>('[data-lx="speed"]')!;
+  const percent = root.querySelector<HTMLElement>('[data-lx="percent"]')!;
   const started = performance.now();
   let lastRead = -Infinity;
   const write = (el: HTMLElement, text: string) => {
@@ -197,6 +204,7 @@ export function mountLaunch(container: HTMLElement): void {
     write(clock, `T+ ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`);
     write(altitude, fmtKm(km, km < 100 ? 1 : 0));
     write(speed, fmtKmS(7.8 * Math.pow(p, 1.15)));
+    write(percent, `${Math.round(p * 100)}%`); // the gauge follows the same --p the rocket climbs with
   };
   requestAnimationFrame(tick);
 }

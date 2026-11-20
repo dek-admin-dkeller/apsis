@@ -57,7 +57,7 @@ export const FEATURES: FeatureGroup[] = [
       { name: 'Search by type', text: 'Type “spacex”, “telescope” or “chinese radar” and choose the type: only those objects stay on the globe, and you step through them one at a time with their 3D models (‹ ›, the arrow keys, or a swipe on a phone). Done leaves you on the one you stopped at.', fresh: true },
       { name: 'The sky behind', text: 'Real stars, constellations, the planets, the Moon, and tonight’s aurora over the poles.' },
       { name: 'Views and time', text: 'Whole Earth, low orbit, the geostationary ring, Earth with the Moon. Pause time, run it backwards, or up to a thousand times faster.' },
-      { name: 'Growth by year', text: 'Drag a slider from 1957 to today and see what is still up there from each year.', fresh: true },
+      { name: 'Growth by year', text: 'Drag across a chart of launch years, or press play, and the globe winds back to 1957: only what was launched by then stays.', fresh: true },
       { name: 'Data age', text: 'Colour every object by how recently its orbit was measured, so stale ones stand out.', fresh: true },
       { name: 'Live and coming up', text: 'The bell in the top bar lists what is happening now — spacecraft in contact with NASA’s dishes, a rocket lifting off, an active meteor shower — and what is next. Choose one to go and see it.', fresh: true },
       { name: 'A filter you cannot miss', text: 'While anything is hidden, a banner at the top says how many objects are shown, what is hiding the rest, and puts everything back in one click.', fresh: true },
@@ -95,7 +95,7 @@ export const FEATURES: FeatureGroup[] = [
     summary: 'Zoom out of the Earth into the solar system, and into any other world in it.',
     items: [
       { name: 'The solar system', text: 'Zoom out, or press Escape, and the satellites fade away, leaving the Earth among the planets, each on the right side of the Sun for today’s date.', fresh: true },
-      { name: 'Autoplay', text: 'Press play on the solar system and sit back: a hands-free trip from the Sun out to Pluto, stopping at each world with a line about it. Any key or click stops it where it is.', fresh: true },
+      { name: 'Guided overview', text: 'Press play on the solar system for a hands-free tour of what Apsis does: the Earth’s tracked objects, a real piece of debris, the geostationary ring, then out to the planets, an orbiter at Mars and the Webb telescope. → and ← move between stops; any other key stops it.', fresh: true },
       { name: 'Other worlds', text: 'Click a planet or a moon, then go in: the Moon, Mars, Jupiter and its four big moons, Saturn and its rings, out to Pluto, each lit and turning as it is right now.', fresh: true },
       { name: 'Thirty-five moons', text: 'Every moon that is round or well known, from Phobos to Pluto’s Hydra, each where it really is today. Twenty-one are mapped from NASA’s pictures and open to visit.', fresh: true },
       { name: 'Unseen sides', text: 'Parts of Pluto, Charon, Triton and Uranus’s moons have never been photographed. They are filled in with an educated guess made from each world’s own photographed terrain, and each world’s card says what is real; one switch shows them as a plain tone instead.', fresh: true },
@@ -117,7 +117,7 @@ export const FEATURES: FeatureGroup[] = [
     summary: 'Whole constellations, what was launched lately, your own satellite, and ways to show others.',
     items: [
       { name: 'Constellations', text: 'All of GPS, Starlink or Iridium at once, with a live map of how much of the ground each can see.' },
-      { name: 'Launches, trains and re-entries', text: 'The newest objects in orbit, freshly launched batches still flying in a line, and the lowest orbits that will come down next.' },
+      { name: 'Launches, trains and re-entries', text: 'The newest objects in orbit; freshly launched batches still flying in a line, shown whole and followed as they fly; and the lowest orbits, which will come down next.' },
       { name: 'Design a satellite', text: 'Choose an orbit, put your own object into the catalogue, and see what it would pass close to.' },
       { name: 'Autopilot and recording', text: 'A hands-free tour of the highlights. Save a picture or record a video of what you see.' },
       { name: 'Share', text: 'A link or QR code that reopens exactly what you are looking at.' },
@@ -148,6 +148,78 @@ export const FEATURES: FeatureGroup[] = [
   },
 ];
 
+/**
+ * Where to find each feature, in a few words: shown on the home page beside what it does
+ * (keyed by the feature's name). A key in brackets is its shortcut on a computer.
+ */
+export const HOW: Record<string, string> = {
+  'A live globe': 'Open the tracker',
+  'Sharp ground': 'Zoom in · Layers',
+  'Names and a hover card': 'Point at a dot',
+  'Colour and filter': 'Objects → Browse',
+  'Search': 'Top bar · /',
+  'Search by type': 'Search → Types',
+  'The sky behind': 'Layers',
+  'Views and time': '1–5 · time bar',
+  'Growth by year': 'Objects → Tools',
+  'Data age': 'Objects → Browse → Colour',
+  'Live and coming up': 'The bell, top bar',
+  'A filter you cannot miss': 'Appears by itself',
+  'Always current': 'Automatic',
+  'Inspector': 'Click any object',
+  '3D models and photos': 'Object card · catalogue',
+  'Ride along': 'Object card',
+  'Passes over you': 'Object card → Passes',
+  'Watchlist and contact timeline': 'Objects → Browse · Tools',
+  'People in space': 'Objects → Activity',
+  'Last heard': 'Object card → Live',
+  'Radio and Doppler': 'Object card → Passes',
+  'Freshness and orbit changes': 'Object card',
+  'Monitor': 'Rail → Monitor · C',
+  'Close-approach view': 'Monitor → a pair',
+  'Coming hours': 'Monitor → Coming hours',
+  'Screening cells': 'G',
+  'Report and data': 'Close-approach view',
+  'The solar system': 'Zoom out · Esc',
+  'Guided overview': 'Play, on the solar system',
+  'Other worlds': 'Click a planet, then Enter',
+  'Thirty-five moons': 'Beside their planets',
+  'Unseen sides': 'Layers · Settings',
+  'Spacecraft out there': 'Search · Objects',
+  'In contact now': 'The bell · craft cards',
+  'Asteroids passing': 'Objects → Activity',
+  'Rover paths': 'At Mars · Layers',
+  'Search where you are': 'Search, at any world',
+  'Landing sites': 'At a world → Objects',
+  'A full card for every craft': 'Click a craft',
+  'Close approaches at every world': 'Monitor · G, anywhere',
+  'Time for the solar system': 'Time bar, away from Earth',
+  'Views of every world': 'View, in the rail · 1–4',
+  'Your choice of what is drawn': 'Layers',
+  'Constellations': 'Objects → Activity',
+  'Launches, trains and re-entries': 'Objects → Activity',
+  'Design a satellite': 'Objects → Tools',
+  'Autopilot and recording': 'A · capture menu',
+  'Share': 'Top bar · share',
+  'Visible tonight': 'Objects → Activity',
+  'Upcoming launches': 'Objects → Activity',
+  'Watch a launch climb': 'Upcoming launches',
+  'New launches': 'Layers',
+  'Orbit changes': 'Objects → Activity',
+  'Space weather and re-entries': 'Lowest orbits',
+  'Spacecraft catalogue': 'Objects → Tools',
+  'Asteroid fly-bys': 'Objects → Activity',
+  'Fireballs': 'Objects → Activity',
+  'Eclipses and transits': 'The bell',
+  'The Station over you': 'The bell, with your location',
+  'Notifications': 'The bell → Notify me',
+  'Meteor showers': 'Objects → Activity',
+  'Deep Space Network': 'Objects → Activity',
+  'Hold it up to the sky': 'Sky button, on a phone',
+  'One pill between worlds': 'Tab bar, on a phone',
+  'Built around the globe': 'On a phone',
+};
+
 /** One release as visitors see it: newest first in WHATS_NEW. */
 export interface Update {
   date: string; // YYYY-MM-DD
@@ -156,6 +228,17 @@ export interface Update {
 }
 
 export const WHATS_NEW: Update[] = [
+  {
+    date: '2026-11-20',
+    title: 'How it works in eight scenes, and a guided overview',
+    items: [
+      'The home page explains how Apsis finds close approaches in eight scenes, from the question to the real code that answers it, with ← and → or full screen for presenting.',
+      'Press play on the solar system for a guided overview: the Earth’s tracked objects, a piece of real debris, the geostationary ring, then out to the planets, an orbiter at Mars and the Webb telescope.',
+      'A visit now opens with the launch screen: the rocket climbs as everything loads, then lifts off to the home page.',
+      'A simpler list of everything Apsis can do, area by area, with where to find each feature.',
+      'Satellite trains are shown whole and followed as they fly; Growth by year is one compact chart you drag across.',
+    ],
+  },
   {
     date: '2026-11-20',
     title: 'Flip through what you search, and a simpler phone',
