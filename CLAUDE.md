@@ -38,6 +38,7 @@ npm run fetch-deep   # JPL Horizons + CNEOS into public/data/deep.json and scrip
 npm run smoke        # the built site in headless Chrome must start and open its main places (the deploy runs it on pushes)
 npm run shots        # retake the home page's product pictures (needs Chrome and the dev server running)
 npm run build-borders  # regenerate public/data/borders.bin from the world-atlas package
+npm run build-countries  # regenerate public/data/countries.json (country name points) from the same package
 npm run check        # the feature checks (orbit changes, visible passes, report, decay, search, groups, and the
                      # solar system against JPL Horizons: check-deep prints the worst errors); exits 1 on a failure
 ```
@@ -1415,6 +1416,30 @@ so the site works from any sub-path.
 - **The upcoming launches rows** are four short lines (mission + status, rocket · provider, site,
   time + a compact countdown: "T−12:43:40", "T+1 h 49 m", "≈ 14 h") with the picture in a column of
   its own: "lifted off 1 h 49 min ago" squeezed the other lines into single words.
+- **Never swallow pointer events on the globe**: the camera controls (OrbitControls) listen for
+  the button's release on the DOCUMENT. A feature that stopped a pointerup to keep a click on a
+  rocket from selecting a satellite left the controls dragging the view with the button up (the
+  owner's "it locks my mouse to the ship"). A feature takes a tap through `app.onCanvasTap(run)`:
+  main asks those first, before picking a satellite.
+- **The bell counts a launch as an alert only while it climbs** (`CLIMB_ALERT_MS`, 30 min after
+  lift-off); Launch Library keeps it "In Flight" for hours, until the payloads are confirmed, and
+  from then the bell lists it as ongoing, "in orbit · awaiting confirmation". The drawing on the
+  globe lasts two orbits after reaching orbit (the card says until when).
+- **"New" says how new** (`freshAge`, `launchDay` in main.ts): the label is "New 2 days · NAME"
+  and a new object's card has a line (`#insp-new`): launched when, and how many objects came up
+  with it. When the catalogue facts have no date yet, the day the objects were first measured
+  (earliest element epoch) stands in, with "about".
+- **A collision being watched is seen from beside the TARGET** (`watchCollisionClose`): its model
+  large, the camera square to the approach (`flyToFocus(…, side)`), so the impactor crosses the
+  picture; framing both kept the camera tens of km out (dots). `ui/impactHud.ts` adds a readout
+  over the picture: countdown, the gap on a LOGARITHMIC track (1,000 km → contact, so the scale
+  of the distances stays honest), closing speed per km, energy, then the fragments.
+- **Country names** (`render/countryLabels.ts`, Layers → Country names, `Settings.countryNames`,
+  off by default like Borders): points from `public/data/countries.json` (`npm run
+  build-countries`: each country's largest landmass, centred on the sphere so Russia and Fiji
+  come out right; the area for ranking), named largest first on the side facing the camera,
+  never overlapping; the smallest named shrinks with height (600,000 km² at the usual whole-Earth
+  view). DOM labels under the satellites' name tags.
 - **Every launch links to its page** ("About this launch ↗", in the list and on the climb card):
   `Launch.pageUrl`, Space Launch Now (The Space Devs' own reader site for the same Launch Library
   data) at `spacelaunchnow.app/launch/<slug>/`, built from the service's `slug` only when it is

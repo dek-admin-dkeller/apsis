@@ -163,6 +163,13 @@ export interface App {
    * phone it is a sheet like theirs (normal height, the view makes room for it).
    */
   sideCard(open: boolean): void;
+  /**
+   * A tap or click on the globe (not a drag), in the tracker, before it selects the satellite
+   * under it: return true to take it (features/ascent.ts: a click on a rocket opens its card).
+   * Never stop the pointer events themselves: the camera controls listen for the release on the
+   * document, and a swallowed pointerup left them dragging the view with the button up.
+   */
+  onCanvasTap(run: (x: number, y: number) => boolean): void;
   /** The visitor is somewhere other than the Earth's tracker (another world, the solar system). */
   away(): boolean;
   /** Launches of the last three days found in the catalogue (data/fresh.ts), newest first. */

@@ -99,7 +99,7 @@ export class CameraRig {
    * `follow` is on) the object is the centre of the view: dragging turns the camera around
    * IT, not around the Earth, and scrolling moves towards or away from it.
    */
-  flyToFocus(focus: FocusFn, distance: number, duration = 1.6, minDistance = 0.012): void {
+  flyToFocus(focus: FocusFn, distance: number, duration = 1.6, minDistance = 0.012, side?: THREE.Vector3): void {
     this.focus = focus;
     this.lastFocus = null;
     this.idle = 0;
@@ -108,7 +108,8 @@ export class CameraRig {
     if (!first) return;
     // End above and to one side of the object — on the side we came from — tilted far enough
     // over that the curve of the Earth and its horizon sit behind it.
-    const from = this.kit.camera.position.clone().sub(first);
+    // (`side`: end on that side of the object instead, e.g. square to a collision's approach.)
+    const from = side ? side.clone() : this.kit.camera.position.clone().sub(first);
     this.startFlight(duration, () => {
       const target = focus();
       if (!target) return null;

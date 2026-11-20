@@ -50,6 +50,7 @@ export const FEATURES: FeatureGroup[] = [
     summary: 'The whole catalogue on a live globe, down to the ground beneath it.',
     items: [
       { name: 'A live globe', text: 'Every tracked satellite, rocket stage and fragment, placed from public tracking data and moving in real time.' },
+      { name: 'Country names', text: 'Names of the countries on the globe, as on a map: the largest from far away, more as you come closer, only on the side facing you.', fresh: true },
       { name: 'Sharp ground', text: 'Zoom in and the ground under you is redrawn from detailed NASA imagery, by day and by night. At the Moon, Mars and Mercury too.' },
       { name: 'Names and a hover card', text: 'Names appear as you zoom in. Point at any dot for a picture, what it is and who runs it.' },
       { name: 'Colour and filter', text: 'Colour the dots by type, orbit, height, owner, launch year or tilt, and hide what you do not need.' },
@@ -155,6 +156,7 @@ export const FEATURES: FeatureGroup[] = [
  */
 export const HOW: Record<string, string> = {
   'A live globe': 'Open the tracker',
+  'Country names': 'Layers',
   'Sharp ground': 'Zoom in · Layers',
   'Names and a hover card': 'Point at a dot',
   'Colour and filter': 'Objects → Browse',
@@ -250,6 +252,10 @@ export const WHATS_NEW: Update[] = [
       'Left alone, the bars around the turning globe dim, then fade away entirely; any touch brings them back.',
       'A launch is an object with its own card: photo, the mission’s goal, time to orbit and a track of the climb, the mission, the record and links. Click the rocket, or choose it in the bell to follow it.',
       'A rocket’s preview shows only when you point at it; Layers → Live launches turns them off.',
+      'Country names on the globe (Layers → Country names).',
+      'A watched collision is seen from beside the target, its 3D model in view, with a readout of the closing gap on a scale from 1,000 km to contact.',
+      'New launches say how new they are, on the globe and on the object’s card.',
+      'The bell counts a launch as live only while it climbs; after that it is listed as in orbit.',
       'Tracking data now refreshes about every two hours, and a missed refresh no longer leaves it hours old.',
       'Phones: the card of a world or spacecraft drags and scrolls like a satellite’s; the code in How it works wraps.',
     ],

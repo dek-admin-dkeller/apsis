@@ -41,6 +41,13 @@ import { watchLaunch } from './ascent.ts';
 const SOON_MS = 20 * 60000;
 /** …and until this long after, unless the service already says how it went. */
 const AFTER_MS = 15 * 60000;
+/**
+ * A launch is an ALERT (counted on the bell) while it climbs: from lift-off to half an hour after,
+ * by when any rocket is in orbit. Launch Library often keeps it "In Flight" for hours after that
+ * (until the payloads are confirmed: it was still "live" two hours on, and the owner asked why),
+ * so from then it is listed as ongoing ("in orbit"), never counted.
+ */
+const CLIMB_ALERT_MS = 30 * 60000;
 const DSN_EVERY_MS = 5 * 60000;
 const LAUNCHES_EVERY_MS = 15 * 60000; // loadLaunches() answers from its hour-old copy in between
 
@@ -212,11 +219,12 @@ export function installBell(app: App): void {
       const imminent = exact && launch.state === 'go' && until < SOON_MS && until > -AFTER_MS;
       if (launch.state === 'done' || launch.state === 'failed') continue;
       if (!flying && !imminent && (until < 0 || !exact)) continue;
+      const climbing = flying && until > -CLIMB_ALERT_MS;
       out.push({
-        kind: flying || imminent ? 'alert' : 'coming', id: `launch-${launch.id}`,
+        kind: climbing || imminent ? 'alert' : flying ? 'ongoing' : 'coming', id: `launch-${launch.id}`,
         icon: 'rocket',
         title: `${launch.rocket} · ${launch.mission}`,
-        note: flying ? `${until < 0 ? `Lifted off ${duration(-until)} ago` : 'In flight'} from ${launch.place}`
+        note: flying ? (climbing ? `${until < 0 ? `Lifted off ${duration(-until)} ago` : 'In flight'} from ${launch.place}` : `In orbit · lifted off ${duration(-until)} ago, awaiting confirmation`)
           : until > 0 ? `${imminent ? 'Lift-off' : clockStamp(launch.netMs)} ${fromNow(until)} · ${launch.place}`
           : `Lift-off was due ${fromNow(until)} · ${launch.place}`,
         at: launch.netMs,

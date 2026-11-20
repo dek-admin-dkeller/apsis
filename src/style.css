@@ -901,6 +901,8 @@ canvas.chart.square { height: auto; aspect-ratio: 1; max-width: 240px; margin: 0
 #insp-sub span + span { margin-left: 8px; padding-left: 8px; border-left: 1px solid var(--line-strong); }
 .insp-wiki { display: inline-block; margin-top: 3px; font-size: 11.5px; line-height: 1.3; color: var(--cyan); text-decoration: none; opacity: 0.85; }
 .insp-wiki::after { content: ' ↗'; font-size: 10px; }
+.insp-new { margin: 4px 0 0; font-size: 11.5px; line-height: 1.35; color: #7dffcf; }
+.insp-new.is-hidden { display: none; }
 .insp-wiki:hover { opacity: 1; text-decoration: underline; }
 
 .insp-hero { flex: none; position: relative; height: 150px; background: #04080f; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); overflow: hidden; }
@@ -1882,3 +1884,39 @@ body:not(.is-filtered) #browse-reset { visibility: hidden; }
 .orbit-grid .chip.is-off .chip-sub { opacity: 0.6; }
 .browse-sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
 @media (max-width: 760px) { .browse-sliders { grid-template-columns: 1fr; } }
+
+/* ---- the collision readout (ui/impactHud.ts): over the picture while a collision is watched ---- */
+.impact-hud {
+  position: fixed; left: 50%; bottom: calc(var(--dock-bottom, 64px) + 64px); /* clear of the time bar, open or resting */ z-index: 16; width: min(460px, calc(100vw - 24px)); transform: translateX(-50%);
+  padding: 10px 14px 11px; border: 1px solid var(--line-strong); border-radius: 12px; background: rgba(8, 12, 20, 0.86);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); color: var(--muted); font-size: 11.5px; pointer-events: none;
+}
+.impact-hud.is-hidden { display: none; }
+.ih-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; letter-spacing: 0.02em; }
+.ih-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-top: 2px; }
+.ih-count { font: 600 17px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text); }
+.impact-hud.is-after .ih-count { color: var(--red); }
+.ih-slow { font: 11px var(--font-mono); color: var(--amber); }
+.ih-track { position: relative; height: 3px; margin: 12px 4px 20px; border-radius: 2px; background: var(--line); }
+.ih-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px; background: linear-gradient(90deg, rgba(127, 227, 255, 0.5), var(--red)); }
+.ih-marker { position: absolute; top: 50%; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border-radius: 50%; background: var(--text); box-shadow: 0 0 0 3px rgba(255, 77, 94, 0.35); }
+.ih-tick { position: absolute; top: 9px; transform: translateX(-50%); font-size: 9.5px; white-space: nowrap; color: var(--muted); opacity: 0.8; }
+.ih-tick:first-of-type { transform: none; }
+.ih-tick:last-of-type { transform: translateX(-100%); }
+.ih-gap { color: var(--text); font-size: 12px; }
+.ih-facts { margin-top: 2px; }
+@media (max-width: 760px) {
+  .impact-hud { top: calc(62px + var(--safe-top, 0px)); bottom: auto; }
+}
+
+/* ---- country names on the globe (render/countryLabels.ts; Layers → Country names) ---- */
+.country-labels { position: fixed; inset: 0; z-index: 4; pointer-events: none; overflow: hidden; display: none; }
+.country-labels.is-on { display: block; }
+.country-labels.is-hidden, body.away .country-labels, body.ui-hidden .country-labels, body.home-open .country-labels, body.arriving .country-labels { display: none; }
+.country-label {
+  position: absolute; left: 0; top: 0; white-space: nowrap; will-change: transform;
+  font: 500 10px var(--font-ui); letter-spacing: 0.12em; text-transform: uppercase;
+  color: rgba(236, 242, 250, 0.72); text-shadow: 0 0 3px rgba(0, 0, 0, 0.9), 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+.country-label.is-big { font-size: 11px; letter-spacing: 0.16em; color: rgba(236, 242, 250, 0.82); }
+

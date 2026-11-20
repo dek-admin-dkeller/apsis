@@ -18,6 +18,7 @@
     "smoke": "node scripts/smoke.mjs",
     "shots": "node scripts/shots.mjs",
     "build-borders": "node scripts/build-borders.mjs",
+    "build-countries": "node scripts/build-country-labels.mjs",
     "bench": "node scripts/bench.mjs",
     "check-changes": "node scripts/check-changes.mjs",
     "diff-elements": "node scripts/diff-elements.mjs",

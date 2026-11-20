@@ -73,7 +73,7 @@ status line sit along the bottom.
 | Radio, last heard, Doppler | inspector, Live tab: when a volunteer ground station last received the object and on which frequency. Passes tab: its listed transmitters and the Doppler shift of one of them as heard at your ground station right now |
 | Data age | inspector, Live tab: how old the object's orbital elements are, with a warning once they are stale, and its catalogue status. Objects → Browse → Colour by → **Data age** colours the whole catalogue the same way |
 | Close-approach report | with a close approach open: **Report** opens a one-page summary to print or save as a PDF; **Data (CSV)** downloads both objects' positions, velocities and the range between them through the approach |
-| Layers panel (`L`) | every layer is a small tile, lit while it is on, so the state of the picture reads at a glance: orbit path, ground track, coverage footprint, 3D model; clouds, atmosphere, coastlines and borders, lat/long grid, day/night line, aurora, sharp ground, ground-station marker; stars, constellations, planets, names in the sky; screening cells (`G`). Name tags (off, well-known, as you zoom) are here too |
+| Layers panel (`L`) | every layer is a small tile, lit while it is on, so the state of the picture reads at a glance: orbit path, ground track, coverage footprint, 3D model; clouds, atmosphere, coastlines and borders, country names (the largest from far away, more as you come closer), lat/long grid, day/night line, aurora, sharp ground, ground-station marker; stars, constellations, planets, names in the sky; screening cells (`G`). Name tags (off, well-known, as you zoom) are here too |
 | Close-approach monitor (`C`) | **Right now**: switch it on, set the alert distance; the pairs inside it are sorted into two lists — **Passing** (objects on different orbits crossing paths, with their passing speed) and **Flying together** (docked spacecraft, formations and launch trains, which are close all the time). A spacecraft that the catalogue lists as several objects, such as the Space Station with its modules and docked capsules, appears there once, under a **Joined** heading apart from the formations and trains, and clicking it selects the spacecraft instead of opening a pair. The counts in the top bar and on the globe are of the passing kind only. **Coming hours**: scan up to 24 hours ahead for predicted close passes. Click any pair to open the **close-approach view** (time keeps running live; the panel's replay and scrubber give a slow-motion or frozen look): both spacecraft as 3D models, their flight paths, the live distance between them, a range chart you can scrub, and a slow-motion replay |
 | Ride along (`V`) | from the inspector: sit on the selected object and look out from it. Drag to look around, scroll to zoom |
 | Sky view (`4`) | the **Sky** button at the foot of the rail: stand at the ground station and watch objects cross overhead |
@@ -282,6 +282,7 @@ src/
     globe.ts             Earth shader: relief, clouds and their shadows, city lights, atmosphere, close-up detail
     tiles.ts             close-up ground: map tiles streamed from NASA GIBS (Earth) and NASA Trek (Moon, Mars, Mercury), kept in a Map keyed "z/x/y"
     geoOverlay.ts        coastlines and borders, latitude / longitude grid, day / night line
+    countryLabels.ts     country names on the globe (Layers)
     sky.ts               Milky Way, real bright stars, constellation figures, planets, Sun, Moon
     satellites.ts        all objects as one THREE.Points draw call; GPU-side interpolation; picking
     satModels.ts         procedural 3D models: the 24 kinds found in Earth orbit, building and caching, cropped thumbnails
@@ -358,6 +359,7 @@ scripts/
   diff-elements.mjs      compares two element downloads and writes public/data/changes.json
   carry-over.mjs         push builds: keep the data the published site is already showing
   build-borders.mjs      turns the world-atlas map data into public/data/borders.bin
+  build-country-labels.mjs  where to write each country's name (public/data/countries.json), from the same data
   bench.mjs              the benchmark in Node
   check-*.mjs  decay-check.mjs  test-command.mjs    the feature checks behind `npm run check`
                          (check-deep.mjs: planets, moons, rotation and spacecraft against JPL Horizons)
@@ -453,7 +455,7 @@ a `Map<catalogue name, full name>` for "Hubble Space Telescope (HST)".
   not replicas of individual spacecraft, and are drawn far larger than life so they are
   visible. Long booms are drawn shorter than life (Voyager's is 13 m on a 3.7 m dish), and
   the craft beyond Earth orbit are posed to be looked at, not turned towards the real Sun.
-- **Coastlines and borders** are Natural Earth data via the `world-atlas` package.
+- **Coastlines, borders and country names** are Natural Earth data via the `world-atlas` package.
 - **Beyond Earth orbit, positions are computed, not downloaded live.** The planets come from
   JPL's "approximate positions" elements, the Moon from a 70-term series, and 34 other moons
   (every one JPL can place that is round or well known, from Phobos to Pluto's Hydra) from

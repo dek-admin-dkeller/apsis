@@ -42,6 +42,7 @@ export interface Settings {
   guessUnseen: boolean; // fill the never-photographed parts of a few worlds with an educated guess (worker/unseen.worker.ts)
   atmosphere: boolean;
   borders: boolean;
+  countryNames: boolean; // country names on the globe (render/countryLabels.ts)
   graticule: boolean;
   terminator: boolean;
   // sky
@@ -97,6 +98,7 @@ const DEFAULTS: Settings = {
   guessUnseen: true,
   atmosphere: true,
   borders: false,
+  countryNames: false,
   graticule: false,
   terminator: false,
   stars: true,

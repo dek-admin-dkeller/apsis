@@ -30,7 +30,7 @@ export class Labels {
   private major: number[] = [];
   private famous: number[] = [];
   private pinned: number[] = []; // watchlist: always labelled
-  private fresh = new Set<number>(); // the lead object of each launch of the last few days: always labelled, "New"
+  private fresh = new Map<number, string>(); // lead object → how new ("today", "2 days")
   showFresh = true;
   private chosen: number[] = []; // object indices currently labelled, most important first
   private catalog: Catalog | null = null;
@@ -69,8 +69,8 @@ export class Labels {
   }
 
   /** The lead objects of the newest launches (data/fresh.ts): labelled at every zoom, marked "New". */
-  setFresh(indices: number[]): void {
-    this.fresh = new Set(indices);
+  setFresh(leads: Map<number, string>): void {
+    this.fresh = leads;
     this.lastPick = -Infinity;
   }
 
@@ -88,7 +88,7 @@ export class Labels {
     //   closer still (< 19,000 km)     the objects nearest the camera — a few at first, steadily
     //                                  more with every bit of zoom, the full number by ~8,000 km
     const distance = this.kit.camera.position.length(); // scene units from the Earth's centre
-    const fresh = this.showFresh && this.mode !== 'off' ? [...this.fresh] : [];
+    const fresh = this.showFresh && this.mode !== 'off' ? [...this.fresh.keys()] : [];
     const named = this.mode === 'notable' || distance < 21 ? [...this.pinned, ...fresh, ...this.major, ...this.famous] : [...this.pinned, ...fresh, ...this.major];
     this.chosen = [...new Set(named)].filter((i) => this.cloud.visible[i]);
     if (this.mode !== 'nearby' || distance > 19) return;
@@ -144,7 +144,8 @@ export class Labels {
       // Each tag is [operator logo] name; the logo arrives from Wikipedia the first time that operator is seen.
       const text = el.lastElementChild as HTMLElement, logo = el.firstElementChild as HTMLImageElement;
       const isNew = this.showFresh && this.fresh.has(index);
-      const shown = isNew ? `New · ${sat.name}` : sat.name;
+      const age = isNew ? this.fresh.get(index) : '';
+      const shown = isNew ? `New${age ? ` ${age}` : ''} · ${sat.name}` : sat.name; // "New 2 days · STARLINK-…": how new, at a glance
       if (text.textContent !== shown) text.textContent = shown;
       el.classList.toggle('is-fresh', isNew);
       let operator = this.operators.get(index);

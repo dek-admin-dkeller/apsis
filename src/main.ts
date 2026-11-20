@@ -76,6 +76,8 @@ import { Search } from './ui/search.ts';
 import { DEFAULT_SITE, SettingsStore, type Settings } from './ui/settings.ts';
 import { ShareDialog, warmShare } from './ui/share.ts';
 import { Sheets } from './ui/sheet.ts';
+import { ImpactHud } from './ui/impactHud.ts';
+import { CountryLabels } from './render/countryLabels.ts';
 import { thumbnail } from './ui/thumb.ts';
 import { clockBehind, speedText, TimeControls, type SimClock } from './ui/timeControls.ts';
 import { ObjectTabs } from './ui/objectTabs.ts';
@@ -212,6 +214,7 @@ const { globe, ready: texturesReady, essential: globeReady } = createGlobe(
 );
 const sky = createSky(kit);
 const overlay = new GeoOverlay(globe.earth, kit.scene);
+const countryLabels = new CountryLabels(globe.earth, kit.camera); // Layers → Country names
 const cloud = new SatelliteCloud(kit, sim);
 const orbit = new OrbitLine(kit.eciGroup);
 const track = new GroundTrack(kit.eciGroup);
@@ -393,6 +396,7 @@ function applySettings(s: Settings, changed: keyof Settings | null): void {
   globe.setClouds(s.clouds);
   globe.setAtmosphere(s.atmosphere);
   overlay.setBorders(s.borders);
+  countryLabels.setVisible(s.countryNames);
   overlay.setGraticule(s.graticule);
   overlay.setTerminator(s.terminator);
   sky.setStars(s.stars);
@@ -762,6 +766,7 @@ function select(sat: Satellite | null): void {
   inspector.show(sat, facts.get(sat.noradId), true);
   inspector.setStarred(watch.has(sat));
   updateAim();
+  updateNewLine();
   // The two crewed stations also list who is aboard right now.
   $('rc-crew').replaceChildren();
   if (sat.name === 'ISS (ZARYA)') renderCrew($('rc-crew'), 'ISS');
@@ -1276,6 +1281,7 @@ function updateSimulation(beforeMs: number): void {
       if (a && b && !encPanel.isOpen && !places.elsewhere) {
         rig.release();
         openEncounter(a.index, b.index);
+        watchCollisionClose();
       }
     }
     updateYoursChip();
@@ -1328,6 +1334,56 @@ function updateFinale(): void {
   }
 }
 let fragmentMiddle: (() => THREE.Vector3 | null) | null = null;
+
+/**
+ * The collision readout over the picture (ui/impactHud.ts): while the close-approach view shows the
+ * designer's pair, and for ten seconds after an impact that was being watched.
+ */
+const impactHud = new ImpactHud();
+let hudWatching = false;
+let hudAfterUntil = 0; // performance.now() ms
+function updateImpactHud(): void {
+  const plan = simPlan;
+  const watching = !!plan && !places.elsewhere && encPanel.isOpen && encPairNorads.includes(CUSTOM_NORAD_ID) && encPairNorads.includes(plan.targetNorad);
+  const now = performance.now();
+  const toImpactS = plan ? (plan.impactMs - clock.time) / 1000 : 0;
+  if (plan && hudWatching && !watching && toImpactS <= 0 && toImpactS > -5) hudAfterUntil = now + 10000; // it was watched through the moment
+  hudWatching = watching;
+  const after = !!plan && !watching && now < hudAfterUntil && toImpactS <= 0 && !places.elsewhere;
+  if (!plan || (!watching && !after)) return impactHud.hide();
+  const target = catalog?.byNorad.get(plan.targetNorad);
+  impactHud.show({
+    names: [customRecord?.OBJECT_NAME ?? 'Your spacecraft', target ? displayName(target) : `#${plan.targetNorad}`],
+    toImpactS,
+    rangeKm: encFrame?.rangeKm ?? 0,
+    figures: plan.figures,
+    speed: clock.paused ? 0 : clock.speed,
+    drawn: plan.fragments.length,
+  });
+}
+
+/**
+ * A collision being watched is seen from close by the TARGET, its 3D model large, from the side of
+ * the approach, so the impactor's model crosses the picture into it. Framing both objects (the
+ * close-approach view's usual way) kept the camera tens of km out: two dots for the whole minute,
+ * and the owner asked twice for the models. (The slow-motion finish, updateFinale, then has
+ * time to show them meeting.) Waits a frame or two for the view's first positions.
+ */
+function watchCollisionClose(tries = 0): void {
+  if (!encPanel.isOpen) return;
+  if (!encFrame) {
+    if (tries < 30) requestAnimationFrame(() => watchCollisionClose(tries + 1));
+    return;
+  }
+  const approach = encFrame.va.clone().sub(encFrame.vb); // the impactor's motion relative to the target
+  const outward = encFrame.b.clone().normalize();
+  const side = new THREE.Vector3().crossVectors(outward, approach).normalize(); // square to the approach, level
+  encFocus = 'b';
+  encAutoFrame = false;
+  encPanel.setFocus('b');
+  rig.follow = true;
+  rig.flyToFocus(() => (encFrame ? encFrame.b : null), encModelSize * 5, 1.6, encModelSize * 1.1, side);
+}
 
 function endSimulation(): void {
   simPlan = null;
@@ -1389,9 +1445,10 @@ const designer = new Designer($('designer-body'), {
     if (!a || !b) return;
     clock.speed = 1;
     clock.paused = false;
-    jumpTo(plan.impactMs - 60000); // a minute before: the two closing in on each other, in their cells
+    jumpTo(plan.impactMs - 60000); // a minute before: the two closing in on each other
     openEncounter(a.index, b.index);
     timeControls.sync();
+    watchCollisionClose();
   },
   setGrid: (on) => setGrid(on),
   context: () => (catalog ? { records: catalog.sats.map((sat) => sat.omm), sats: catalog.sats, mask: cloud.visible.slice(), startMs: clock.time } : null),
@@ -1450,7 +1507,53 @@ function markFresh(): void {
   fresh = catalog ? freshLaunches(catalog, facts, Date.now()) : [];
   const on = store.settings.newLaunches;
   cloud.setFresh(on ? fresh.flatMap((launch) => launch.members) : null);
-  labels.setFresh(on ? fresh.map((launch) => launch.lead) : []);
+  labels.setFresh(new Map(on ? fresh.map((launch) => [launch.lead, freshAge(launchDay(launch).date)] as [number, string]) : []));
+  updateNewLine();
+}
+
+/**
+ * A new launch's day (UTC, YYYY-MM-DD): the catalogue facts' date, or, when the facts have not
+ * caught up yet (they lag the elements by up to a day), the day its objects were first measured
+ * (the earliest element epoch among them): `estimated`.
+ */
+function launchDay(launch: FreshLaunch): { date: string; estimated: boolean } {
+  if (launch.date) return { date: launch.date, estimated: false };
+  let first = Infinity;
+  for (const index of launch.members) {
+    const epoch = catalog?.sats[index]?.omm.EPOCH;
+    const ms = epoch ? Date.parse(epoch.endsWith('Z') ? epoch : `${epoch}Z`) : NaN; // CelesTrak omits the Z; it is UTC
+    if (ms < first) first = ms;
+  }
+  return Number.isFinite(first) ? { date: new Date(first).toISOString().slice(0, 10), estimated: true } : { date: '', estimated: true };
+}
+
+/** How new a launch is, from its UTC date: "today", "1 day", "3 days"; '' when there is no date. */
+function freshAge(date: string): string {
+  const day = Date.parse(`${date}T00:00:00Z`);
+  if (!date || !Number.isFinite(day)) return '';
+  const days = Math.max(0, Math.floor((Date.now() - day) / 86400000));
+  return days === 0 ? 'today' : days === 1 ? '1 day' : `${days} days`;
+}
+
+/**
+ * On a new object's card: when it was launched and what came up with it. The owner saw "New ·" on
+ * the globe and asked what it meant and how new: the label now says the age, the card the rest.
+ */
+function updateNewLine(): void {
+  const line = $('insp-new');
+  const sat = selected;
+  const launch = sat && store.settings.newLaunches ? fresh.find((candidate) => candidate.members.includes(sat.index)) : undefined;
+  line.classList.toggle('is-hidden', !launch);
+  if (!launch) return;
+  const { date, estimated } = launchDay(launch);
+  const day = date ? new Date(`${date}T12:00:00Z`) : null;
+  const age = freshAge(date);
+  const when = day
+    ? `launched ${estimated ? 'about ' : ''}${day.getUTCDate()} ${day.toLocaleString('en', { month: 'short', timeZone: 'UTC' })} (${age === 'today' ? 'today' : `${age} ago`})`
+    : 'launched in the last day or so';
+  const others = launch.members.length - 1;
+  line.textContent = `New · ${when}${others > 0 ? ` · 1 of ${launch.members.length} objects from this launch` : ''}`;
+  line.title = `Launch ${launch.id}: the objects CelesTrak tracks from it so far. "New" marks launches of the last three days (Layers → New launches).`;
 }
 
 function updateDataNote(): void {
@@ -1621,11 +1724,13 @@ canvas.addEventListener('pointerdown', (event) => {
   pointer.downX = event.clientX;
   pointer.downY = event.clientY;
 });
+const canvasTapHooks: ((x: number, y: number) => boolean)[] = []; // App.onCanvasTap
 canvas.addEventListener('pointerup', (event) => {
   const immersive = document.body.classList.contains('sky-immersive');
   // A drag, not a tap (a fingertip wanders more than a mouse: more room in the phone's sky view).
   if (!catalog || places.elsewhere || Math.hypot(event.clientX - pointer.downX, event.clientY - pointer.downY) > (immersive ? 12 : 4)) return;
   if (immersive) return skyTap(event.clientX, event.clientY); // full-screen sky: a small card, never a panel
+  for (const take of canvasTapHooks) if (take(event.clientX, event.clientY)) return; // a feature's own thing was tapped (a rocket)
   const index = cloud.pick(event.clientX, event.clientY, 12);
   if (index >= 0 && index !== selected?.index) select(catalog.sats[index]);
 });
@@ -2606,6 +2711,7 @@ function step(now: number): void {
   advanceClock(elapsed);
   updateSimulation(before);
   updateFinale();
+  updateImpactHud();
   if (replay && clock.time >= replay.endMs) {
     // A replay ran to its end: go (back) to the closest point and hold there.
     const hold = replay.holdMs;
@@ -2658,6 +2764,7 @@ function step(now: number): void {
   updateSelection(realSeconds);
   updateEncounter(realSeconds, dt);
   labels.update(realSeconds, selected ? selected.index : -1, labelAvoid);
+  countryLabels.update(fp.mode !== 'off' || landing.showing);
   updateSkyLabels();
   site.update(realSeconds);
   aurora.update(realSeconds, globe.sunDirection);
@@ -2758,6 +2865,7 @@ const app: App = {
     rig.flyToView(overhead, look ? ground(look.latDeg, look.lonDeg, look.altitudeKm ?? 0) : ORIGIN.clone(), 2);
     rig.holdStill(); // stay over the place: the idle drift would slide it out of view
   },
+  onCanvasTap: (run) => void canvasTapHooks.push(run),
   sideCard: (open) => {
     sideCardOpen = open;
     if (open) {

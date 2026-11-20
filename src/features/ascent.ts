@@ -186,19 +186,16 @@ export function installAscent(app: App): void {
     pointerAt.y = event.clientY;
     pointerAt.mouse = event.pointerType === 'mouse';
   }, { passive: true });
-  // A click or tap on a rocket opens its card (and does not also select whatever dot is behind it).
-  let downAt = { x: 0, y: 0 };
-  window.addEventListener('pointerdown', (event) => {
-    downAt = { x: event.clientX, y: event.clientY };
-  }, true);
-  window.addEventListener('pointerup', (event) => {
-    if (app.away() || !(event.target instanceof HTMLCanvasElement)) return;
-    if (Math.hypot(event.clientX - downAt.x, event.clientY - downAt.y) > 8) return; // a drag
-    const id = rocketAt(event.clientX, event.clientY);
-    if (!id) return;
-    event.stopImmediatePropagation();
+  // A click or tap on a rocket opens its card instead of selecting whatever dot is behind it.
+  // (Through the app's own tap handling: this module once swallowed the pointerup itself, and the
+  // camera controls, which listen for the release on the document, kept dragging the view.)
+  app.onCanvasTap((x, y) => {
+    if (app.away()) return false;
+    const id = rocketAt(x, y);
+    if (!id) return false;
     openCard(id);
-  }, true);
+    return true;
+  });
 
   // The launch's card (right dock), and what its switches and × do.
   const card = new LaunchCard({
