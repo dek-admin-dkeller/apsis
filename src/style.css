@@ -1761,3 +1761,15 @@ html.intro #landing .ld-top { visibility: hidden; } /* the bar would show throug
 #loading.is-leaving { opacity: 0; pointer-events: none; }
 /* The progress is the gauge beside the rocket (launch.css): the plain bar is not needed. */
 .loading-bar { display: none; }
+
+/* A satellite train on show (main.ts, showTrain): the filter banner's shape, in the tracker's cyan. */
+.train-banner { border-color: rgba(127, 227, 255, 0.5); background: rgba(6, 26, 36, 0.88); color: var(--cyan); }
+.train-banner svg { fill: currentColor; stroke: none; }
+.train-banner .fb-text b { color: #d4f6ff; }
+.train-banner .tb-why { color: rgba(170, 236, 255, 0.85); }
+.train-banner .tb-why::before { content: '·'; margin-right: 8px; opacity: 0.6; }
+#tb-done { flex: none; padding: 4px 13px; border: 0; border-radius: 999px; background: var(--cyan); color: #04202a; font: 600 12px var(--font-ui); cursor: pointer; }
+#tb-done:hover { background: #b6f0ff; }
+/* Both on at once: the train's banner under the filter's. */
+.filter-banner:not(.is-hidden) ~ .train-banner { top: calc(var(--top) + 56px); }
+@media (max-width: 760px) { .train-banner { top: calc(60px + env(safe-area-inset-top, 0px)); } }

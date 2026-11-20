@@ -283,3 +283,6 @@ body.away .search.has-filter input { padding-right: 10px !important; }
 .path-esc kbd { padding: 1px 6px; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 5px; font: 600 10.5px var(--font-ui); color: var(--text); background: rgba(255, 255, 255, 0.04); }
 .path-esc.is-hidden { display: none; }
 @media (max-width: 760px), (pointer: coarse) { .path-esc { display: none !important; } }
+
+/* The status bar's "From the Sun" (main.ts, updatePlaceStatus): away from the Earth only. */
+body:not(.away) #sb-sun-wrap { display: none; }

@@ -1559,10 +1559,17 @@ export class SpaceView {
    * latitude and (east) longitude under it, in the world's own turning frame; on the solar
    * system, the world the camera is beside (null: the whole of it).
    */
-  readout(): { kind: 'place'; body: BodyId; heightKm: number; latDeg: number; lonDeg: number } | { kind: 'map'; beside: BodyId | null } | null {
+  readout(tMs: number): { kind: 'place'; body: BodyId; heightKm: number; latDeg: number; lonDeg: number; sunKm: number } | { kind: 'map'; beside: BodyId | null; sunKm: number } | null {
     const where = this.where;
     if (!where) return null;
-    if (where.kind === 'system') return { kind: 'map', beside: this.focus?.kind === 'body' ? this.focus.body.id : null };
+    if (where.kind === 'system') {
+      // Beside a world: that world's distance from the Sun (its dot is drawn far larger than life,
+      // so where the camera hangs beside it is no true distance). Otherwise the camera's own,
+      // undoing the map's squeeze of distance (mapRadius).
+      const beside = this.focus?.kind === 'body' ? this.focus.body.id : null;
+      const sunKm = beside && beside !== 'sun' ? Math.hypot(...bodyPosition(beside, tMs, this.vec)) : beside === 'sun' ? 0 : Math.expm1(this.camera.position.length() / MAP_SCALE) * 0.3 * AU;
+      return { kind: 'map', beside, sunKm };
+    }
     const mesh = this.item(null)?.mesh?.mesh;
     if (!mesh) return null;
     const local = mesh.worldToLocal(this.camera.position.clone());
@@ -1574,6 +1581,8 @@ export class SpaceView {
       // The body's own axes: longitude 0 on +X, north on +Y, 90° east on −Z.
       latDeg: (Math.asin(THREE.MathUtils.clamp(local.y / Math.max(r, 1e-9), -1, 1)) * 180) / Math.PI,
       lonDeg: (Math.atan2(-local.z, local.x) * 180) / Math.PI,
+      // At a place the camera is beside its world: the world's own distance from the Sun.
+      sunKm: where.body === 'sun' ? 0 : Math.hypot(...bodyPosition(where.body, tMs, this.vec)),
     };
   }
 

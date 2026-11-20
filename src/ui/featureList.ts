@@ -117,7 +117,7 @@ export const FEATURES: FeatureGroup[] = [
     summary: 'Whole constellations, what was launched lately, your own satellite, and ways to show others.',
     items: [
       { name: 'Constellations', text: 'All of GPS, Starlink or Iridium at once, with a live map of how much of the ground each can see.' },
-      { name: 'Launches, trains and re-entries', text: 'The newest objects in orbit; freshly launched batches still flying in a line, shown whole and followed as they fly; and the lowest orbits, which will come down next.' },
+      { name: 'Launches, trains and re-entries', text: 'The newest objects in orbit; freshly launched batches still flying in a line, shown whole and followed as they fly (Done puts them away); and the lowest orbits, which will come down next.' },
       { name: 'Design a satellite', text: 'Choose an orbit, put your own object into the catalogue, and see what it would pass close to.' },
       { name: 'Autopilot and recording', text: 'A hands-free tour of the highlights. Save a picture or record a video of what you see.' },
       { name: 'Share', text: 'A link or QR code that reopens exactly what you are looking at.' },

@@ -789,7 +789,12 @@ to…", never "we learned in class"). On the branch `claude/presentation-walkthr
   the headline sinks back into the globe, headings rise, the screenshots tilt up, the big pieces
   lift in. Compositor only; nothing at all where unsupported or with reduce motion.
 - **Trains** (Objects → Activity) are lit, framed whole and followed (`showTrain` in main.ts),
-  not reduced to selecting their first satellite.
+  not reduced to selecting their first satellite; `#train-banner` (the filter banner's shape, in
+  cyan) says which and is the way out: Done, Escape (`escapeHooks`), Home, or selecting any object.
+- **Distances in AU**: `farText` (places.ts) adds "(1.61 AU)" from half an AU on (light years
+  would be no help: Voyager 1 is 0.003 of one); the status bar shows **From the Sun** away from the
+  Earth (`#sb-sun`; `SpaceView.readout(t).sunKm`): a world's own distance at a place or beside
+  its dot, the camera's (the map's squeeze undone) on the whole solar system.
 - **Growth by year** is one compact instrument (the chart is the scrubber; a hidden range input
   keeps the keyboard), not a column of sentences.
 - **The benchmark tool is gone from the interface** (its tile, walkthrough section and overlay);

@@ -179,12 +179,24 @@ function siteCraft(site: Site): Craft {
   };
 }
 
-/** A long distance in words: "384,400 km", "1.67 million km", "24.9 billion km" (or miles). */
-function farText(km: number): string {
+/**
+ * A long distance in words: "384,400 km", "1.67 million km", "24.9 billion km (166 AU)" (or
+ * miles). From about half the Earth–Sun distance on, the same distance in AU follows: the unit
+ * of the solar system. (Light years would be no help: Voyager 1, the farthest thing here, is
+ * 0.003 of one.)
+ */
+export function farText(km: number): string {
   const value = lengthValue(km);
   if (value < 1e6) return fmtKm(km);
-  if (value < 1e9) return `${fmt(value / 1e6, value < 1e7 ? 2 : value < 1e8 ? 1 : 0)} million ${lengthUnit()}`;
-  return `${fmt(value / 1e9, value < 1e10 ? 2 : 1)} billion ${lengthUnit()}`;
+  const au = km / AU >= 0.5 ? ` (${auText(km)})` : '';
+  if (value < 1e9) return `${fmt(value / 1e6, value < 1e7 ? 2 : value < 1e8 ? 1 : 0)} million ${lengthUnit()}${au}`;
+  return `${fmt(value / 1e9, value < 1e10 ? 2 : 1)} billion ${lengthUnit()}${au}`;
+}
+
+/** A distance in AU (astronomical units, the Earth–Sun distance): "1.52 AU", "166 AU". */
+export function auText(km: number): string {
+  const au = km / AU;
+  return `${fmt(au, au < 10 ? 2 : au < 100 ? 1 : 0)} AU`;
 }
 
 function spanText(days: number): string {
@@ -583,7 +595,7 @@ export class Places {
    */
   /** The status bar's numbers for the scene on screen (SpaceView.readout); null in the tracker. */
   readout(): ReturnType<SpaceView['readout']> {
-    return this.spot === 'tracker' ? null : this.view(this.spot).readout();
+    return this.spot === 'tracker' ? null : this.view(this.spot).readout(this.host.time());
   }
 
   /** Told whenever where the visitor is (or is heading) changes: a phone's world strip follows it. */

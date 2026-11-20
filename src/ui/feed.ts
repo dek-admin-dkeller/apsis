@@ -54,6 +54,12 @@ function row(sat: Satellite, title: string, right: string, onSelect: (sat: Satel
   return li;
 }
 
+/** The train shown has been put away elsewhere (Done, Escape, Home): no row stays marked as chosen. */
+export function clearTrainChoice(): void {
+  activeTrain = '';
+  for (const row of document.getElementById('feed-trains')?.children ?? []) row.classList.remove('is-on');
+}
+
 /** A recently launched batch still flying together: its objects, for highlighting. */
 export type TrainPick = (members: number[] | null, lead: Satellite | null) => void;
 let activeTrain = '';

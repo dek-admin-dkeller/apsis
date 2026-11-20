@@ -217,6 +217,12 @@
         <span class="fb-text"><b id="fb-count"></b><span id="fb-why"></span></span>
         <button id="fb-clear" type="button">Show all</button>
       </div>
+      <!-- A satellite train on show (Objects → Activity → Trains): what it is, and the way out (main.ts, showTrain). -->
+      <div id="train-banner" class="filter-banner train-banner is-hidden" role="status">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="4" cy="12" r="1.6" /><circle cx="8.5" cy="10.5" r="1.6" /><circle cx="13" cy="9" r="1.6" /><circle cx="17" cy="7.5" r="1.6" /></svg>
+        <span class="fb-text"><b id="tb-what"></b><span class="tb-why">lit and followed</span></span>
+        <button id="tb-done" type="button" title="Back to the usual view (Esc)">Done</button>
+      </div>
       <!-- ============ top bar ============ -->
       <header class="topbar">
         <div class="brand" id="home" role="button" tabindex="0" title="Home: close everything and go back to the whole-Earth view (0)" aria-label="Home: close everything and reset the view">
@@ -1086,6 +1092,8 @@
       <div class="statusbar">
         <span>Camera <b id="sb-cam">–</b></span>
         <span><span id="sb-sub-label">Below</span> <b id="sb-sub">–</b></span>
+        <!-- Away from the Earth (main.ts, updatePlaceStatus): how far from the Sun the camera is, or the world it is at. -->
+        <span id="sb-sun-wrap">From the Sun <b id="sb-sun">–</b></span>
         <span class="grow"></span>
         <span id="sb-screen-wrap" class="is-hidden">Screening <b id="sb-screen">–</b></span>
         <span>Time rate <b id="sb-rate">1×</b></span>

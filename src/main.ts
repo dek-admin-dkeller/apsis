@@ -41,7 +41,7 @@ import { behindEarth, legendFor, SatelliteCloud } from './render/satellites.ts';
 import { createScene, EARTH_RADIUS, EARTH_RADIUS_KM, KM } from './render/scene.ts';
 import { SiteMarker } from './render/siteMarker.ts';
 import { createSky } from './render/sky.ts';
-import { Places } from './ui/places.ts';
+import { auText, farText, Places } from './ui/places.ts';
 import { matchScore } from './ui/searchMatch.ts';
 import type { Pose } from './render/space/spaceView.ts';
 import { EarthTiles } from './render/tiles.ts';
@@ -53,7 +53,7 @@ import { ConstellationsPanel } from './ui/constellations.ts';
 import type { Contacts } from './ui/contacts.ts';
 import { renderCrew, renderCrewSummary } from './ui/crew.ts';
 import { CUSTOM_NORAD_ID, Designer } from './ui/designer.ts';
-import { renderFeed } from './ui/feed.ts';
+import { clearTrainChoice, renderFeed } from './ui/feed.ts';
 import { $, fmt, fmtInt, fmtKm, fmtKmS, fmtRange, setClockZone, setUnits } from './ui/dom.ts';
 import { EncounterPanel, type Encounter, type EncounterFocus } from './ui/encounterPanel.ts';
 import { Filters } from './ui/filters.ts';
@@ -96,6 +96,7 @@ let customRecord: OmmRecord | null = null; // the user's own satellite (Objects 
 let facts = new Map<number, CatalogFacts>();
 let conjunctionOn = false;
 let gridOn = false;
+let trainOn = false; // a satellite train is on show (showTrain): its banner is the way out
 let screeningDistance = 10; // alert distance d, km
 let observer: Observer = { name: '', latDeg: 0, lonDeg: 0 };
 let skyLabelsOn = true;
@@ -715,6 +716,7 @@ function refreshSelected(): void {
 const FOCUS_DISTANCE = 0.1; // scene units (100 km): the 3D model fills about a quarter of the view
 
 function select(sat: Satellite | null): void {
+  if (sat && trainOn) endTrain(false); // choosing an object ends the train on show (the camera goes to the object)
   if (encPanel.isOpen && sat) closeEncounter(true);
   if (fp.mode === 'satellite') fp.exit(); // the ride is tied to the object being left
   selected = sat;
@@ -1213,11 +1215,8 @@ function updateDataNote(): void {
  * first object and fly in close to it, so the visitor saw one satellite, not the train.)
  */
 function showTrain(members: number[] | null, lead: Satellite | null): void {
+  if (!members || !lead || !catalog) return endTrain();
   cloud.setHighlight(members);
-  if (!members || !lead || !catalog) {
-    rig.release();
-    return;
-  }
   closeEncounter(true);
   if (selected) select(null);
   const p = { x: 0, y: 0, z: 0 };
@@ -1239,8 +1238,34 @@ function showTrain(members: number[] | null, lead: Satellite | null): void {
   rig.follow = true;
   rig.flyToFocus(middle, THREE.MathUtils.clamp(spread * 2.6, 0.25, 9), 2);
   const family = lead.name.replace(/[-\s]?\d+.*$/, '') || lead.name;
-  toast(`${fmtInt(members.length)} ${family} satellites from one launch, still flying in a line`);
+  // A banner says what is on show and is the way out (Done; also Escape, Home, or choosing any object).
+  // (A launch too new to have names is still called by its designator, "2026-257A": say "launch 2026-257".)
+  $('tb-what').textContent = /^\d{4}-\d{3}/.test(family)
+    ? `${fmtInt(members.length)} satellites from launch ${lead.intlDes.slice(0, 8)}`
+    : `${fmtInt(members.length)} ${family} satellites from one launch`;
+  $('train-banner').classList.remove('is-hidden');
+  trainOn = true;
 }
+
+/** Put a shown train away: the highlight off, the camera back to the whole Earth, the banner gone. */
+function endTrain(release = true): void {
+  if (!trainOn) {
+    cloud.setHighlight(null);
+    return;
+  }
+  trainOn = false;
+  cloud.setHighlight(null);
+  $('train-banner').classList.add('is-hidden');
+  clearTrainChoice();
+  if (release) rig.release();
+}
+$('tb-done').addEventListener('click', () => endTrain());
+escapeHooks.push(() => {
+  if (!trainOn) return false;
+  endTrain();
+  return true;
+});
+homeHooks.push(() => endTrain(false));
 
 /**
  * The top bar's "Tracking data": how OLD the orbital data is ("2 h 57 min old"), not the time
@@ -2175,6 +2200,9 @@ function updatePlaceStatus(realSeconds: number): void {
   lastStatusAt = realSeconds;
   const read = places.readout();
   if (!read) return;
+  // From the Sun, everywhere away from the Earth: in AU, with the distance in km (or miles) on hover.
+  $('sb-sun').textContent = read.sunKm < 1e6 ? fmtKm(read.sunKm) : auText(read.sunKm);
+  $('sb-sun').title = farText(read.sunKm).replace(/ \(.*\)$/, '');
   if (read.kind === 'map') {
     $('sb-cam').textContent = 'on the solar system';
     $('sb-sub-label').textContent = 'Beside';
